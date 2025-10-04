@@ -1,23 +1,35 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { PatchNote } from '@/types/patch-note';
-import { ArrowLeftIcon, PencilIcon, SaveIcon, SendIcon, XIcon } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { PatchNote } from "@/types/patch-note";
+import {
+  ArrowLeftIcon,
+  PencilIcon,
+  CheckIcon,
+  PaperAirplaneIcon,
+  XMarkIcon,
+} from "@heroicons/react/16/solid";
 
 export default function BlogViewPage() {
   const params = useParams();
   const router = useRouter();
   const [patchNote, setPatchNote] = useState<PatchNote | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState('');
-  const [editedTitle, setEditedTitle] = useState('');
+  const [editedContent, setEditedContent] = useState("");
+  const [editedTitle, setEditedTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
@@ -26,10 +38,10 @@ export default function BlogViewPage() {
       try {
         const response = await fetch(`/api/patch-notes/${params.id}`);
         if (!response.ok) {
-          throw new Error('Failed to fetch patch note');
+          throw new Error("Failed to fetch patch note");
         }
         const data = await response.json();
-        
+
         // Transform database format to UI format
         const transformedNote = {
           id: data.id,
@@ -42,12 +54,12 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
         };
-        
+
         setPatchNote(transformedNote);
         setEditedContent(transformedNote.content);
         setEditedTitle(transformedNote.title);
       } catch (error) {
-        console.error('Error fetching patch note:', error);
+        console.error("Error fetching patch note:", error);
       }
     };
 
@@ -68,12 +80,12 @@ export default function BlogViewPage() {
 
   const handleSave = async () => {
     setIsSaving(true);
-    
+
     try {
       const response = await fetch(`/api/patch-notes/${params.id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           title: editedTitle,
@@ -87,11 +99,11 @@ export default function BlogViewPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save changes');
+        throw new Error("Failed to save changes");
       }
 
       await response.json();
-      
+
       if (patchNote) {
         setPatchNote({
           ...patchNote,
@@ -99,11 +111,11 @@ export default function BlogViewPage() {
           content: editedContent,
         });
       }
-      
+
       setIsEditing(false);
     } catch (error) {
-      console.error('Error saving patch note:', error);
-      alert('Failed to save changes. Please try again.');
+      console.error("Error saving patch note:", error);
+      alert("Failed to save changes. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -111,20 +123,24 @@ export default function BlogViewPage() {
 
   const handleSendEmail = async () => {
     setIsSending(true);
-    
+
     // TODO: Implement actual API call to send emails
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    alert('Patch notes sent to all recipients!');
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    alert("Patch notes sent to all recipients!");
     setIsSending(false);
   };
 
   const getTimePeriodLabel = (period: string) => {
     switch (period) {
-      case '1day': return 'Daily';
-      case '1week': return 'Weekly';
-      case '1month': return 'Monthly';
-      default: return period;
+      case "1day":
+        return "Daily";
+      case "1week":
+        return "Weekly";
+      case "1month":
+        return "Monthly";
+      default:
+        return period;
     }
   };
 
@@ -144,7 +160,7 @@ export default function BlogViewPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => router.push('/')}
+            onClick={() => router.push("/")}
             className="mb-4"
           >
             <ArrowLeftIcon className="h-4 w-4 mr-2" />
@@ -161,7 +177,7 @@ export default function BlogViewPage() {
                   {new Date(patchNote.generatedAt).toLocaleDateString()}
                 </Badge>
               </div>
-              
+
               {isEditing ? (
                 <Textarea
                   value={editedTitle}
@@ -172,7 +188,7 @@ export default function BlogViewPage() {
               ) : (
                 <h1 className="text-4xl font-bold mb-2">{patchNote.title}</h1>
               )}
-              
+
               <a
                 href={patchNote.repoUrl}
                 target="_blank"
@@ -186,30 +202,18 @@ export default function BlogViewPage() {
             <div className="flex gap-2">
               {isEditing ? (
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCancel}
-                  >
-                    <XIcon className="h-4 w-4 mr-2" />
+                  <Button variant="outline" size="sm" onClick={handleCancel}>
+                    <XMarkIcon className="h-4 w-4 mr-2" />
                     Cancel
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSave}
-                    disabled={isSaving}
-                  >
-                    <SaveIcon className="h-4 w-4 mr-2" />
-                    {isSaving ? 'Saving...' : 'Save'}
+                  <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                    <CheckIcon className="h-4 w-4 mr-2" />
+                    {isSaving ? "Saving..." : "Save"}
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleEdit}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleEdit}>
                     <PencilIcon className="h-4 w-4 mr-2" />
                     Edit
                   </Button>
@@ -218,8 +222,8 @@ export default function BlogViewPage() {
                     onClick={handleSendEmail}
                     disabled={isSending}
                   >
-                    <SendIcon className="h-4 w-4 mr-2" />
-                    {isSending ? 'Sending...' : 'Send Email'}
+                    <PaperAirplaneIcon className="h-4 w-4 mr-2" />
+                    {isSending ? "Sending..." : "Send Email"}
                   </Button>
                 </>
               )}
@@ -237,7 +241,7 @@ export default function BlogViewPage() {
               </CardTitle>
             </CardHeader>
           </Card>
-          
+
           <Card>
             <CardHeader className="pb-3">
               <CardDescription>Lines Removed</CardDescription>
@@ -304,4 +308,3 @@ export default function BlogViewPage() {
     </div>
   );
 }
-
