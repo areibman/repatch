@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
+      console.error('Supabase error:', error);
       return NextResponse.json(
         { error: error.message },
         { status: 500 }
@@ -60,8 +61,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
+    console.error('API error:', error);
     return NextResponse.json(
-      { error: 'Failed to create patch note' },
+      { error: error instanceof Error ? error.message : 'Failed to create patch note' },
       { status: 500 }
     );
   }

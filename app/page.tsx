@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PatchNote } from '@/types/patch-note';
-import { PlusIcon, GitBranchIcon, CalendarIcon, UsersIcon } from 'lucide-react';
+import { GitBranchIcon, CalendarIcon, UsersIcon } from 'lucide-react';
+import { CreatePostDialog } from '@/components/create-post-dialog';
 
 export default function Home() {
   const [patchNotes, setPatchNotes] = useState<PatchNote[]>([]);
@@ -106,10 +107,7 @@ export default function Home() {
               AI-generated patch notes from your repositories
             </p>
           </div>
-          <Button size="lg">
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Create New Post
-          </Button>
+          <CreatePostDialog />
         </div>
       </header>
 
@@ -234,7 +232,7 @@ export default function Home() {
         </div>
 
         {/* Empty State (shown when no posts) */}
-        {patchNotes.length === 0 && (
+        {patchNotes.length === 0 && !isLoading && (
           <Card className="text-center py-12">
             <CardContent>
               <GitBranchIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -242,10 +240,7 @@ export default function Home() {
               <p className="text-muted-foreground mb-6">
                 Create your first patch note to get started
               </p>
-              <Button>
-                <PlusIcon className="h-4 w-4 mr-2" />
-                Create New Post
-              </Button>
+              <CreatePostDialog />
             </CardContent>
           </Card>
         )}
