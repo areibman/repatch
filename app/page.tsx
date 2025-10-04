@@ -120,7 +120,6 @@ export default function Home() {
 
   return (
     <div className="bg-gradient-to-b from-background via-background to-muted/20">
-
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-6 flex items-center justify-between">
@@ -133,6 +132,7 @@ export default function Home() {
           <CreatePostDialog />
         </div>
       </header>
+
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         {/* Stats Bar */}

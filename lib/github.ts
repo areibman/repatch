@@ -2,6 +2,10 @@
  * GitHub API utilities for fetching repository data
  */
 
+import { z } from "zod";
+import { systemPrompt } from "../constants";
+import { VideoData } from "../types/patch-note";
+
 export interface GitHubCommit {
   sha: string;
   commit: {
@@ -32,12 +36,14 @@ export interface RepoStats {
 /**
  * Parse repository information from GitHub URL
  */
-export function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
+export function parseGitHubUrl(
+  url: string
+): { owner: string; repo: string } | null {
   const match = url.match(/github\.com\/([^\/]+)\/([^\/\?#]+)/);
   if (match) {
     return {
       owner: match[1],
-      repo: match[2].replace(/\.git$/, ''),
+      repo: match[2].replace(/\.git$/, ""),
     };
   }
   return null;
@@ -46,23 +52,26 @@ export function parseGitHubUrl(url: string): { owner: string; repo: string } | n
 /**
  * Calculate date range based on time period
  */
-export function getDateRange(timePeriod: '1day' | '1week' | '1month'): { since: string; until: string } {
+export function getDateRange(timePeriod: "1day" | "1week" | "1month"): {
+  since: string;
+  until: string;
+} {
   const now = new Date();
   const until = now.toISOString();
-  
+
   const since = new Date(now);
   switch (timePeriod) {
-    case '1day':
+    case "1day":
       since.setDate(since.getDate() - 1);
       break;
-    case '1week':
+    case "1week":
       since.setDate(since.getDate() - 7);
       break;
-    case '1month':
+    case "1month":
       since.setMonth(since.getMonth() - 1);
       break;
   }
-  
+
   return { since: since.toISOString(), until };
 }
 
@@ -76,18 +85,18 @@ export async function fetchGitHubCommits(
   until: string
 ): Promise<GitHubCommit[]> {
   const url = `https://api.github.com/repos/${owner}/${repo}/commits?since=${since}&until=${until}&per_page=100`;
-  
+
   const response = await fetch(url, {
     headers: {
-      'Accept': 'application/vnd.github.v3+json',
+      Accept: "application/vnd.github.v3+json",
       // Add User-Agent for better rate limiting
-      'User-Agent': 'Repatch-App',
+      "User-Agent": "Repatch-App",
     },
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch commits from GitHub');
+    throw new Error(error.message || "Failed to fetch commits from GitHub");
   }
 
   return response.json();
@@ -102,11 +111,11 @@ export async function fetchCommitStats(
   sha: string
 ): Promise<{ additions: number; deletions: number }> {
   const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`;
-  
+
   const response = await fetch(url, {
     headers: {
-      'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'Repatch-App',
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "Repatch-App",
     },
   });
 
@@ -127,7 +136,7 @@ export async function fetchCommitStats(
 export async function getRepoStats(
   owner: string,
   repo: string,
-  timePeriod: '1day' | '1week' | '1month'
+  timePeriod: "1day" | "1week" | "1month"
 ): Promise<RepoStats> {
   const { since, until } = getDateRange(timePeriod);
   const commits = await fetchGitHubCommits(owner, repo, since, until);
@@ -145,7 +154,7 @@ export async function getRepoStats(
   // Extract unique contributors
   const contributorSet = new Set<string>();
   const commitMessages: string[] = [];
-  
+
   commits.forEach((commit) => {
     if (commit.author?.login) {
       contributorSet.add(`@${commit.author.login}`);
@@ -163,7 +172,7 @@ export async function getRepoStats(
   );
 
   const stats = await Promise.all(statsPromises);
-  
+
   // Calculate totals
   const additions = stats.reduce((sum, s) => sum + s.additions, 0);
   const deletions = stats.reduce((sum, s) => sum + s.deletions, 0);
@@ -187,11 +196,16 @@ export async function getRepoStats(
  */
 export function generateBoilerplateContent(
   repoName: string,
-  timePeriod: '1day' | '1week' | '1month',
+  timePeriod: "1day" | "1week" | "1month",
   stats: RepoStats
 ): string {
-  const periodLabel = timePeriod === '1day' ? 'Daily' : timePeriod === '1week' ? 'Weekly' : 'Monthly';
-  
+  const periodLabel =
+    timePeriod === "1day"
+      ? "Daily"
+      : timePeriod === "1week"
+      ? "Weekly"
+      : "Monthly";
+
   const content = `# ${periodLabel} Update for ${repoName}
 
 ## 📊 Overview
@@ -206,21 +220,32 @@ This ${periodLabel.toLowerCase()} summary covers changes made to the repository.
 
 ## 🚀 Highlights
 
-${stats.commits > 0 ? `
+${
+  stats.commits > 0
+    ? `
 The team has been actively developing with ${stats.commits} commits during this period. 
 Key areas of focus include ongoing development and improvements across the codebase.
-` : 'No commits were made during this period.'}
+`
+    : "No commits were made during this period."
+}
 
 ## 📝 Recent Commits
 
-${stats.commitMessages.slice(0, 10).map((msg) => `- ${msg.split('\n')[0]}`).join('\n')}
+${stats.commitMessages
+  .slice(0, 10)
+  .map((msg) => `- ${msg.split("\n")[0]}`)
+  .join("\n")}
 
-${stats.commitMessages.length > 10 ? `\n_...and ${stats.commitMessages.length - 10} more commits_` : ''}
+${
+  stats.commitMessages.length > 10
+    ? `\n_...and ${stats.commitMessages.length - 10} more commits_`
+    : ""
+}
 
 ## 👥 Contributors
 
 Thanks to all contributors who made this release possible:
-${stats.contributors.join(', ')}
+${stats.contributors.join(", ")}
 
 ---
 
@@ -230,3 +255,78 @@ ${stats.contributors.join(', ')}
   return content;
 }
 
+/**
+ * Generate video data using AI based on repository stats and commit messages
+ */
+export async function generateVideoData(
+  repoName: string,
+  timePeriod: "1day" | "1week" | "1month",
+  stats: RepoStats
+): Promise<VideoData> {
+  const periodLabel =
+    timePeriod === "1day"
+      ? "Daily"
+      : timePeriod === "1week"
+      ? "Weekly"
+      : "Monthly";
+
+  // Create a summary of the changes for AI processing
+  const changesSummary = `
+Repository: ${repoName}
+Period: ${periodLabel}
+Commits: ${stats.commits}
+Contributors: ${stats.contributors.length}
+Lines added: ${stats.additions}
+Lines removed: ${stats.deletions}
+
+Recent commit messages:
+${stats.commitMessages
+  .slice(0, 20)
+  .map((msg, i) => `${i + 1}. ${msg.split("\n")[0]}`)
+  .join("\n")}
+`;
+
+  try {
+    // For now, we'll create a simple fallback structure
+    // In a real implementation, you would call an AI service here
+    const topChanges = stats.commitMessages.slice(0, 5).map((msg, i) => ({
+      title: `Change ${i + 1}`,
+      description:
+        msg.split("\n")[0].substring(0, 100) + (msg.length > 100 ? "..." : ""),
+    }));
+
+    const allChanges = stats.commitMessages
+      .slice(0, 25)
+      .map(
+        (msg) =>
+          msg.split("\n")[0].substring(0, 80) + (msg.length > 80 ? "..." : "")
+      );
+
+    return {
+      langCode: "en",
+      topChanges,
+      allChanges,
+    };
+  } catch (error) {
+    console.error("Error generating video data:", error);
+
+    // Fallback data
+    return {
+      langCode: "en",
+      topChanges: [
+        {
+          title: "Repository Updates",
+          description: `Active development with ${
+            stats.commits
+          } commits during this ${periodLabel.toLowerCase()} period`,
+        },
+      ],
+      allChanges: stats.commitMessages
+        .slice(0, 10)
+        .map(
+          (msg) =>
+            msg.split("\n")[0].substring(0, 60) + (msg.length > 60 ? "..." : "")
+        ),
+    };
+  }
+}

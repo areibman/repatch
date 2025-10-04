@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -22,6 +22,15 @@ import {
   PaperAirplaneIcon,
   XMarkIcon,
 } from "@heroicons/react/16/solid";
+import { Player } from "@remotion/player";
+import { getDuration } from "@/remotion/Root";
+import { ParsedPropsSchema } from "@/remotion/BaseComp";
+
+import dynamic from "next/dynamic";
+
+const BaseComp = dynamic(() => import("@/remotion/BaseComp"), {
+  ssr: false,
+});
 
 export default function BlogViewPage() {
   const params = useParams();
@@ -32,6 +41,18 @@ export default function BlogViewPage() {
   const [editedTitle, setEditedTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+
+  // Calculate duration from patch note's video data
+  const videoDuration = useMemo(() => {
+    try {
+      if (patchNote?.videoData) {
+        return getDuration(patchNote.videoData);
+      }
+      return 30 * 4; // fallback duration
+    } catch {
+      return 30 * 4; // fallback duration
+    }
+  }, [patchNote?.videoData]);
 
   useEffect(() => {
     const fetchPatchNote = async () => {
@@ -249,6 +270,32 @@ export default function BlogViewPage() {
           </div>
         </div>
 
+        {/* Remotion Player */}
+        <div className="mb-8">
+          <Player
+            component={BaseComp as any}
+            durationInFrames={videoDuration}
+            fps={30}
+            compositionHeight={1080}
+            compositionWidth={2160}
+            controls
+            style={{
+              width: "100%",
+              height: "100%",
+            }}
+            inputProps={{
+              repositorySlug: patchNote.repoName,
+              releaseTag: "latest",
+              openaiGeneration: patchNote.videoData || {
+                langCode: "en",
+                topChanges: [],
+                allChanges: [],
+              },
+              langCode: patchNote.videoData?.langCode || "en",
+            }}
+          />
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Card>
@@ -272,8 +319,12 @@ export default function BlogViewPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardDescription>Contributors</CardDescription>
-              <CardTitle className="text-3xl text-blue-600">{patchNote.contributors.length}</CardTitle>
-              <CardDescription>contributor{patchNote.contributors.length !== 1 ? 's' : ''}</CardDescription>
+              <CardTitle className="text-3xl text-blue-600">
+                {patchNote.contributors.length}
+              </CardTitle>
+              <CardDescription>
+                contributor{patchNote.contributors.length !== 1 ? "s" : ""}
+              </CardDescription>
             </CardHeader>
           </Card>
         </div>

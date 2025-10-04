@@ -23,6 +23,7 @@ export interface Database {
             removed: number;
           };
           contributors: string[];
+          video_data: Json | null;
           generated_at: string;
           created_at: string;
           updated_at: string;
@@ -40,6 +41,7 @@ export interface Database {
             removed: number;
           };
           contributors?: string[];
+          video_data?: Json | null;
           generated_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -57,6 +59,7 @@ export interface Database {
             removed: number;
           };
           contributors?: string[];
+          video_data?: Json | null;
           generated_at?: string;
           created_at?: string;
           updated_at?: string;

@@ -1,5 +1,5 @@
 import { registerRoot } from "remotion";
-import Comp from "./Root";
+import { RemotionComp } from "./Root";
 import "../app/globals.css";
 
-registerRoot(Comp);
+registerRoot(RemotionComp);

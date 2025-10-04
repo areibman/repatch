@@ -1,5 +1,9 @@
 import { HTMLAttributes } from "react";
-import { AbsoluteFill, Series, useVideoConfig } from "remotion";
+import {
+  AbsoluteFill,
+  Series,
+  useVideoConfig,
+} from "remotion";
 import { z } from "zod";
 import First from "./sequences/SlideInContentFromBottomWithGrid";
 import { loadFont as loadInterFont } from "@remotion/google-fonts/Inter";
@@ -27,7 +31,7 @@ export type ParsedPropsSchema = z.infer<typeof parsedPropsSchema>;
 export const baseCompSchema = z.object({
   repositorySlug: z.string(),
   releaseTag: z.string(),
-  openaiGeneration: z.string(),
+  openaiGeneration: z.object(parsedPropsSchemaBase),
 
   ...parsedPropsSchemaBase,
 });
@@ -52,8 +56,13 @@ const BaseComp = ({
   topChanges,
   allChanges,
   langCode,
+  openaiGeneration,
 }: z.infer<typeof baseCompSchema> & HTMLAttributes<HTMLDivElement>) => {
   const { fps } = useVideoConfig();
+
+  const effectiveLangCode = langCode ?? openaiGeneration?.langCode ?? "en";
+  const effectiveTopChanges = topChanges ?? openaiGeneration?.topChanges ?? [];
+  const effectiveAllChanges = allChanges ?? openaiGeneration?.allChanges ?? [];
 
   return (
     <AbsoluteFill className="bg-black">
@@ -115,14 +124,14 @@ const BaseComp = ({
               <Star4Sided />
               <h1 className="text-9xl font-black">
                 {translations.HERE_ARE_THE_TOP_CHANGES[
-                  langCode as keyof typeof translations.HERE_ARE_THE_TOP_CHANGES
+                  effectiveLangCode as keyof typeof translations.HERE_ARE_THE_TOP_CHANGES
                 ] ?? translations.HERE_ARE_THE_TOP_CHANGES["en"]}
               </h1>
             </First>
           </SlidingDoors>
         </Series.Sequence>
 
-        {topChanges.map((change, i) => (
+        {effectiveTopChanges.map((change, i) => (
           <Series.Sequence
             durationInFrames={fps * 4}
             offset={-20}
@@ -136,7 +145,7 @@ const BaseComp = ({
             <ConditionalWrap
               condition={
                 // Last one only
-                i === topChanges.length - 1
+                i === effectiveTopChanges.length - 1
               }
               wrap={(children) => <SlideExitToTop>{children}</SlideExitToTop>}
             >
@@ -184,7 +193,10 @@ const BaseComp = ({
           className="z-0"
           name={"Scrolling all things changed list"}
         >
-          <AllThingsWeAddedSequence langCode={langCode} list={allChanges} />
+          <AllThingsWeAddedSequence
+            langCode={effectiveLangCode}
+            list={effectiveAllChanges}
+          />
         </Series.Sequence>
 
         <Series.Sequence
@@ -202,12 +214,12 @@ const BaseComp = ({
               <First className="bg-blue-500 text-white flex flex-col items-center justify-center text-center">
                 <h1 className="text-9xl font-black">
                   {translations.CHECK_OUT_THE_LATEST_RELEASE[
-                    langCode as keyof typeof translations.CHECK_OUT_THE_LATEST_RELEASE
+                    effectiveLangCode as keyof typeof translations.CHECK_OUT_THE_LATEST_RELEASE
                   ] ?? translations.CHECK_OUT_THE_LATEST_RELEASE["en"]}
                 </h1>
                 <p className="text-5xl mt-10 text-white/70">
                   {translations.ON_GITHUB[
-                    langCode as keyof typeof translations.ON_GITHUB
+                    effectiveLangCode as keyof typeof translations.ON_GITHUB
                   ] ?? translations.ON_GITHUB["en"]}
                 </p>
               </First>
