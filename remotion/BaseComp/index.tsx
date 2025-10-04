@@ -1,9 +1,5 @@
 import { HTMLAttributes } from "react";
-import {
-  AbsoluteFill,
-  Series,
-  useVideoConfig,
-} from "remotion";
+import { AbsoluteFill, Series, useVideoConfig } from "remotion";
 import { z } from "zod";
 import First from "./sequences/SlideInContentFromBottomWithGrid";
 import { loadFont as loadInterFont } from "@remotion/google-fonts/Inter";
