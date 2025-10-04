@@ -122,13 +122,31 @@ export default function BlogViewPage() {
   };
 
   const handleSendEmail = async () => {
+    if (!confirm('Send this patch note to all email subscribers?')) {
+      return;
+    }
+
     setIsSending(true);
+    
+    try {
+      const response = await fetch(`/api/patch-notes/${params.id}/send`, {
+        method: 'POST',
+      });
 
-    // TODO: Implement actual API call to send emails
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send email');
+      }
 
-    alert("Patch notes sent to all recipients!");
-    setIsSending(false);
+      const data = await response.json();
+      alert(`✅ Patch note successfully sent to ${data.sentTo} recipient${data.sentTo !== 1 ? 's' : ''}!`);
+    } catch (error) {
+      console.error('Error sending email:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
+      alert(`❌ Error: ${errorMessage}`);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const getTimePeriodLabel = (period: string) => {
