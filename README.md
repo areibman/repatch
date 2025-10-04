@@ -1,8 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Repatch
+
+AI-generated patch notes from your GitHub repositories, delivered as beautiful newsletters.
+
+## Overview
+
+Repatch uses LLMs to analyze GitHub repository changes over time periods (daily, weekly, monthly) and generates professional patch notes. The generated content can be edited and sent via email to subscribers.
+
+## Tech Stack
+
+- **Framework**: Next.js 15 with App Router
+- **Database**: Supabase (PostgreSQL)
+- **UI**: ShadCN UI + Tailwind CSS
+- **Email**: Resend (planned)
+- **AI**: LiteLLM + AWS Bedrock (planned)
 
 ## Getting Started
 
-First, run the development server:
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Set Up Supabase
+
+Follow the instructions in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to:
+- Configure your database
+- Run migrations
+- Add test data
+
+### 3. Run Development Server
 
 ```bash
 npm run dev

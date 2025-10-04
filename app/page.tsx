@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,78 +8,53 @@ import { Badge } from '@/components/ui/badge';
 import { PatchNote } from '@/types/patch-note';
 import { PlusIcon, GitBranchIcon, CalendarIcon, UsersIcon } from 'lucide-react';
 
-// Mock data - replace with actual API call
-const getMockPatchNotes = (): PatchNote[] => [
-  {
-    id: '1',
-    repoName: 'acme/awesome-project',
-    repoUrl: 'https://github.com/acme/awesome-project',
-    timePeriod: '1week',
-    generatedAt: new Date('2025-10-01'),
-    title: 'Weekly Update: New Features and Bug Fixes',
-    content: 'Enhanced authentication, dashboard redesign, and performance improvements...',
-    changes: { added: 2543, modified: 1823, removed: 456 },
-    contributors: ['@alice', '@bob', '@charlie', '@diana'],
-  },
-  {
-    id: '2',
-    repoName: 'acme/awesome-project',
-    repoUrl: 'https://github.com/acme/awesome-project',
-    timePeriod: '1month',
-    generatedAt: new Date('2025-09-30'),
-    title: 'September Monthly Recap: Major Milestone Release',
-    content: 'This month brought significant updates including API v2, mobile app launch, and security enhancements...',
-    changes: { added: 8234, modified: 4521, removed: 1203 },
-    contributors: ['@alice', '@bob', '@charlie', '@diana', '@eve', '@frank'],
-  },
-  {
-    id: '3',
-    repoName: 'techcorp/api-gateway',
-    repoUrl: 'https://github.com/techcorp/api-gateway',
-    timePeriod: '1day',
-    generatedAt: new Date('2025-10-04'),
-    title: 'Daily Update: Critical Hotfixes',
-    content: 'Fixed authentication timeout issues and improved rate limiting logic...',
-    changes: { added: 145, modified: 89, removed: 23 },
-    contributors: ['@alice', '@bob'],
-  },
-  {
-    id: '4',
-    repoName: 'techcorp/api-gateway',
-    repoUrl: 'https://github.com/techcorp/api-gateway',
-    timePeriod: '1week',
-    generatedAt: new Date('2025-09-28'),
-    title: 'Weekly Progress: Performance Optimization',
-    content: 'Significant performance improvements with new caching strategy and database optimizations...',
-    changes: { added: 1456, modified: 892, removed: 234 },
-    contributors: ['@alice', '@bob', '@charlie'],
-  },
-  {
-    id: '5',
-    repoName: 'startup/mobile-app',
-    repoUrl: 'https://github.com/startup/mobile-app',
-    timePeriod: '1week',
-    generatedAt: new Date('2025-09-25'),
-    title: 'Weekly Update: UI Refresh and New Screens',
-    content: 'Complete redesign of profile screen, added dark mode support, and implemented push notifications...',
-    changes: { added: 3421, modified: 2134, removed: 567 },
-    contributors: ['@designer', '@developer', '@qa'],
-  },
-  {
-    id: '6',
-    repoName: 'startup/mobile-app',
-    repoUrl: 'https://github.com/startup/mobile-app',
-    timePeriod: '1month',
-    generatedAt: new Date('2025-09-01'),
-    title: 'August Monthly Summary: Beta Launch',
-    content: 'Successfully launched beta version with 1000+ users, implemented feedback system, and fixed critical bugs...',
-    changes: { added: 12453, modified: 6782, removed: 2341 },
-    contributors: ['@designer', '@developer', '@qa', '@pm', '@lead'],
-  },
-];
-
 export default function Home() {
-  const [patchNotes] = useState<PatchNote[]>(getMockPatchNotes());
+  const [patchNotes, setPatchNotes] = useState<PatchNote[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPatchNotes = async () => {
+      try {
+        const response = await fetch('/api/patch-notes');
+        if (!response.ok) {
+          throw new Error('Failed to fetch patch notes');
+        }
+        const data = await response.json();
+        
+        // Transform database format to UI format
+        const transformedData = data.map((note: {
+          id: string;
+          repo_name: string;
+          repo_url: string;
+          time_period: '1day' | '1week' | '1month';
+          generated_at: string;
+          title: string;
+          content: string;
+          changes: { added: number; modified: number; removed: number };
+          contributors: string[];
+        }) => ({
+          id: note.id,
+          repoName: note.repo_name,
+          repoUrl: note.repo_url,
+          timePeriod: note.time_period,
+          generatedAt: new Date(note.generated_at),
+          title: note.title,
+          content: note.content,
+          changes: note.changes,
+          contributors: note.contributors,
+        }));
+        
+        setPatchNotes(transformedData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPatchNotes();
+  }, []);
 
   const getTimePeriodLabel = (period: string) => {
     switch (period) {
@@ -98,6 +73,27 @@ export default function Home() {
       default: return 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20';
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading patch notes...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardContent className="pt-6">
+            <p className="text-destructive mb-4">Error: {error}</p>
+            <Button onClick={() => window.location.reload()}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">

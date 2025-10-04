@@ -11,3 +11,4 @@ Core features:
 General rules:
 - Use LiteLLM + AWS Bedrock for LLM summarization
 - Use Resend for emails
+- Use bun

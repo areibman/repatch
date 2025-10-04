@@ -8,54 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { PatchNote } from '@/types/patch-note';
 import { ArrowLeftIcon, PencilIcon, SaveIcon, SendIcon, XIcon } from 'lucide-react';
-
-// Mock data - replace with actual API call
-const getMockPatchNote = (id: string): PatchNote => ({
-  id,
-  repoName: 'acme/awesome-project',
-  repoUrl: 'https://github.com/acme/awesome-project',
-  timePeriod: '1week',
-  generatedAt: new Date(),
-  title: 'Weekly Update: New Features and Bug Fixes',
-  content: `# What's New This Week
-
-We've been hard at work improving the platform! Here's what changed:
-
-## 🚀 New Features
-
-- **Enhanced Authentication**: Implemented OAuth2 support for third-party integrations
-- **Dashboard Redesign**: Completely revamped the user dashboard with a modern, intuitive interface
-- **Real-time Notifications**: Added WebSocket support for instant updates
-
-## 🐛 Bug Fixes
-
-- Fixed memory leak in the background worker process
-- Resolved race condition in the payment processing pipeline
-- Corrected timezone handling for international users
-
-## 📈 Performance Improvements
-
-- Reduced API response times by 40%
-- Optimized database queries for faster page loads
-- Implemented caching layer for frequently accessed data
-
-## 🔧 Technical Updates
-
-- Updated dependencies to latest stable versions
-- Improved test coverage to 85%
-- Enhanced error logging and monitoring
-
-Thanks to all our contributors for making this release possible!`,
-  changes: {
-    added: 2543,
-    modified: 1823,
-    removed: 456,
-  },
-  contributors: ['@alice', '@bob', '@charlie', '@diana'],
-});
 
 export default function BlogViewPage() {
   const params = useParams();
@@ -68,11 +22,36 @@ export default function BlogViewPage() {
   const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
-    // In production, fetch from API
-    const note = getMockPatchNote(params.id as string);
-    setPatchNote(note);
-    setEditedContent(note.content);
-    setEditedTitle(note.title);
+    const fetchPatchNote = async () => {
+      try {
+        const response = await fetch(`/api/patch-notes/${params.id}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch patch note');
+        }
+        const data = await response.json();
+        
+        // Transform database format to UI format
+        const transformedNote = {
+          id: data.id,
+          repoName: data.repo_name,
+          repoUrl: data.repo_url,
+          timePeriod: data.time_period,
+          generatedAt: new Date(data.generated_at),
+          title: data.title,
+          content: data.content,
+          changes: data.changes,
+          contributors: data.contributors,
+        };
+        
+        setPatchNote(transformedNote);
+        setEditedContent(transformedNote.content);
+        setEditedTitle(transformedNote.title);
+      } catch (error) {
+        console.error('Error fetching patch note:', error);
+      }
+    };
+
+    fetchPatchNote();
   }, [params.id]);
 
   const handleEdit = () => {
@@ -90,19 +69,44 @@ export default function BlogViewPage() {
   const handleSave = async () => {
     setIsSaving(true);
     
-    // TODO: Implement actual API call to save changes
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    if (patchNote) {
-      setPatchNote({
-        ...patchNote,
-        title: editedTitle,
-        content: editedContent,
+    try {
+      const response = await fetch(`/api/patch-notes/${params.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: editedTitle,
+          content: editedContent,
+          repo_name: patchNote?.repoName,
+          repo_url: patchNote?.repoUrl,
+          time_period: patchNote?.timePeriod,
+          changes: patchNote?.changes,
+          contributors: patchNote?.contributors,
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to save changes');
+      }
+
+      await response.json();
+      
+      if (patchNote) {
+        setPatchNote({
+          ...patchNote,
+          title: editedTitle,
+          content: editedContent,
+        });
+      }
+      
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error saving patch note:', error);
+      alert('Failed to save changes. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
-    
-    setIsSaving(false);
-    setIsEditing(false);
   };
 
   const handleSendEmail = async () => {
