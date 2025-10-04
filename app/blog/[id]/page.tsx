@@ -240,19 +240,18 @@ export default function BlogViewPage() {
           
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>Lines Modified</CardDescription>
-              <CardTitle className="text-3xl text-blue-600">
-                ~{patchNote.changes.modified.toLocaleString()}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-3">
               <CardDescription>Lines Removed</CardDescription>
               <CardTitle className="text-3xl text-red-600">
                 -{patchNote.changes.removed.toLocaleString()}
               </CardTitle>
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardDescription>Contributors</CardDescription>
+              <CardTitle className="text-3xl text-blue-600">{patchNote.contributors.length}</CardTitle>
+              <CardDescription>contributor{patchNote.contributors.length !== 1 ? 's' : ''}</CardDescription>
             </CardHeader>
           </Card>
         </div>

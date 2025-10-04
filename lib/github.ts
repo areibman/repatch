@@ -1,0 +1,232 @@
+/**
+ * GitHub API utilities for fetching repository data
+ */
+
+export interface GitHubCommit {
+  sha: string;
+  commit: {
+    author: {
+      name: string;
+      date: string;
+    };
+    message: string;
+  };
+  author: {
+    login: string;
+  } | null;
+  stats?: {
+    additions: number;
+    deletions: number;
+    total: number;
+  };
+}
+
+export interface RepoStats {
+  commits: number;
+  additions: number;
+  deletions: number;
+  contributors: string[];
+  commitMessages: string[];
+}
+
+/**
+ * Parse repository information from GitHub URL
+ */
+export function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
+  const match = url.match(/github\.com\/([^\/]+)\/([^\/\?#]+)/);
+  if (match) {
+    return {
+      owner: match[1],
+      repo: match[2].replace(/\.git$/, ''),
+    };
+  }
+  return null;
+}
+
+/**
+ * Calculate date range based on time period
+ */
+export function getDateRange(timePeriod: '1day' | '1week' | '1month'): { since: string; until: string } {
+  const now = new Date();
+  const until = now.toISOString();
+  
+  const since = new Date(now);
+  switch (timePeriod) {
+    case '1day':
+      since.setDate(since.getDate() - 1);
+      break;
+    case '1week':
+      since.setDate(since.getDate() - 7);
+      break;
+    case '1month':
+      since.setMonth(since.getMonth() - 1);
+      break;
+  }
+  
+  return { since: since.toISOString(), until };
+}
+
+/**
+ * Fetch commits from GitHub API for a time period
+ */
+export async function fetchGitHubCommits(
+  owner: string,
+  repo: string,
+  since: string,
+  until: string
+): Promise<GitHubCommit[]> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/commits?since=${since}&until=${until}&per_page=100`;
+  
+  const response = await fetch(url, {
+    headers: {
+      'Accept': 'application/vnd.github.v3+json',
+      // Add User-Agent for better rate limiting
+      'User-Agent': 'Repatch-App',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to fetch commits from GitHub');
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetch detailed commit stats including additions/deletions
+ */
+export async function fetchCommitStats(
+  owner: string,
+  repo: string,
+  sha: string
+): Promise<{ additions: number; deletions: number }> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`;
+  
+  const response = await fetch(url, {
+    headers: {
+      'Accept': 'application/vnd.github.v3+json',
+      'User-Agent': 'Repatch-App',
+    },
+  });
+
+  if (!response.ok) {
+    return { additions: 0, deletions: 0 };
+  }
+
+  const data = await response.json();
+  return {
+    additions: data.stats?.additions || 0,
+    deletions: data.stats?.deletions || 0,
+  };
+}
+
+/**
+ * Aggregate repository statistics from commits
+ */
+export async function getRepoStats(
+  owner: string,
+  repo: string,
+  timePeriod: '1day' | '1week' | '1month'
+): Promise<RepoStats> {
+  const { since, until } = getDateRange(timePeriod);
+  const commits = await fetchGitHubCommits(owner, repo, since, until);
+
+  if (commits.length === 0) {
+    return {
+      commits: 0,
+      additions: 0,
+      deletions: 0,
+      contributors: [],
+      commitMessages: [],
+    };
+  }
+
+  // Extract unique contributors
+  const contributorSet = new Set<string>();
+  const commitMessages: string[] = [];
+  
+  commits.forEach((commit) => {
+    if (commit.author?.login) {
+      contributorSet.add(`@${commit.author.login}`);
+    } else if (commit.commit.author.name) {
+      contributorSet.add(commit.commit.author.name);
+    }
+    commitMessages.push(commit.commit.message);
+  });
+
+  // Fetch detailed stats for up to 20 most recent commits
+  // (to avoid rate limiting, we sample instead of fetching all)
+  const commitsToFetch = commits.slice(0, Math.min(20, commits.length));
+  const statsPromises = commitsToFetch.map((commit) =>
+    fetchCommitStats(owner, repo, commit.sha)
+  );
+
+  const stats = await Promise.all(statsPromises);
+  
+  // Calculate totals
+  const additions = stats.reduce((sum, s) => sum + s.additions, 0);
+  const deletions = stats.reduce((sum, s) => sum + s.deletions, 0);
+
+  // Estimate total changes if we didn't fetch all commits
+  const estimationFactor = commits.length / commitsToFetch.length;
+  const estimatedAdditions = Math.round(additions * estimationFactor);
+  const estimatedDeletions = Math.round(deletions * estimationFactor);
+
+  return {
+    commits: commits.length,
+    additions: estimatedAdditions,
+    deletions: estimatedDeletions,
+    contributors: Array.from(contributorSet),
+    commitMessages,
+  };
+}
+
+/**
+ * Generate boilerplate patch note content
+ */
+export function generateBoilerplateContent(
+  repoName: string,
+  timePeriod: '1day' | '1week' | '1month',
+  stats: RepoStats
+): string {
+  const periodLabel = timePeriod === '1day' ? 'Daily' : timePeriod === '1week' ? 'Weekly' : 'Monthly';
+  
+  const content = `# ${periodLabel} Update for ${repoName}
+
+## 📊 Overview
+
+This ${periodLabel.toLowerCase()} summary covers changes made to the repository.
+
+**Period Statistics:**
+- **${stats.commits}** commits
+- **${stats.contributors.length}** active contributors
+- **${stats.additions.toLocaleString()}** lines added
+- **${stats.deletions.toLocaleString()}** lines removed
+
+## 🚀 Highlights
+
+${stats.commits > 0 ? `
+The team has been actively developing with ${stats.commits} commits during this period. 
+Key areas of focus include ongoing development and improvements across the codebase.
+` : 'No commits were made during this period.'}
+
+## 📝 Recent Commits
+
+${stats.commitMessages.slice(0, 10).map((msg) => `- ${msg.split('\n')[0]}`).join('\n')}
+
+${stats.commitMessages.length > 10 ? `\n_...and ${stats.commitMessages.length - 10} more commits_` : ''}
+
+## 👥 Contributors
+
+Thanks to all contributors who made this release possible:
+${stats.contributors.join(', ')}
+
+---
+
+*Note: This is an auto-generated summary. AI-powered detailed analysis coming soon.*
+`;
+
+  return content;
+}
+

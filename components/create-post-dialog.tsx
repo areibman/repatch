@@ -21,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PlusIcon } from 'lucide-react';
+import { PlusIcon, Loader2Icon } from 'lucide-react';
+import { parseGitHubUrl, getRepoStats, generateBoilerplateContent } from '@/lib/github';
 
 export function CreatePostDialog() {
   const router = useRouter();
@@ -30,23 +31,10 @@ export function CreatePostDialog() {
   const [repoUrl, setRepoUrl] = useState('');
   const [timePeriod, setTimePeriod] = useState<'1day' | '1week' | '1month'>('1week');
 
-  const extractRepoInfo = (url: string) => {
-    // Extract owner/repo from various GitHub URL formats
-    const match = url.match(/github\.com\/([^\/]+)\/([^\/\?#]+)/);
-    if (match) {
-      return {
-        owner: match[1],
-        repo: match[2].replace(/\.git$/, ''),
-        fullName: `${match[1]}/${match[2].replace(/\.git$/, '')}`,
-      };
-    }
-    return null;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const repoInfo = extractRepoInfo(repoUrl);
+    const repoInfo = parseGitHubUrl(repoUrl);
     if (!repoInfo) {
       alert('Please enter a valid GitHub repository URL');
       return;
@@ -55,39 +43,36 @@ export function CreatePostDialog() {
     setIsLoading(true);
 
     try {
-      // TODO: Replace this with actual AI generation
-      // For now, create a placeholder post
+      // Fetch real GitHub statistics
+      const stats = await getRepoStats(repoInfo.owner, repoInfo.repo, timePeriod);
+      
+      // Generate boilerplate content
+      const content = generateBoilerplateContent(
+        `${repoInfo.owner}/${repoInfo.repo}`,
+        timePeriod,
+        stats
+      );
+
+      const periodLabel = timePeriod === '1day' ? 'Daily' : timePeriod === '1week' ? 'Weekly' : 'Monthly';
+
+      // Create the patch note with real data
       const response = await fetch('/api/patch-notes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          repo_name: repoInfo.fullName,
+          repo_name: `${repoInfo.owner}/${repoInfo.repo}`,
           repo_url: repoUrl,
           time_period: timePeriod,
-          title: `${timePeriod === '1day' ? 'Daily' : timePeriod === '1week' ? 'Weekly' : 'Monthly'} Update - ${repoInfo.repo}`,
-          content: `# Patch Notes for ${repoInfo.fullName}
-
-## 🚀 Summary
-
-This is a placeholder patch note. AI generation will be implemented soon.
-
-## Changes Overview
-
-- Placeholder content
-- AI generation coming soon
-- Real GitHub data integration pending
-
-## Next Steps
-
-Integrate with LiteLLM + AWS Bedrock to generate actual content from GitHub commits.`,
+          title: `${periodLabel} Update - ${repoInfo.repo}`,
+          content: content,
           changes: {
-            added: 0,
-            modified: 0,
-            removed: 0,
+            added: stats.additions,
+            modified: 0, // GitHub API doesn't distinguish modified from additions
+            removed: stats.deletions,
           },
-          contributors: [],
+          contributors: stats.contributors,
           generated_at: new Date().toISOString(),
         }),
       });
@@ -182,7 +167,14 @@ Integrate with LiteLLM + AWS Bedrock to generate actual content from GitHub comm
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading}>
-              {isLoading ? 'Creating...' : 'Create Patch Note'}
+              {isLoading ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                  Fetching data...
+                </>
+              ) : (
+                'Create Patch Note'
+              )}
             </Button>
           </DialogFooter>
         </form>
