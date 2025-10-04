@@ -43,9 +43,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // @ts-expect-error - Supabase type inference issue with inserts
     const { data, error } = await supabase
       .from('email_subscribers')
-      // @ts-expect-error - Supabase type inference issue with inserts
       .insert([
         {
           email: body.email,
