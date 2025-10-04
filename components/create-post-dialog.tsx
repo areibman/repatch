@@ -23,20 +23,58 @@ import {
 } from "@/components/ui/select";
 import { PlusIcon, Loader2Icon } from "lucide-react";
 import {
-  parseGitHubUrl,
   getRepoStats,
-  generateBoilerplateContent,
   generateVideoData,
 } from "@/lib/github";
+import { parseGitHubUrl, generateBoilerplateContent } from '@/lib/github';
 
 export function CreatePostDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [repoUrl, setRepoUrl] = useState("");
-  const [timePeriod, setTimePeriod] = useState<"1day" | "1week" | "1month">(
-    "1week"
-  );
+  const [isFetchingBranches, setIsFetchingBranches] = useState(false);
+  const [repoUrl, setRepoUrl] = useState('');
+  const [branches, setBranches] = useState<{ name: string; protected: boolean }[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [timePeriod, setTimePeriod] = useState<'1day' | '1week' | '1month'>('1week');
+
+  const handleRepoUrlChange = async (url: string) => {
+    setRepoUrl(url);
+    setBranches([]);
+    setSelectedBranch('');
+
+    const repoInfo = parseGitHubUrl(url);
+    if (repoInfo) {
+      setIsFetchingBranches(true);
+      try {
+        // Call server-side API route to fetch branches
+        const response = await fetch(
+          `/api/github/branches?owner=${encodeURIComponent(repoInfo.owner)}&repo=${encodeURIComponent(repoInfo.repo)}`
+        );
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to fetch branches');
+        }
+        
+        const fetchedBranches = await response.json();
+        setBranches(fetchedBranches);
+        
+        // Auto-select main/master branch if available
+        const defaultBranch = fetchedBranches.find((b: { name: string; protected: boolean }) => b.name === 'main') || 
+                             fetchedBranches.find((b: { name: string; protected: boolean }) => b.name === 'master') ||
+                             fetchedBranches[0];
+        if (defaultBranch) {
+          setSelectedBranch(defaultBranch.name);
+        }
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+        // Continue without branches - will be validated on submit
+      } finally {
+        setIsFetchingBranches(false);
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +82,11 @@ export function CreatePostDialog() {
     const repoInfo = parseGitHubUrl(repoUrl);
     if (!repoInfo) {
       alert("Please enter a valid GitHub repository URL");
+      return;
+    }
+
+    if (!selectedBranch) {
+      alert('Please select a branch');
       return;
     }
 
@@ -110,7 +153,9 @@ export function CreatePostDialog() {
 
       // Close modal and redirect to the new post
       setOpen(false);
-      setRepoUrl("");
+      setRepoUrl('');
+      setBranches([]);
+      setSelectedBranch('');
       router.push(`/blog/${data.id}`);
       router.refresh();
     } catch (error) {
@@ -147,15 +192,43 @@ export function CreatePostDialog() {
                 id="repo-url"
                 placeholder="https://github.com/owner/repository"
                 value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
+                onChange={(e) => handleRepoUrlChange(e.target.value)}
                 required
                 disabled={isLoading}
               />
               <p className="text-xs text-muted-foreground">
-                Enter the full GitHub repository URL
+                {isFetchingBranches ? 'Fetching branches...' : 'Enter the full GitHub repository URL'}
               </p>
             </div>
 
+            {branches.length > 0 && (
+              <div className="grid gap-2">
+                <Label htmlFor="branch">
+                  Branch
+                </Label>
+                <Select
+                  value={selectedBranch}
+                  onValueChange={setSelectedBranch}
+                  disabled={isLoading || isFetchingBranches}
+                >
+                  <SelectTrigger id="branch">
+                    <SelectValue placeholder="Select branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.name} value={branch.name}>
+                        {branch.name}
+                        {branch.protected && ' 🔒'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Select which branch to analyze
+                </p>
+              </div>
+            )}
+            
             <div className="grid gap-2">
               <Label htmlFor="time-period">Time Period</Label>
               <Select
@@ -185,15 +258,23 @@ export function CreatePostDialog() {
               type="button"
               variant="outline"
               onClick={() => setOpen(false)}
-              disabled={isLoading}
+              disabled={isLoading || isFetchingBranches}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button 
+              type="submit" 
+              disabled={isLoading || isFetchingBranches || !selectedBranch}
+            >
               {isLoading ? (
                 <>
                   <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
                   Fetching data...
+                </>
+              ) : isFetchingBranches ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                  Loading branches...
                 </>
               ) : (
                 "Create Patch Note"

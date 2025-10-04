@@ -76,27 +76,84 @@ export function getDateRange(timePeriod: "1day" | "1week" | "1month"): {
 }
 
 /**
- * Fetch commits from GitHub API for a time period
+ * Get headers for GitHub API requests with authentication if available
+ */
+function getGitHubHeaders(): HeadersInit {
+  const headers: HeadersInit = {
+    'Accept': 'application/vnd.github.v3+json',
+    'User-Agent': 'Repatch-App',
+  };
+
+  // Add authentication token if available
+  const token = process.env.GITHUB_TOKEN;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  return headers;
+}
+
+/**
+ * Fetch branches from GitHub repository
+ */
+export async function fetchGitHubBranches(
+  owner: string,
+  repo: string
+): Promise<{ name: string; protected: boolean }[]> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`;
+  
+  const response = await fetch(url, {
+    headers: getGitHubHeaders(),
+  });
+
+  if (!response.ok) {
+    let errorMessage = 'Failed to fetch branches from GitHub';
+    try {
+      const error = await response.json();
+      errorMessage = error.message || errorMessage;
+    } catch {
+      errorMessage = `GitHub API error: ${response.status} ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  const branches = await response.json();
+  return branches.map((branch: any) => ({
+    name: branch.name,
+    protected: branch.protected || false,
+  }));
+}
+
+/**
+ * Fetch commits from GitHub API for a time period and specific branch
  */
 export async function fetchGitHubCommits(
   owner: string,
   repo: string,
   since: string,
-  until: string
+  until: string,
+  branch?: string
 ): Promise<GitHubCommit[]> {
-  const url = `https://api.github.com/repos/${owner}/${repo}/commits?since=${since}&until=${until}&per_page=100`;
-
+  let url = `https://api.github.com/repos/${owner}/${repo}/commits?since=${since}&until=${until}&per_page=100`;
+  
+  // Add branch parameter if specified
+  if (branch) {
+    url += `&sha=${encodeURIComponent(branch)}`;
+  }
+  
   const response = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github.v3+json",
-      // Add User-Agent for better rate limiting
-      "User-Agent": "Repatch-App",
-    },
+    headers: getGitHubHeaders(),
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || "Failed to fetch commits from GitHub");
+    let errorMessage = 'Failed to fetch commits from GitHub';
+    try {
+      const error = await response.json();
+      errorMessage = error.message || errorMessage;
+    } catch {
+      errorMessage = `GitHub API error: ${response.status} ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();
@@ -113,10 +170,7 @@ export async function fetchCommitStats(
   const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`;
 
   const response = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github.v3+json",
-      "User-Agent": "Repatch-App",
-    },
+    headers: getGitHubHeaders(),
   });
 
   if (!response.ok) {
@@ -136,10 +190,11 @@ export async function fetchCommitStats(
 export async function getRepoStats(
   owner: string,
   repo: string,
-  timePeriod: "1day" | "1week" | "1month"
+  timePeriod: '1day' | '1week' | '1month',
+  branch?: string
 ): Promise<RepoStats> {
   const { since, until } = getDateRange(timePeriod);
-  const commits = await fetchGitHubCommits(owner, repo, since, until);
+  const commits = await fetchGitHubCommits(owner, repo, since, until, branch);
 
   if (commits.length === 0) {
     return {

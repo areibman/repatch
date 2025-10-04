@@ -32,7 +32,6 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("patch_notes")
-      // @ts-expect-error - Supabase type inference issue with inserts
       .insert([
         {
           repo_name: body.repo_name,
