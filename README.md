@@ -33,6 +33,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 # Resend (for sending emails)
 RESEND_API_KEY=your_resend_api_key
+RESEND_AUDIENCE_ID=your_resend_audience_id
 
 # GitHub (REQUIRED to avoid rate limits)
 GITHUB_TOKEN=ghp_yourTokenHere
@@ -41,13 +42,27 @@ GITHUB_TOKEN=ghp_yourTokenHere
 **⚠️ Important**: Without a GitHub token, you'll hit rate limits (60 requests/hour). With a token, you get 5,000 requests/hour.
 
 To create a GitHub token:
+
 1. Go to https://github.com/settings/tokens
 2. Generate a new classic token with `public_repo` scope
 3. Add it to `.env.local` as shown above
 
+### Resend Setup
+
+To set up Resend for email sending:
+
+1. Go to https://resend.com and create an account
+2. Get your API key from the dashboard
+3. Create an audience for your subscribers:
+   - Go to the Audiences section in your Resend dashboard
+   - Create a new audience (e.g., "Repatch Subscribers")
+   - Copy the audience ID
+4. Add both the API key and audience ID to your `.env.local` file
+
 ### 3. Set Up Supabase
 
 Follow the instructions in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to:
+
 - Configure your database
 - Run migrations
 - Add test data

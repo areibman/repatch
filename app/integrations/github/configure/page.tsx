@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,14 +13,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ArrowLeftIcon } from "@heroicons/react/16/solid";
-import {
-  saveGitHubConfig,
-  saveGitHubConfigAction,
-} from "@/app/integrations/github/actions";
-import { useFormState } from "react-dom";
+import { saveGitHubConfigAction } from "@/app/integrations/github/actions";
 
 export default function GitHubConfigurePage() {
-  const [state, formAction] = useFormState(saveGitHubConfigAction, {
+  const [state, formAction] = useActionState(saveGitHubConfigAction, {
     ok: false,
   });
   const [repoUrl, setRepoUrl] = useState("");

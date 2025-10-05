@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
-import { createClient } from '@/lib/supabase/server';
-import { marked } from 'marked';
-import { Database } from '@/lib/supabase/database.types';
+import { NextRequest, NextResponse } from "next/server";
+import { Resend } from "resend";
+import { createClient } from "@/lib/supabase/server";
+import { marked } from "marked";
+import { Database } from "@/lib/supabase/database.types";
 
-type PatchNote = Database['public']['Tables']['patch_notes']['Row'];
+type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -30,40 +30,52 @@ export async function POST(
 
     // Fetch the patch note
     const { data: patchNote, error: patchNoteError } = await supabase
-      .from('patch_notes')
-      .select('*')
-      .eq('id', id)
+      .from("patch_notes")
+      .select("*")
+      .eq("id", id)
       .single();
 
     if (patchNoteError || !patchNote) {
       return NextResponse.json(
-        { error: 'Patch note not found' },
+        { error: "Patch note not found" },
         { status: 404 }
       );
     }
 
-    // Fetch active email subscribers
-    const { data: subscribers, error: subscribersError } = await supabase
-      .from('email_subscribers')
-      .select('email')
-      .eq('active', true);
+    // Use hardcoded audience ID from the docs
+    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
-    if (subscribersError) {
+    // Verify audience exists and get contact count
+    const audience = await resend.audiences.get(audienceId);
+
+    if (!audience.data) {
       return NextResponse.json(
-        { error: 'Failed to fetch subscribers' },
-        { status: 500 }
+        { error: "Resend audience not found" },
+        { status: 404 }
       );
     }
 
-    if (!subscribers || subscribers.length === 0) {
+    // Get contacts from the audience
+    const contacts = await resend.contacts.list({ audienceId });
+
+    if (!contacts.data || contacts.data.data.length === 0) {
       return NextResponse.json(
-        { error: 'No active subscribers found' },
+        { error: "No active subscribers found in audience" },
         { status: 400 }
       );
     }
 
-    // Extract email addresses
-    const recipientEmails = subscribers.map((s: { email: string }) => s.email);
+    // Filter out unsubscribed contacts
+    const activeContacts = contacts.data.data.filter(
+      (contact: any) => !contact.unsubscribed
+    );
+
+    if (activeContacts.length === 0) {
+      return NextResponse.json(
+        { error: "No active subscribers found" },
+        { status: 400 }
+      );
+    }
 
     // Convert markdown content to HTML
     const htmlContent = markdownToHtml((patchNote as PatchNote).content);
@@ -286,23 +298,41 @@ export async function POST(
       <h1 class="title">${(patchNote as PatchNote).title}</h1>
       <div class="metadata">
         <span class="badge">${(patchNote as PatchNote).repo_name}</span>
-        <span class="badge">${(patchNote as PatchNote).time_period === '1day' ? 'Daily' : (patchNote as PatchNote).time_period === '1week' ? 'Weekly' : 'Monthly'}</span>
-        <span>${new Date((patchNote as PatchNote).generated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+        <span class="badge">${
+          (patchNote as PatchNote).time_period === "1day"
+            ? "Daily"
+            : (patchNote as PatchNote).time_period === "1week"
+            ? "Weekly"
+            : "Monthly"
+        }</span>
+        <span>${new Date(
+          (patchNote as PatchNote).generated_at
+        ).toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        })}</span>
       </div>
     </div>
 
     <div class="stats">
       <div class="stat">
         <div class="stat-label">Added</div>
-        <div class="stat-value added">+${(patchNote as PatchNote).changes.added.toLocaleString()}</div>
+        <div class="stat-value added">+${(
+          patchNote as PatchNote
+        ).changes.added.toLocaleString()}</div>
       </div>
       <div class="stat">
         <div class="stat-label">Removed</div>
-        <div class="stat-value removed">-${(patchNote as PatchNote).changes.removed.toLocaleString()}</div>
+        <div class="stat-value removed">-${(
+          patchNote as PatchNote
+        ).changes.removed.toLocaleString()}</div>
       </div>
       <div class="stat">
         <div class="stat-label">Contributors</div>
-        <div class="stat-value">${(patchNote as PatchNote).contributors.length}</div>
+        <div class="stat-value">${
+          (patchNote as PatchNote).contributors.length
+        }</div>
       </div>
     </div>
 
@@ -310,18 +340,30 @@ export async function POST(
       ${htmlContent}
     </div>
 
-    ${(patchNote as PatchNote).contributors && (patchNote as PatchNote).contributors.length > 0 ? `
+    ${
+      (patchNote as PatchNote).contributors &&
+      (patchNote as PatchNote).contributors.length > 0
+        ? `
     <div class="contributors">
       <div class="contributors-title">Contributors</div>
       <div>
-        ${(patchNote as PatchNote).contributors.map((contributor: string) => `<span class="contributor-tag">${contributor}</span>`).join('')}
+        ${(patchNote as PatchNote).contributors
+          .map(
+            (contributor: string) =>
+              `<span class="contributor-tag">${contributor}</span>`
+          )
+          .join("")}
       </div>
     </div>
-    ` : ''}
+    `
+        : ""
+    }
 
     <div class="footer">
       <p>
-        View this patch note on the web: <a href="${(patchNote as PatchNote).repo_url}" target="_blank">${(patchNote as PatchNote).repo_name}</a>
+        View this patch note on the web: <a href="${
+          (patchNote as PatchNote).repo_url
+        }" target="_blank">${(patchNote as PatchNote).repo_name}</a>
       </p>
       <p>
         <small>This email was sent by Repatch - AI-powered patch notes for your repositories</small>
@@ -332,33 +374,36 @@ export async function POST(
 </html>
     `;
 
-    // Send email using Resend
+    // Send email using Resend to the audience
     const { data, error } = await resend.emails.send({
-      from: 'Repatch <onboarding@resend.dev>',
-      to: recipientEmails,
-      subject: `${(patchNote as PatchNote).title} - ${(patchNote as PatchNote).repo_name}`,
+      from: "Repatch <onboarding@resend.dev>",
+      to: audienceId, // Send to audience instead of individual emails
+      subject: `${(patchNote as PatchNote).title} - ${
+        (patchNote as PatchNote).repo_name
+      }`,
       html: emailHtml,
     });
 
     if (error) {
-      console.error('Resend error:', error);
+      console.error("Resend error:", error);
       return NextResponse.json(
-        { error: error.message || 'Failed to send email' },
+        { error: error.message || "Failed to send email" },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      sentTo: recipientEmails.length,
+      sentTo: activeContacts.length,
       emailId: data?.id,
     });
   } catch (error) {
-    console.error('API error:', error);
+    console.error("API error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to send email' },
+      {
+        error: error instanceof Error ? error.message : "Failed to send email",
+      },
       { status: 500 }
     );
   }
 }
-

@@ -1,5 +1,5 @@
 import { HTMLAttributes } from "react";
-import { AbsoluteFill, Series, useVideoConfig } from "remotion";
+import { AbsoluteFill, Series, useVideoConfig, Sequence } from "remotion";
 import { z } from "zod";
 import First from "./sequences/SlideInContentFromBottomWithGrid";
 import { loadFont as loadInterFont } from "@remotion/google-fonts/Inter";
@@ -70,7 +70,7 @@ const BaseComp = ({
         <Series.Sequence
           durationInFrames={fps * 1.5}
           className="text-white"
-          name="Vercel/NextJS"
+          name="remotion-dev/remotion"
         >
           <SlidingDoors>
             <First className="bg-black">
@@ -83,7 +83,7 @@ const BaseComp = ({
           durationInFrames={fps * 1.5}
           offset={-20}
           className="text-white"
-          name={"13.4.2"}
+          name={"v4.0.0"}
         >
           <SlidingDoors>
             <First className="bg-blue-500">
@@ -96,7 +96,7 @@ const BaseComp = ({
           durationInFrames={fps * 3}
           offset={-20}
           className="text-black"
-          name={"Vercel/NextJS | 13.4.2"}
+          name={"remotion-dev/remotion | v4.0.0"}
         >
           <SlidingDoors>
             <First className="bg-white text-center">
@@ -196,38 +196,32 @@ const BaseComp = ({
         </Series.Sequence>
 
         <Series.Sequence
-          durationInFrames={fps * 3}
+          durationInFrames={fps * 2}
           offset={-30}
           className="z-0"
           name="Checkout the latest release"
         >
-          <Series.Sequence
-            durationInFrames={fps * 1.5}
-            offset={-20}
-            className="text-white"
-          >
-            <SlidingDoors>
-              <First className="bg-blue-500 text-white flex flex-col items-center justify-center text-center">
-                <h1 className="text-9xl font-black">
-                  {translations.CHECK_OUT_THE_LATEST_RELEASE[
-                    effectiveLangCode as keyof typeof translations.CHECK_OUT_THE_LATEST_RELEASE
-                  ] ?? translations.CHECK_OUT_THE_LATEST_RELEASE["en"]}
-                </h1>
-                <p className="text-5xl mt-10 text-white/70">
-                  {translations.ON_GITHUB[
-                    effectiveLangCode as keyof typeof translations.ON_GITHUB
-                  ] ?? translations.ON_GITHUB["en"]}
-                </p>
-              </First>
-            </SlidingDoors>
-          </Series.Sequence>
+          <SlidingDoors>
+            <First className="bg-blue-500 text-white flex flex-col items-center justify-center text-center">
+              <h1 className="text-9xl font-black">
+                {translations.CHECK_OUT_THE_LATEST_RELEASE[
+                  effectiveLangCode as keyof typeof translations.CHECK_OUT_THE_LATEST_RELEASE
+                ] ?? translations.CHECK_OUT_THE_LATEST_RELEASE["en"]}
+              </h1>
+              <p className="text-5xl mt-10 text-white/70">
+                {translations.ON_GITHUB[
+                  effectiveLangCode as keyof typeof translations.ON_GITHUB
+                ] ?? translations.ON_GITHUB["en"]}
+              </p>
+            </First>
+          </SlidingDoors>
         </Series.Sequence>
 
         <Series.Sequence
           durationInFrames={fps * 3}
           offset={-20}
           className="text-black"
-          name={"Vercel/NextJS | 13.4.2"}
+          name={"remotion-dev/remotion | v4.0.0"}
         >
           <FadeOutExit>
             <SlidingDoors>
