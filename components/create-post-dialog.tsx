@@ -108,7 +108,7 @@ export function CreatePostDialog() {
       const stats = await statsResponse.json();
 
       // Generate AI summaries for commits
-      setLoadingStep('🤖 Analyzing commits with AI (this may take 30-60s)...');
+      setLoadingStep('Analyzing commits (30-60s)...');
       console.log('Fetching AI summaries...');
       const summariesResponse = await fetch('/api/github/summarize', {
         method: 'POST',
@@ -257,7 +257,7 @@ export function CreatePostDialog() {
                   <SelectTrigger id="branch">
                     <SelectValue placeholder="Select branch" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     {branches.map((branch) => (
                       <SelectItem key={branch.name} value={branch.name}>
                         {branch.name}
@@ -267,6 +267,7 @@ export function CreatePostDialog() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
+                  {branches.length > 0 && `${branches.length} branch${branches.length !== 1 ? 'es' : ''} found. `}
                   Select which branch to analyze
                 </p>
               </div>

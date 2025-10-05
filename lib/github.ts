@@ -94,34 +94,66 @@ function getGitHubHeaders(): HeadersInit {
 }
 
 /**
- * Fetch branches from GitHub repository
+ * Fetch branches from GitHub repository with pagination support
  */
 export async function fetchGitHubBranches(
   owner: string,
   repo: string
 ): Promise<{ name: string; protected: boolean }[]> {
-  const url = `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`;
+  const allBranches: { name: string; protected: boolean }[] = [];
+  let page = 1;
+  const perPage = 100;
   
-  const response = await fetch(url, {
-    headers: getGitHubHeaders(),
-  });
+  while (true) {
+    const url = `https://api.github.com/repos/${owner}/${repo}/branches?per_page=${perPage}&page=${page}`;
+    
+    const response = await fetch(url, {
+      headers: getGitHubHeaders(),
+    });
 
-  if (!response.ok) {
-    let errorMessage = 'Failed to fetch branches from GitHub';
-    try {
-      const error = await response.json();
-      errorMessage = error.message || errorMessage;
-    } catch {
-      errorMessage = `GitHub API error: ${response.status} ${response.statusText}`;
+    if (!response.ok) {
+      let errorMessage = 'Failed to fetch branches from GitHub';
+      try {
+        const error = await response.json();
+        errorMessage = error.message || errorMessage;
+      } catch {
+        errorMessage = `GitHub API error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
-    throw new Error(errorMessage);
-  }
 
-  const branches = await response.json();
-  return branches.map((branch: any) => ({
-    name: branch.name,
-    protected: branch.protected || false,
-  }));
+    const branches = await response.json();
+    
+    if (branches.length === 0) {
+      break; // No more branches
+    }
+    
+    allBranches.push(...branches.map((branch: any) => ({
+      name: branch.name,
+      protected: branch.protected || false,
+    })));
+    
+    // If we got fewer branches than requested, we've reached the end
+    if (branches.length < perPage) {
+      break;
+    }
+    
+    page++;
+    
+    // Safety limit: stop at 500 branches to avoid infinite loops
+    if (allBranches.length >= 500) {
+      break;
+    }
+  }
+  
+  // Sort branches: main/master first, then alphabetically
+  return allBranches.sort((a, b) => {
+    if (a.name === 'main') return -1;
+    if (b.name === 'main') return 1;
+    if (a.name === 'master') return -1;
+    if (b.name === 'master') return 1;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 /**
