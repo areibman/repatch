@@ -211,6 +211,22 @@ export default function BlogViewPage() {
             Back to Home
           </Button>
 
+          {/* Hero Image/Video */}
+          <div className="mb-6 rounded-lg overflow-hidden shadow-lg">
+            <a 
+              href="https://openedit-uploads.openchatui.com/basecomp.mp4" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="block hover:opacity-90 transition-opacity"
+            >
+              <img 
+                src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png" 
+                alt="Watch Repatch Demo Video" 
+                className="w-full h-auto"
+              />
+            </a>
+          </div>
+
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
