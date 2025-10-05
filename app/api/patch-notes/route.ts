@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const body = await request.json();
 
+    // @ts-expect-error - Supabase type inference issue with inserts
     const { data, error } = await supabase
       .from("patch_notes")
       .insert([
@@ -42,6 +43,8 @@ export async function POST(request: NextRequest) {
           changes: body.changes,
           contributors: body.contributors,
           video_data: body.video_data,
+          ai_summaries: body.ai_summaries || null,
+          ai_overall_summary: body.ai_overall_summary || null,
           generated_at: body.generated_at || new Date().toISOString(),
         },
       ])

@@ -214,6 +214,55 @@ export async function POST(
       font-size: 13px;
       margin: 4px;
     }
+    .ai-summaries {
+      margin: 30px 0;
+      padding: 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px;
+      color: #ffffff;
+    }
+    .ai-summaries-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ai-badge {
+      background-color: rgba(255, 255, 255, 0.2);
+      padding: 2px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .ai-summary-item {
+      background-color: rgba(255, 255, 255, 0.1);
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 3px solid rgba(255, 255, 255, 0.5);
+    }
+    .ai-summary-item:last-child {
+      margin-bottom: 0;
+    }
+    .ai-commit-title {
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0.9;
+      margin-bottom: 8px;
+    }
+    .ai-commit-summary {
+      font-size: 14px;
+      line-height: 1.6;
+      opacity: 0.95;
+    }
+    .ai-stats {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-top: 8px;
+    }
     .footer {
       margin-top: 40px;
       padding-top: 20px;
@@ -256,6 +305,22 @@ export async function POST(
         <div class="stat-value">${(patchNote as PatchNote).contributors.length}</div>
       </div>
     </div>
+
+    ${Array.isArray((patchNote as PatchNote).ai_summaries) && ((patchNote as PatchNote).ai_summaries as any[]).length > 0 ? `
+    <div class="ai-summaries">
+      <div class="ai-summaries-title">
+        <span>✨ AI-Generated Highlights</span>
+        <span class="ai-badge">Powered by Gemini</span>
+      </div>
+      ${((patchNote as PatchNote).ai_summaries as any[]).map((summary: any) => `
+        <div class="ai-summary-item">
+          <div class="ai-commit-title">${summary.message.split('\n')[0]}</div>
+          <div class="ai-commit-summary">${summary.aiSummary}</div>
+          <div class="ai-stats">+${summary.additions} -${summary.deletions} lines</div>
+        </div>
+      `).join('')}
+    </div>
+    ` : ''}
 
     <div class="content">
       ${htmlContent}

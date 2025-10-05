@@ -24,6 +24,8 @@ export interface Database {
           };
           contributors: string[];
           video_data: Json | null;
+          ai_summaries: Json | null;
+          ai_overall_summary: string | null;
           generated_at: string;
           created_at: string;
           updated_at: string;
@@ -42,6 +44,8 @@ export interface Database {
           };
           contributors?: string[];
           video_data?: Json | null;
+          ai_summaries?: Json | null;
+          ai_overall_summary?: string | null;
           generated_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -60,6 +64,8 @@ export interface Database {
           };
           contributors?: string[];
           video_data?: Json | null;
+          ai_summaries?: Json | null;
+          ai_overall_summary?: string | null;
           generated_at?: string;
           created_at?: string;
           updated_at?: string;

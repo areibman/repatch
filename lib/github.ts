@@ -185,6 +185,30 @@ export async function fetchCommitStats(
 }
 
 /**
+ * Fetch commit diff/patch for AI summarization
+ */
+export async function fetchCommitDiff(
+  owner: string,
+  repo: string,
+  sha: string
+): Promise<string> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`;
+
+  const response = await fetch(url, {
+    headers: {
+      ...getGitHubHeaders(),
+      Accept: 'application/vnd.github.v3.diff',
+    },
+  });
+
+  if (!response.ok) {
+    return '';
+  }
+
+  return response.text();
+}
+
+/**
  * Aggregate repository statistics from commits
  */
 export async function getRepoStats(

@@ -23,15 +23,16 @@ import {
 } from "@/components/ui/select";
 import { PlusIcon, Loader2Icon } from "lucide-react";
 import {
-  getRepoStats,
   generateVideoData,
+  parseGitHubUrl,
+  generateBoilerplateContent,
 } from "@/lib/github";
-import { parseGitHubUrl, generateBoilerplateContent } from '@/lib/github';
 
 export function CreatePostDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState('');
   const [isFetchingBranches, setIsFetchingBranches] = useState(false);
   const [repoUrl, setRepoUrl] = useState('');
   const [branches, setBranches] = useState<{ name: string; protected: boolean }[]>([]);
@@ -93,19 +94,56 @@ export function CreatePostDialog() {
     setIsLoading(true);
 
     try {
-      // Fetch real GitHub statistics
-      const stats = await getRepoStats(
-        repoInfo.owner,
-        repoInfo.repo,
-        timePeriod
+      // Fetch real GitHub statistics via API route (server-side with token)
+      setLoadingStep('📊 Fetching repository statistics...');
+      const statsResponse = await fetch(
+        `/api/github/stats?owner=${encodeURIComponent(repoInfo.owner)}&repo=${encodeURIComponent(repoInfo.repo)}&timePeriod=${timePeriod}&branch=${encodeURIComponent(selectedBranch)}`
       );
+      
+      if (!statsResponse.ok) {
+        const error = await statsResponse.json();
+        throw new Error(error.error || 'Failed to fetch repository stats');
+      }
+      
+      const stats = await statsResponse.json();
 
-      // Generate boilerplate content
-      const content = generateBoilerplateContent(
-        `${repoInfo.owner}/${repoInfo.repo}`,
-        timePeriod,
-        stats
-      );
+      // Generate AI summaries for commits
+      setLoadingStep('🤖 Analyzing commits with AI (this may take 30-60s)...');
+      console.log('Fetching AI summaries...');
+      const summariesResponse = await fetch('/api/github/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          owner: repoInfo.owner,
+          repo: repoInfo.repo,
+          timePeriod,
+          branch: selectedBranch,
+        }),
+      });
+
+      let aiSummaries = [];
+      let aiOverallSummary = null;
+      
+      if (summariesResponse.ok) {
+        const summaryData = await summariesResponse.json();
+        aiSummaries = summaryData.summaries || [];
+        aiOverallSummary = summaryData.overallSummary || null;
+        console.log('AI summaries generated:', aiSummaries.length, 'commits summarized');
+      } else {
+        console.warn('Failed to generate AI summaries, continuing without them');
+      }
+
+      // Use AI summary as content, or fallback to boilerplate
+      setLoadingStep('✍️ Generating patch note content...');
+      const content = aiOverallSummary 
+        ? `${aiOverallSummary}\n\n## Key Changes\n\n${aiSummaries.map((s: any) => `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`).join('\n\n')}`
+        : generateBoilerplateContent(
+            `${repoInfo.owner}/${repoInfo.repo}`,
+            timePeriod,
+            stats
+          );
 
       // Generate video data
       const videoData = await generateVideoData(
@@ -121,7 +159,8 @@ export function CreatePostDialog() {
           ? "Weekly"
           : "Monthly";
 
-      // Create the patch note with real data
+      // Create the patch note with real data and AI summaries
+      setLoadingStep('💾 Saving patch note...');
       const response = await fetch("/api/patch-notes", {
         method: "POST",
         headers: {
@@ -140,6 +179,8 @@ export function CreatePostDialog() {
           },
           contributors: stats.contributors,
           video_data: videoData,
+          ai_summaries: aiSummaries,
+          ai_overall_summary: aiOverallSummary,
           generated_at: new Date().toISOString(),
         }),
       });
@@ -156,6 +197,7 @@ export function CreatePostDialog() {
       setRepoUrl('');
       setBranches([]);
       setSelectedBranch('');
+      setLoadingStep('');
       router.push(`/blog/${data.id}`);
       router.refresh();
     } catch (error) {
@@ -165,6 +207,7 @@ export function CreatePostDialog() {
       alert(`Error: ${errorMessage}`);
     } finally {
       setIsLoading(false);
+      setLoadingStep('');
     }
   };
 
@@ -265,11 +308,12 @@ export function CreatePostDialog() {
             <Button 
               type="submit" 
               disabled={isLoading || isFetchingBranches || !selectedBranch}
+              className="min-w-[200px]"
             >
               {isLoading ? (
                 <>
                   <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
-                  Fetching data...
+                  <span className="text-sm">{loadingStep || 'Processing...'}</span>
                 </>
               ) : isFetchingBranches ? (
                 <>
