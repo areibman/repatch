@@ -306,22 +306,6 @@ export async function POST(
       </div>
     </div>
 
-    ${Array.isArray((patchNote as PatchNote).ai_summaries) && ((patchNote as PatchNote).ai_summaries as any[]).length > 0 ? `
-    <div class="ai-summaries">
-      <div class="ai-summaries-title">
-        <span>✨ AI-Generated Highlights</span>
-        <span class="ai-badge">Powered by Gemini</span>
-      </div>
-      ${((patchNote as PatchNote).ai_summaries as any[]).map((summary: any) => `
-        <div class="ai-summary-item">
-          <div class="ai-commit-title">${summary.message.split('\n')[0]}</div>
-          <div class="ai-commit-summary">${summary.aiSummary}</div>
-          <div class="ai-stats">+${summary.additions} -${summary.deletions} lines</div>
-        </div>
-      `).join('')}
-    </div>
-    ` : ''}
-
     <div class="content">
       ${htmlContent}
     </div>
