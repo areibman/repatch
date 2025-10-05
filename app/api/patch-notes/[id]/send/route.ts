@@ -45,37 +45,30 @@ export async function POST(
     // Use hardcoded audience ID from the docs
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
-    // Verify audience exists and get contact count
-    const audience = await resend.audiences.get(audienceId);
-
-    if (!audience.data) {
-      return NextResponse.json(
-        { error: "Resend audience not found" },
-        { status: 404 }
-      );
-    }
-
-    // Get contacts from the audience
+    // Get contacts from the audience (we need their emails for the 'to' field)
     const contacts = await resend.contacts.list({ audienceId });
 
     if (!contacts.data || contacts.data.data.length === 0) {
       return NextResponse.json(
-        { error: "No active subscribers found in audience" },
+        { error: "No subscribers found in audience" },
         { status: 400 }
       );
     }
 
-    // Filter out unsubscribed contacts
-    const activeContacts = contacts.data.data.filter(
-      (contact: any) => !contact.unsubscribed
-    );
+    // Filter out unsubscribed contacts and extract emails
+    const activeEmails = contacts.data.data
+      .filter((contact: any) => !contact.unsubscribed)
+      .map((contact: any) => contact.email);
 
-    if (activeContacts.length === 0) {
+    if (activeEmails.length === 0) {
       return NextResponse.json(
         { error: "No active subscribers found" },
         { status: 400 }
       );
     }
+
+    // Add a small delay to avoid hitting rate limits (2 req/sec = 500ms between calls)
+    await new Promise(resolve => setTimeout(resolve, 600));
 
     // Convert markdown content to HTML
     const htmlContent = markdownToHtml((patchNote as PatchNote).content);
@@ -290,10 +283,26 @@ export async function POST(
     .footer a:hover {
       text-decoration: underline;
     }
+    .hero-image {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .hero-image img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="hero-image">
+      <a href="https://openedit-uploads.openchatui.com/basecomp.mp4" target="_blank">
+        <img src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png" alt="Repatch Demo Video" />
+      </a>
+    </div>
+    
     <div class="header">
       <h1 class="title">${(patchNote as PatchNote).title}</h1>
       <div class="metadata">
@@ -374,10 +383,10 @@ export async function POST(
 </html>
     `;
 
-    // Send email using Resend to the audience
+    // Send email using Resend to all active subscribers
     const { data, error } = await resend.emails.send({
       from: "Repatch <onboarding@resend.dev>",
-      to: audienceId, // Send to audience instead of individual emails
+      to: activeEmails, // Array of email addresses
       subject: `${(patchNote as PatchNote).title} - ${
         (patchNote as PatchNote).repo_name
       }`,
@@ -394,7 +403,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      sentTo: activeContacts.length,
+      sentTo: activeEmails.length,
       emailId: data?.id,
     });
   } catch (error) {

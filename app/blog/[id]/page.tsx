@@ -143,6 +143,11 @@ export default function BlogViewPage() {
   };
 
   const handleSendEmail = async () => {
+    // Prevent multiple calls
+    if (isSending) {
+      return;
+    }
+
     if (!confirm('Send this patch note to all email subscribers?')) {
       return;
     }
@@ -160,7 +165,7 @@ export default function BlogViewPage() {
       }
 
       const data = await response.json();
-      alert(`✅ Patch note successfully sent to ${data.sentTo} recipient${data.sentTo !== 1 ? 's' : ''}!`);
+      alert(`✅ Patch note successfully sent to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''}!`);
     } catch (error) {
       console.error('Error sending email:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
