@@ -1,47 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchGitHubCommits, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
+import { fetchCommitStats, fetchCommitDiff, getCommitsForFilters } from '@/lib/github';
+import { FilterValidationError } from '@/lib/filter-utils';
 import { summarizeCommits, generateOverallSummary } from '@/lib/ai-summarizer';
+import { PatchNoteFilters } from '@/types/patch-note';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { owner, repo, timePeriod, branch } = body;
+    const { owner, repo, filters, branch } = body as {
+      owner?: string;
+      repo?: string;
+      filters?: PatchNoteFilters;
+      branch?: string;
+    };
 
-    if (!owner || !repo || !timePeriod) {
+    if (!owner || !repo) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
       );
     }
 
-    // Calculate date range
-    const now = new Date();
-    const since = new Date(now);
-    switch (timePeriod) {
-      case '1day':
-        since.setDate(since.getDate() - 1);
-        break;
-      case '1week':
-        since.setDate(since.getDate() - 7);
-        break;
-      case '1month':
-        since.setMonth(since.getMonth() - 1);
-        break;
-    }
-
-    // Fetch commits
-    const commits = await fetchGitHubCommits(
+    const commits = await getCommitsForFilters(
       owner,
       repo,
-      since.toISOString(),
-      now.toISOString(),
+      filters,
       branch
     );
 
     if (commits.length === 0) {
       return NextResponse.json({
         summaries: [],
-        overallSummary: 'No commits found in this time period.',
+        overallSummary: 'No commits found for the selected filters.',
         totalCommits: 0,
         totalAdditions: 0,
         totalDeletions: 0,
@@ -84,7 +74,7 @@ export async function POST(request: NextRequest) {
     // Generate overall summary
     const overallSummary = await generateOverallSummary(
       `${owner}/${repo}`,
-      timePeriod,
+      filters,
       summaries,
       commits.length,
       totalAdditions,
@@ -100,6 +90,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error generating summaries:', error);
+    if (error instanceof FilterValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to generate summaries' },
       { status: 500 }
