@@ -32,21 +32,19 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("patch_notes")
-      .insert([
-        {
-          repo_name: body.repo_name,
-          repo_url: body.repo_url,
-          time_period: body.time_period,
-          title: body.title,
-          content: body.content,
-          changes: body.changes,
-          contributors: body.contributors,
-          video_data: body.video_data,
-          ai_summaries: body.ai_summaries || null,
-          ai_overall_summary: body.ai_overall_summary || null,
-          generated_at: body.generated_at || new Date().toISOString(),
-        },
-      ])
+      .insert({
+        repo_name: body.repo_name,
+        repo_url: body.repo_url,
+        time_period: body.time_period,
+        title: body.title,
+        content: body.content,
+        changes: body.changes,
+        contributors: body.contributors,
+        video_data: body.video_data,
+        ai_summaries: body.ai_summaries || null,
+        ai_overall_summary: body.ai_overall_summary || null,
+        generated_at: body.generated_at || new Date().toISOString(),
+      } as any)
       .select()
       .single();
 
@@ -56,10 +54,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Trigger video rendering asynchronously (don't wait for it)
-    if (body.video_data && data.id) {
+    if (body.video_data && (data as any).id) {
       const videoRenderUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/videos/render`;
       console.log('🎬 Triggering video rendering...');
-      console.log('   - Patch Note ID:', data.id);
+      console.log('   - Patch Note ID:', (data as any).id);
       console.log('   - Repo:', body.repo_name);
       console.log('   - Video API URL:', videoRenderUrl);
       console.log('   - Has video_data:', !!body.video_data);
@@ -70,7 +68,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          patchNoteId: data.id,
+          patchNoteId: (data as any).id,
           videoData: body.video_data,
           repoName: body.repo_name,
         }),
@@ -86,7 +84,7 @@ export async function POST(request: NextRequest) {
     } else {
       console.log('⚠️  Video rendering NOT triggered:', {
         hasVideoData: !!body.video_data,
-        hasId: !!data.id
+        hasId: !!(data as any).id
       });
     }
 

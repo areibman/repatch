@@ -44,12 +44,12 @@ export async function POST(request: NextRequest) {
     // Prefer AI summaries over generic video_data
     let finalVideoData = videoData;
     
-    if (patchNote.ai_summaries && Array.isArray(patchNote.ai_summaries) && patchNote.ai_summaries.length > 0) {
+    if ((patchNote as any).ai_summaries && Array.isArray((patchNote as any).ai_summaries) && (patchNote as any).ai_summaries.length > 0) {
       console.log('✨ Using AI summaries for video generation!');
-      console.log('   - Found', patchNote.ai_summaries.length, 'AI summaries');
+      console.log('   - Found', (patchNote as any).ai_summaries.length, 'AI summaries');
       
       // Generate video data from AI summaries
-      const aiSummaries = patchNote.ai_summaries as Array<{
+      const aiSummaries = (patchNote as any).ai_summaries as Array<{
         sha: string;
         message: string;
         aiSummary: string;
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       serveUrl: bundleLocation,
       id: 'basecomp',
       inputProps: {
-        repositorySlug: patchNote.repo_name || repoName || 'repository',
+        repositorySlug: (patchNote as any).repo_name || repoName || 'repository',
         releaseTag: 'Latest Update',
         openaiGeneration: finalVideoData,
         ...finalVideoData,
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
       codec: 'h264',
       outputLocation: outputPath,
       inputProps: {
-        repositorySlug: patchNote.repo_name || repoName || 'repository',
+        repositorySlug: (patchNote as any).repo_name || repoName || 'repository',
         releaseTag: 'Latest Update',
         openaiGeneration: finalVideoData,
         ...finalVideoData,
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
     console.log('📝 Updating database with video URL:', videoUrl);
 
     // Update the patch note with the video URL (reuse existing supabase client)
-    const { data: updateData, error: updateError } = await supabase
+    const { data: updateData, error: updateError } = await (supabase as any)
       .from('patch_notes')
       .update({ video_url: videoUrl })
       .eq('id', patchNoteId)

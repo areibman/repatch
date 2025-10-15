@@ -25,7 +25,7 @@ export const webpackOverride: WebpackOverrideFn = (currentConfiguration) =>
             if (rule === "...") {
               return false;
             }
-            if (rule.test?.toString().includes(".css")) {
+            if (rule && rule.test?.toString().includes(".css")) {
               return false;
             }
             return true;
