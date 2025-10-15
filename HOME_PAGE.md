@@ -45,6 +45,7 @@ Each card displays:
   - Lines added (green)
   - Lines modified (blue)
   - Lines removed (red)
+- **GitHub Status**: Badge summarizing publish state with release/discussion indicators
 
 #### Footer
 - **Contributors**: Number of contributors
@@ -87,6 +88,7 @@ Each card displays:
 - `GitBranchIcon` - Repository indicator
 - `CalendarIcon` - Date indicator
 - `UsersIcon` - Contributors indicator
+- `GithubIcon` - GitHub publishing status badges
 
 ## Data Flow
 

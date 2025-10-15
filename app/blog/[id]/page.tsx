@@ -14,6 +14,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PatchNote } from "@/types/patch-note";
 import {
   ArrowLeftIcon,
@@ -22,16 +30,34 @@ import {
   PaperAirplaneIcon,
   XMarkIcon,
 } from "@heroicons/react/16/solid";
-import { Loader2Icon } from "lucide-react";
+import { Loader2Icon, Github as GithubIcon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
-import { ParsedPropsSchema } from "@/remotion/BaseComp";
+import { dbToUiPatchNote } from "@/lib/transformers";
+import type { Database } from "@/lib/supabase/database.types";
+import type { PublishTarget } from "@/lib/github-publisher";
 
 import dynamic from "next/dynamic";
 
 const BaseComp = dynamic(() => import("@/remotion/BaseComp"), {
   ssr: false,
 });
+
+type PublishStatus = PatchNote["githubPublishStatus"];
+
+const publishStatusLabels: Record<PublishStatus, string> = {
+  idle: "Not published to GitHub",
+  publishing: "Publishing to GitHub...",
+  succeeded: "Published to GitHub",
+  failed: "Publish to GitHub failed",
+};
+
+const publishStatusClasses: Record<PublishStatus, string> = {
+  idle: "bg-muted text-muted-foreground border-muted/40",
+  publishing: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  succeeded: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  failed: "bg-destructive/10 text-destructive border-destructive/30",
+};
 
 export default function BlogViewPage() {
   const params = useParams();
@@ -43,6 +69,8 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [publishTarget, setPublishTarget] = useState<PublishTarget>("release");
+  const [discussionCategory, setDiscussionCategory] = useState("");
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -56,6 +84,8 @@ export default function BlogViewPage() {
     }
   }, [patchNote?.videoData]);
 
+  const isPublishing = patchNote?.githubPublishStatus === "publishing";
+
   useEffect(() => {
     const fetchPatchNote = async () => {
       try {
@@ -63,21 +93,10 @@ export default function BlogViewPage() {
         if (!response.ok) {
           throw new Error("Failed to fetch patch note");
         }
-        const data = await response.json();
+        const data: Database["public"]["Tables"]["patch_notes"]["Row"] =
+          await response.json();
 
-        // Transform database format to UI format
-        const transformedNote = {
-          id: data.id,
-          repoName: data.repo_name,
-          repoUrl: data.repo_url,
-          timePeriod: data.time_period,
-          generatedAt: new Date(data.generated_at),
-          title: data.title,
-          content: data.content,
-          changes: data.changes,
-          contributors: data.contributors,
-          videoUrl: data.video_url,
-        };
+        const transformedNote = dbToUiPatchNote(data);
 
         setPatchNote(transformedNote);
         setEditedContent(transformedNote.content);
@@ -195,9 +214,73 @@ export default function BlogViewPage() {
     }
   };
 
+  const handlePublishToGitHub = async () => {
+    if (!patchNote) {
+      return;
+    }
+
+    setPatchNote((current) =>
+      current
+        ? {
+            ...current,
+            githubPublishStatus: "publishing",
+            githubPublishError: null,
+          }
+        : current
+    );
+
+    try {
+      const payload: Record<string, unknown> = { target: publishTarget };
+      if (discussionCategory.trim()) {
+        payload.discussionCategory = discussionCategory.trim();
+      }
+
+      const response = await fetch(
+        `/api/patch-notes/${params.id}/publish/github`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "Failed to publish patch note to GitHub"
+        );
+      }
+
+      if (data?.patchNote) {
+        const updatedPatchNote = dbToUiPatchNote(
+          data.patchNote as Database["public"]["Tables"]["patch_notes"]["Row"]
+        );
+        setPatchNote(updatedPatchNote);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to publish patch note to GitHub";
+
+      setPatchNote((current) =>
+        current
+          ? {
+              ...current,
+              githubPublishStatus: "failed",
+              githubPublishError: message,
+            }
+          : current
+      );
+    }
+  };
+
   const handleGenerateVideo = async () => {
     if (!patchNote) return;
-    
+
     setIsGeneratingVideo(true);
     try {
       const response = await fetch('/api/videos/render', {
@@ -329,9 +412,9 @@ export default function BlogViewPage() {
               </a>
             </div>
 
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex flex-col gap-3 min-w-[220px]">
               {isEditing ? (
-                <>
+                <div className="flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={handleCancel}>
                     <XMarkIcon className="h-4 w-4 mr-2" />
                     Cancel
@@ -340,42 +423,141 @@ export default function BlogViewPage() {
                     <CheckIcon className="h-4 w-4 mr-2" />
                     {isSaving ? "Saving..." : "Save"}
                   </Button>
-                </>
+                </div>
               ) : (
                 <>
-                  <Button variant="outline" size="sm" onClick={handleEdit}>
-                    <PencilIcon className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
-                  {!patchNote.videoUrl && (
-                    <Button 
-                      variant="outline"
+                  <div className="flex gap-2 flex-wrap">
+                    <Button variant="outline" size="sm" onClick={handleEdit}>
+                      <PencilIcon className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                    {!patchNote.videoUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGenerateVideo}
+                        disabled={isGeneratingVideo || !patchNote.videoData}
+                      >
+                        {isGeneratingVideo ? (
+                          <>
+                            <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            🎬 Generate Video
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    <Button
                       size="sm"
-                      onClick={handleGenerateVideo} 
-                      disabled={isGeneratingVideo || !patchNote.videoData}
+                      onClick={handleSendEmail}
+                      disabled={isSending}
                     >
-                      {isGeneratingVideo ? (
+                      <PaperAirplaneIcon className="h-4 w-4 mr-2" />
+                      {isSending ? "Sending..." : "Send Email"}
+                    </Button>
+                  </div>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <Select
+                      value={publishTarget}
+                      onValueChange={(value) =>
+                        setPublishTarget(value as PublishTarget)
+                      }
+                      disabled={isPublishing}
+                    >
+                      <SelectTrigger className="w-[220px]">
+                        <SelectValue placeholder="Select publish target" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="release">GitHub Release</SelectItem>
+                        <SelectItem value="discussion">
+                          GitHub Discussion
+                        </SelectItem>
+                        <SelectItem value="release-and-discussion">
+                          Release + Discussion
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {publishTarget !== "release" && (
+                      <div className="flex flex-col gap-1 min-w-[220px]">
+                        <Input
+                          value={discussionCategory}
+                          onChange={(event) =>
+                            setDiscussionCategory(event.target.value)
+                          }
+                          placeholder="Discussion category (slug or name)"
+                          className="w-full"
+                          disabled={isPublishing}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          Leave blank to use the default category
+                        </span>
+                      </div>
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={handlePublishToGitHub}
+                      disabled={isPublishing}
+                    >
+                      {isPublishing ? (
                         <>
                           <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
-                          Generating...
+                          Publishing...
                         </>
                       ) : (
                         <>
-                          🎬 Generate Video
+                          <GithubIcon className="h-4 w-4 mr-2" />
+                          Publish to GitHub
                         </>
                       )}
                     </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    onClick={handleSendEmail}
-                    disabled={isSending}
-                  >
-                    <PaperAirplaneIcon className="h-4 w-4 mr-2" />
-                    {isSending ? "Sending..." : "Send Email"}
-                  </Button>
+                  </div>
                 </>
               )}
+              <div className="space-y-1 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="outline"
+                    className={publishStatusClasses[patchNote.githubPublishStatus]}
+                  >
+                    {publishStatusLabels[patchNote.githubPublishStatus]}
+                  </Badge>
+                  {patchNote.githubPublishedAt && (
+                    <span className="text-muted-foreground">
+                      Last updated {patchNote.githubPublishedAt.toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                {patchNote.githubReleaseUrl && (
+                  <a
+                    href={patchNote.githubReleaseUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <GithubIcon className="h-3 w-3" />
+                    View GitHub release
+                  </a>
+                )}
+                {patchNote.githubDiscussionUrl && (
+                  <a
+                    href={patchNote.githubDiscussionUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <GithubIcon className="h-3 w-3" />
+                    View GitHub discussion
+                  </a>
+                )}
+                {patchNote.githubPublishError && (
+                  <p className="text-destructive">
+                    {patchNote.githubPublishError}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -13,6 +13,7 @@ Your Repatch application now has full Supabase integration! Here's what's ready 
 - `GET/POST /api/patch-notes` - List and create patch notes
 - `GET/PUT/DELETE /api/patch-notes/[id]` - Single patch note operations
 - `GET/POST /api/subscribers` - Email subscriber management
+- `POST /api/patch-notes/[id]/publish/github` - Publish a patch note to GitHub releases/discussions
 
 ### 🎨 UI Components
 - Home page with grid view fetching from database

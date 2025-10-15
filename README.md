@@ -134,6 +134,33 @@ Send beautiful HTML emails to subscribers with:
 - Contributor list
 - Custom video links (when available)
 
+### 🚀 Publish Patch Notes to GitHub
+
+Share your changelog directly on GitHub without leaving Repatch:
+
+- The blog detail page includes a **Publish to GitHub** control that creates releases and/or discussions using the stored repository credentials.
+- Publishing metadata (`github_publish_status`, release/discussion IDs, URLs, and the last error) is stored alongside each patch note for visibility and future retries.
+- The home page surfaces GitHub publishing status so you can see which notes have gone live at a glance.
+
+**Required token scopes**
+
+- `repo` – create and update releases
+- `discussions:write` – create repository discussions when requested
+
+**API trigger**
+
+```http
+POST /api/patch-notes/{id}/publish/github
+Content-Type: application/json
+
+{
+  "target": "release-and-discussion", // "release" | "discussion"
+  "discussionCategory": "announcements" // optional slug or name
+}
+```
+
+Successful responses return the refreshed patch note row so the UI stays in sync. Failures respond with an error message and persist the details in `github_publish_error`, enabling background workers or manual retries to inspect and recover from GitHub API issues.
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration

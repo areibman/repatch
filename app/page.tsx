@@ -20,6 +20,25 @@ import {
   CalendarIcon,
   UsersIcon,
 } from "@heroicons/react/16/solid";
+import { Github as GithubIcon } from "lucide-react";
+import { dbToUiPatchNote } from "@/lib/transformers";
+import type { Database } from "@/lib/supabase/database.types";
+
+type PublishStatus = PatchNote["githubPublishStatus"];
+
+const publishStatusLabels: Record<PublishStatus, string> = {
+  idle: "Not published",
+  publishing: "Publishing...",
+  succeeded: "Published on GitHub",
+  failed: "Publish failed",
+};
+
+const publishStatusClasses: Record<PublishStatus, string> = {
+  idle: "bg-muted text-muted-foreground border-muted/40",
+  publishing: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  succeeded: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  failed: "bg-destructive/10 text-destructive border-destructive/30",
+};
 
 export default function Home() {
   const [patchNotes, setPatchNotes] = useState<PatchNote[]>([]);
@@ -33,34 +52,10 @@ export default function Home() {
         if (!response.ok) {
           throw new Error("Failed to fetch patch notes");
         }
-        const data = await response.json();
+        const data: Database["public"]["Tables"]["patch_notes"]["Row"][] =
+          await response.json();
 
-        // Transform database format to UI format
-        const transformedData = data.map(
-          (note: {
-            id: string;
-            repo_name: string;
-            repo_url: string;
-            time_period: "1day" | "1week" | "1month";
-            generated_at: string;
-            title: string;
-            content: string;
-            changes: { added: number; modified: number; removed: number };
-            contributors: string[];
-            video_url?: string | null;
-          }) => ({
-            id: note.id,
-            repoName: note.repo_name,
-            repoUrl: note.repo_url,
-            timePeriod: note.time_period,
-            generatedAt: new Date(note.generated_at),
-            title: note.title,
-            content: note.content,
-            changes: note.changes,
-            contributors: note.contributors,
-            videoUrl: note.video_url,
-          })
-        );
+        const transformedData = data.map((note) => dbToUiPatchNote(note));
 
         setPatchNotes(transformedData);
       } catch (err) {
@@ -249,6 +244,34 @@ export default function Home() {
                         removed
                       </div>
                     </div>
+                  </div>
+                  <div className="mt-4 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <Badge
+                        variant="outline"
+                        className={publishStatusClasses[note.githubPublishStatus]}
+                      >
+                        {publishStatusLabels[note.githubPublishStatus]}
+                      </Badge>
+                      {note.githubReleaseUrl && (
+                        <span className="flex items-center gap-1 text-muted-foreground">
+                          <GithubIcon className="h-3 w-3" />
+                          Release
+                        </span>
+                      )}
+                      {note.githubDiscussionUrl && (
+                        <span className="flex items-center gap-1 text-muted-foreground">
+                          <GithubIcon className="h-3 w-3" />
+                          Discussion
+                        </span>
+                      )}
+                    </div>
+                    {note.githubPublishStatus === "failed" &&
+                      note.githubPublishError && (
+                        <p className="text-xs text-destructive">
+                          {note.githubPublishError}
+                        </p>
+                      )}
                   </div>
                 </CardContent>
 

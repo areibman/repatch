@@ -21,6 +21,13 @@ Stores AI-generated patch notes from GitHub repositories.
 | changes       | JSONB                      | {added, modified, removed} line counts         |
 | contributors  | TEXT[]                     | Array of contributor usernames                 |
 | generated_at  | TIMESTAMP WITH TIME ZONE   | When the patch note was generated              |
+| github_publish_status | TEXT               | GitHub publishing workflow status (`idle`, `publishing`, `succeeded`, `failed`) |
+| github_publish_error | TEXT                | Last error message from a GitHub publish attempt |
+| github_release_id | TEXT                   | Identifier returned by GitHub for the release   |
+| github_release_url | TEXT                  | HTML URL for the GitHub release                 |
+| github_discussion_id | TEXT                | Identifier returned by GitHub for the discussion |
+| github_discussion_url | TEXT               | HTML URL for the GitHub discussion              |
+| github_published_at | TIMESTAMP WITH TIME ZONE | When the patch note was last published to GitHub |
 | created_at    | TIMESTAMP WITH TIME ZONE   | Record creation timestamp                      |
 | updated_at    | TIMESTAMP WITH TIME ZONE   | Record last update timestamp                   |
 
