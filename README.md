@@ -134,6 +134,35 @@ Send beautiful HTML emails to subscribers with:
 - Contributor list
 - Custom video links (when available)
 
+## End-to-End Testing & Coverage
+
+Playwright powers the end-to-end regression suite for Repatch. The tests stub Supabase and GitHub API responses so you can exercise the UI without real infrastructure.
+
+### Install the tooling
+
+```bash
+npm install
+npx playwright install --with-deps
+```
+
+### Run the suite
+
+```bash
+# Execute the Chromium-based E2E flow
+npm run test:e2e
+
+# Collect V8 coverage information and emit an HTML report under playwright-coverage/
+npm run test:e2e:coverage
+
+# Inspect the most recent Playwright HTML report
+npm run test:e2e:report
+
+# Optional: print a text summary from the captured coverage data
+npx playwright coverage show --reporter=text
+```
+
+See [`tests/e2e/COVERAGE.md`](./tests/e2e/COVERAGE.md) for the current scenario coverage map and gaps that still require automation.
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration
