@@ -15,11 +15,12 @@ Stores AI-generated patch notes from GitHub repositories.
 | id            | UUID (PK)                  | Unique identifier                              |
 | repo_name     | TEXT                       | Repository name (e.g., "owner/repo")           |
 | repo_url      | TEXT                       | Full GitHub repository URL                     |
-| time_period   | ENUM                       | '1day', '1week', or '1month'                   |
+| time_period   | ENUM                       | '1day', '1week', '1month', 'custom', 'release' |
 | title         | TEXT                       | Patch note title                               |
 | content       | TEXT                       | Full patch note content (markdown)             |
 | changes       | JSONB                      | {added, modified, removed} line counts         |
 | contributors  | TEXT[]                     | Array of contributor usernames                 |
+| filter_metadata | JSONB                    | Filters applied during generation              |
 | generated_at  | TIMESTAMP WITH TIME ZONE   | When the patch note was generated              |
 | created_at    | TIMESTAMP WITH TIME ZONE   | Record creation timestamp                      |
 | updated_at    | TIMESTAMP WITH TIME ZONE   | Record last update timestamp                   |
@@ -28,6 +29,7 @@ Stores AI-generated patch notes from GitHub repositories.
 - `idx_patch_notes_repo_name` - On `repo_name` for filtering by repository
 - `idx_patch_notes_generated_at` - On `generated_at DESC` for chronological queries
 - `idx_patch_notes_time_period` - On `time_period` for filtering by period
+- `idx_patch_notes_filter_metadata` - GIN index on `filter_metadata` for auditing queries
 
 #### `email_subscribers`
 Stores email addresses for newsletter distribution.
