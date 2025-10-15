@@ -1,3 +1,5 @@
+import type { AiTemplate } from "./ai-template";
+
 export interface VideoData {
   langCode: string;
   topChanges: Array<{
@@ -5,6 +7,14 @@ export interface VideoData {
     description: string;
   }>;
   allChanges: string[];
+}
+
+export interface CommitSummary {
+  sha: string;
+  message: string;
+  aiSummary: string;
+  additions: number;
+  deletions: number;
 }
 
 export interface PatchNote {
@@ -23,4 +33,9 @@ export interface PatchNote {
   contributors: string[];
   videoData?: VideoData;
   videoUrl?: string | null;
+  repoBranch?: string | null;
+  aiSummaries?: CommitSummary[] | null;
+  aiOverallSummary?: string | null;
+  aiTemplateId?: string | null;
+  aiTemplate?: AiTemplate;
 }

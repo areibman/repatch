@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PatchNote } from "@/types/patch-note";
+import { CommitSummary, PatchNote } from "@/types/patch-note";
 import { CreatePostDialog } from "@/components/create-post-dialog";
 import {
   PlusIcon,
@@ -59,6 +59,10 @@ export default function Home() {
             changes: note.changes,
             contributors: note.contributors,
             videoUrl: note.video_url,
+            repoBranch: note.repo_branch,
+            aiSummaries: note.ai_summaries as CommitSummary[] | null,
+            aiOverallSummary: note.ai_overall_summary,
+            aiTemplateId: note.ai_template_id,
           })
         );
 
@@ -131,7 +135,12 @@ export default function Home() {
               AI-generated patch notes from your repositories
             </p>
           </div>
-          <CreatePostDialog />
+          <div className="flex items-center gap-3">
+            <Button asChild variant="outline">
+              <Link href="/settings/templates">Templates</Link>
+            </Button>
+            <CreatePostDialog />
+          </div>
         </div>
       </header>
 

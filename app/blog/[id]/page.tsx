@@ -9,12 +9,22 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { PatchNote } from "@/types/patch-note";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { CommitSummary, PatchNote } from "@/types/patch-note";
+import type { AiTemplate } from "@/types/ai-template";
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -26,12 +36,18 @@ import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
+import {
+  DEFAULT_TEMPLATE_EXAMPLES,
+  formatTemplateAudience,
+} from "@/lib/templates";
 
 import dynamic from "next/dynamic";
 
 const BaseComp = dynamic(() => import("@/remotion/BaseComp"), {
   ssr: false,
 });
+
+const DEFAULT_TEMPLATE_OPTION = "__default__";
 
 export default function BlogViewPage() {
   const params = useParams();
@@ -43,6 +59,12 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [templates, setTemplates] = useState<AiTemplate[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateMessage, setRegenerateMessage] = useState('');
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -55,6 +77,16 @@ export default function BlogViewPage() {
       return 30 * 4; // fallback duration
     }
   }, [patchNote?.videoData]);
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) || null,
+    [templates, selectedTemplateId]
+  );
+
+  const previewExamples = useMemo(
+    () => selectedTemplate?.examples || DEFAULT_TEMPLATE_EXAMPLES,
+    [selectedTemplate]
+  );
 
   useEffect(() => {
     const fetchPatchNote = async () => {
@@ -77,11 +109,16 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          repoBranch: data.repo_branch,
+          aiSummaries: data.ai_summaries as CommitSummary[] | null,
+          aiOverallSummary: data.ai_overall_summary,
+          aiTemplateId: data.ai_template_id,
         };
 
         setPatchNote(transformedNote);
         setEditedContent(transformedNote.content);
         setEditedTitle(transformedNote.title);
+        setSelectedTemplateId(transformedNote.aiTemplateId ?? null);
       } catch (error) {
         console.error("Error fetching patch note:", error);
       }
@@ -106,6 +143,41 @@ export default function BlogViewPage() {
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        setIsLoadingTemplates(true);
+        setTemplateError(null);
+        const response = await fetch('/api/ai-templates');
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to load templates');
+        }
+
+        const data = (await response.json()) as AiTemplate[];
+        setTemplates(data);
+      } catch (error) {
+        console.error('Error loading templates:', error);
+        setTemplateError(
+          error instanceof Error ? error.message : 'Failed to load templates'
+        );
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    };
+
+    loadTemplates();
+  }, []);
+
+  useEffect(() => {
+    if (selectedTemplateId && templates.length > 0) {
+      const exists = templates.some((template) => template.id === selectedTemplateId);
+      if (!exists) {
+        setSelectedTemplateId(templates[0]?.id ?? null);
+      }
+    }
+  }, [templates, selectedTemplateId]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -197,7 +269,7 @@ export default function BlogViewPage() {
 
   const handleGenerateVideo = async () => {
     if (!patchNote) return;
-    
+
     setIsGeneratingVideo(true);
     try {
       const response = await fetch('/api/videos/render', {
@@ -233,6 +305,111 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsGeneratingVideo(false);
+    }
+  };
+
+  const handleRegenerateSummary = async () => {
+    if (!patchNote || isRegenerating) {
+      return;
+    }
+
+    const [owner, repo] = patchNote.repoName.split('/');
+    if (!owner || !repo) {
+      alert('Unable to determine repository name for regeneration.');
+      return;
+    }
+
+    try {
+      setIsRegenerating(true);
+      setRegenerateMessage('Analyzing commits...');
+
+      const summarizeResponse = await fetch('/api/github/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          owner,
+          repo,
+          timePeriod: patchNote.timePeriod,
+          branch: patchNote.repoBranch || 'main',
+          templateId: selectedTemplateId || undefined,
+        }),
+      });
+
+      if (!summarizeResponse.ok) {
+        const error = await summarizeResponse.json();
+        throw new Error(error.error || 'Failed to regenerate summaries');
+      }
+
+      const summaryData = await summarizeResponse.json();
+      const summaries: CommitSummary[] = summaryData.summaries || [];
+      const overallSummary: string | null = summaryData.overallSummary || null;
+
+      const sectionHeading = previewExamples.sectionHeading || 'Key Changes';
+      const commitSection = summaries.length
+        ? `\n\n## ${sectionHeading}\n\n${summaries
+            .map(
+              (s: CommitSummary) =>
+                `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`
+            )
+            .join('\n\n')}`
+        : '';
+      const newContent = overallSummary
+        ? `${overallSummary}${commitSection}`
+        : patchNote.content;
+
+      setRegenerateMessage('Saving patch note...');
+
+      const updateResponse = await fetch(`/api/patch-notes/${patchNote.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: patchNote.title,
+          content: newContent,
+          repo_name: patchNote.repoName,
+          repo_url: patchNote.repoUrl,
+          repo_branch: patchNote.repoBranch || 'main',
+          time_period: patchNote.timePeriod,
+          changes: patchNote.changes,
+          contributors: patchNote.contributors,
+          ai_summaries: summaries,
+          ai_overall_summary: overallSummary,
+          ai_template_id: selectedTemplateId,
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        const error = await updateResponse.json();
+        throw new Error(error.error || 'Failed to save regenerated summary');
+      }
+
+      const updated = await updateResponse.json();
+
+      const updatedNote: PatchNote = {
+        ...patchNote,
+        content: newContent,
+        repoBranch: updated.repo_branch,
+        aiSummaries: summaries,
+        aiOverallSummary: overallSummary,
+        aiTemplateId: selectedTemplateId ?? null,
+      };
+
+      setPatchNote(updatedNote);
+      setEditedContent(newContent);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error regenerating summary:', error);
+      alert(
+        `Failed to regenerate summary: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    } finally {
+      setRegenerateMessage('');
+      setIsRegenerating(false);
     }
   };
 
@@ -379,6 +556,116 @@ export default function BlogViewPage() {
             </div>
           </div>
         </div>
+
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Summary Template</CardTitle>
+            <CardDescription>
+              Choose how AI phrases this update and regenerate the patch note.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="detail-template">Template</Label>
+                <Select
+                  value={selectedTemplateId ?? DEFAULT_TEMPLATE_OPTION}
+                  onValueChange={(value) =>
+                    setSelectedTemplateId(
+                      value === DEFAULT_TEMPLATE_OPTION ? null : value
+                    )
+                  }
+                  disabled={isRegenerating || isLoadingTemplates}
+                >
+                  <SelectTrigger
+                    id="detail-template"
+                    data-testid="detail-template-select"
+                  >
+                    <SelectValue placeholder="Select template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_TEMPLATE_OPTION}>
+                      System Default · technical
+                    </SelectItem>
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                        {template.audience
+                          ? ` · ${formatTemplateAudience(template.audience)}`
+                          : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {templateError
+                    ? `Error loading templates: ${templateError}`
+                    : isLoadingTemplates
+                    ? 'Loading templates...'
+                    : 'Preview shows the expected tone for regenerated summaries.'}
+                </p>
+              </div>
+              <div className="space-y-2 rounded-md border bg-muted/40 p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">
+                    {selectedTemplate?.name || 'System Default'}
+                  </span>
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {formatTemplateAudience(selectedTemplate?.audience)}
+                  </span>
+                </div>
+                <p className="text-muted-foreground leading-snug">
+                  {selectedTemplate?.description ||
+                    'Balanced tone with concise technical highlights.'}
+                </p>
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">
+                    {previewExamples.sectionHeading}
+                  </p>
+                  {previewExamples.overview ? (
+                    <p className="mt-1 leading-snug">
+                      {previewExamples.overview}
+                    </p>
+                  ) : null}
+                </div>
+                {previewExamples.commits?.length ? (
+                  <ul className="mt-2 space-y-1 list-disc pl-5">
+                    {previewExamples.commits.slice(0, 2).map((example, index) => (
+                      <li key={`${example.summary}-${index}`}>
+                        {example.title ? (
+                          <span className="font-medium">{example.title}: </span>
+                        ) : null}
+                        {example.summary}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs text-muted-foreground">
+              {patchNote.repoBranch
+                ? `Generated from branch ${patchNote.repoBranch}`
+                : 'Branch defaults to main'}
+            </div>
+            <Button
+              variant="outline"
+              onClick={handleRegenerateSummary}
+              disabled={isRegenerating || isLoadingTemplates}
+              data-testid="regenerate-template-button"
+            >
+              {isRegenerating ? (
+                <>
+                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                  {regenerateMessage || 'Regenerating...'}
+                </>
+              ) : (
+                'Regenerate summary'
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
 
         {/* Remotion Player */}
         <div className="mb-8">

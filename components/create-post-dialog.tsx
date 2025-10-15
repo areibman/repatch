@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -28,6 +28,10 @@ import {
   parseGitHubUrl,
   generateBoilerplateContent,
 } from "@/lib/github";
+import { DEFAULT_TEMPLATE_EXAMPLES, formatTemplateAudience } from "@/lib/templates";
+import type { AiTemplate } from "@/types/ai-template";
+
+const DEFAULT_TEMPLATE_OPTION = "__default__";
 
 export function CreatePostDialog() {
   const router = useRouter();
@@ -39,6 +43,49 @@ export function CreatePostDialog() {
   const [branches, setBranches] = useState<{ name: string; protected: boolean }[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [timePeriod, setTimePeriod] = useState<'1day' | '1week' | '1month'>('1week');
+  const [templates, setTemplates] = useState<AiTemplate[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        setIsLoadingTemplates(true);
+        setTemplateError(null);
+        const response = await fetch('/api/ai-templates');
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to load templates');
+        }
+
+        const data = (await response.json()) as AiTemplate[];
+        setTemplates(data);
+        if (data.length > 0) {
+          setSelectedTemplateId((current) => current ?? data[0].id);
+        }
+      } catch (error) {
+        console.error('Error loading templates:', error);
+        setTemplateError(
+          error instanceof Error ? error.message : 'Failed to load templates'
+        );
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    };
+
+    fetchTemplates();
+  }, []);
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) || null,
+    [templates, selectedTemplateId]
+  );
+
+  const previewExamples = useMemo(
+    () => selectedTemplate?.examples || DEFAULT_TEMPLATE_EXAMPLES,
+    [selectedTemplate]
+  );
 
   const handleRepoUrlChange = async (url: string) => {
     setRepoUrl(url);
@@ -121,6 +168,7 @@ export function CreatePostDialog() {
           repo: repoInfo.repo,
           timePeriod,
           branch: selectedBranch,
+          templateId: selectedTemplateId || undefined,
         }),
       });
 
@@ -138,8 +186,9 @@ export function CreatePostDialog() {
 
       // Use AI summary as content, or fallback to boilerplate
       setLoadingStep('✍️ Generating patch note content...');
-      const content = aiOverallSummary 
-        ? `${aiOverallSummary}\n\n## Key Changes\n\n${aiSummaries.map((s: any) => `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`).join('\n\n')}`
+      const sectionHeading = previewExamples.sectionHeading || 'Key Changes';
+      const content = aiOverallSummary
+        ? `${aiOverallSummary}\n\n## ${sectionHeading}\n\n${aiSummaries.map((s: any) => `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`).join('\n\n')}`
         : generateBoilerplateContent(
             `${repoInfo.owner}/${repoInfo.repo}`,
             timePeriod,
@@ -173,6 +222,7 @@ export function CreatePostDialog() {
         body: JSON.stringify({
           repo_name: `${repoInfo.owner}/${repoInfo.repo}`,
           repo_url: repoUrl,
+          repo_branch: selectedBranch,
           time_period: timePeriod,
           title: `${periodLabel} Update - ${repoInfo.repo}`,
           content: content,
@@ -185,6 +235,7 @@ export function CreatePostDialog() {
           video_data: videoData,
           ai_summaries: aiSummaries,
           ai_overall_summary: aiOverallSummary,
+          ai_template_id: selectedTemplateId,
           generated_at: new Date().toISOString(),
         }),
       });
@@ -298,6 +349,85 @@ export function CreatePostDialog() {
               <p className="text-xs text-muted-foreground">
                 Choose the time range for analyzing changes
               </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="summary-template">Summary Template</Label>
+              <Select
+                value={selectedTemplateId ?? DEFAULT_TEMPLATE_OPTION}
+                onValueChange={(value) =>
+                  setSelectedTemplateId(
+                    value === DEFAULT_TEMPLATE_OPTION ? null : value
+                  )
+                }
+                disabled={isLoading || isLoadingTemplates}
+              >
+                <SelectTrigger
+                  id="summary-template"
+                  data-testid="template-select"
+                >
+                  <SelectValue placeholder="Select template" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={DEFAULT_TEMPLATE_OPTION}>
+                    System Default · technical
+                  </SelectItem>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                      {template.audience
+                        ? ` · ${formatTemplateAudience(template.audience)}`
+                        : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {templateError
+                  ? `Error loading templates: ${templateError}`
+                  : isLoadingTemplates
+                  ? 'Loading templates...'
+                  : 'Preview shows how the AI summary will read.'}
+              </p>
+              <div
+                className="space-y-2 rounded-md border bg-muted/40 p-3 text-sm"
+                data-testid="template-preview"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">
+                    {selectedTemplate?.name || 'System Default'}
+                  </span>
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {formatTemplateAudience(selectedTemplate?.audience)}
+                  </span>
+                </div>
+                <p className="text-muted-foreground leading-snug">
+                  {selectedTemplate?.description ||
+                    'Balanced tone with concise technical highlights.'}
+                </p>
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">
+                    {previewExamples.sectionHeading}
+                  </p>
+                  {previewExamples.overview ? (
+                    <p className="mt-1 leading-snug">
+                      {previewExamples.overview}
+                    </p>
+                  ) : null}
+                </div>
+                {previewExamples.commits?.length ? (
+                  <ul className="mt-2 space-y-1 list-disc pl-5">
+                    {previewExamples.commits.slice(0, 2).map((example, index) => (
+                      <li key={`${example.summary}-${index}`}>
+                        {example.title ? (
+                          <span className="font-medium">{example.title}: </span>
+                        ) : null}
+                        {example.summary}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             </div>
           </div>
 
