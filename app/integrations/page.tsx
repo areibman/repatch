@@ -18,10 +18,11 @@ import {
   EnvelopeIcon,
   MagnifyingGlassIcon,
   ArrowTopRightOnSquareIcon,
+  MegaphoneIcon,
 } from "@heroicons/react/16/solid";
 
 type IntegrationItem = {
-  id: "github" | "resend";
+  id: "github" | "resend" | "typefully";
   name: string;
   description: string;
   href: string;
@@ -50,6 +51,16 @@ const INTEGRATIONS: IntegrationItem[] = [
     configureHref: "/integrations/resend/configure",
     badge: { label: "Email", variant: "outline" },
     icon: <EnvelopeIcon className="h-5 w-5" />,
+  },
+  {
+    id: "typefully",
+    name: "Typefully",
+    description:
+      "Queue threaded release updates to X / Twitter with Remotion video clips.",
+    href: "/integrations/typefully",
+    configureHref: "/integrations/typefully/configure",
+    badge: { label: "Social", variant: "outline" },
+    icon: <MegaphoneIcon className="h-5 w-5" />,
   },
 ];
 
