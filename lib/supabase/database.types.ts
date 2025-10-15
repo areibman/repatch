@@ -126,6 +126,76 @@ export interface Database {
           updated_at?: string;
         };
       };
+      typefully_configs: {
+        Row: {
+          id: string;
+          profile_id: string;
+          workspace_id: string | null;
+          api_key: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          workspace_id?: string | null;
+          api_key: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          profile_id?: string;
+          workspace_id?: string | null;
+          api_key?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      typefully_jobs: {
+        Row: {
+          id: string;
+          patch_note_id: string;
+          status: string;
+          thread_id: string | null;
+          queue_url: string | null;
+          video_url: string | null;
+          video_upload_id: string | null;
+          payload: Json | null;
+          response: Json | null;
+          error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          patch_note_id: string;
+          status: string;
+          thread_id?: string | null;
+          queue_url?: string | null;
+          video_url?: string | null;
+          video_upload_id?: string | null;
+          payload?: Json | null;
+          response?: Json | null;
+          error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          patch_note_id?: string;
+          status?: string;
+          thread_id?: string | null;
+          queue_url?: string | null;
+          video_url?: string | null;
+          video_upload_id?: string | null;
+          payload?: Json | null;
+          response?: Json | null;
+          error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
