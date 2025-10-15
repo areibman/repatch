@@ -21,6 +21,7 @@ import {
   CheckIcon,
   PaperAirplaneIcon,
   XMarkIcon,
+  MegaphoneIcon,
 } from "@heroicons/react/16/solid";
 import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
@@ -33,9 +34,20 @@ const BaseComp = dynamic(() => import("@/remotion/BaseComp"), {
   ssr: false,
 });
 
+interface TypefullyJob {
+  id: string;
+  status: string;
+  thread_id: string | null;
+  error: string | null;
+  video_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function BlogViewPage() {
   const params = useParams();
   const router = useRouter();
+  const patchNoteId = Array.isArray(params?.id) ? params.id[0] : params.id;
   const [patchNote, setPatchNote] = useState<PatchNote | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState("");
@@ -43,6 +55,12 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [isQueueingThread, setIsQueueingThread] = useState(false);
+  const [queueStatus, setQueueStatus] = useState<
+    "idle" | "success" | "error"
+  >("idle");
+  const [queueMessage, setQueueMessage] = useState<string | null>(null);
+  const [lastThreadJob, setLastThreadJob] = useState<TypefullyJob | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -58,8 +76,9 @@ export default function BlogViewPage() {
 
   useEffect(() => {
     const fetchPatchNote = async () => {
+      if (!patchNoteId) return;
       try {
-        const response = await fetch(`/api/patch-notes/${params.id}`);
+        const response = await fetch(`/api/patch-notes/${patchNoteId}`);
         if (!response.ok) {
           throw new Error("Failed to fetch patch note");
         }
@@ -76,6 +95,7 @@ export default function BlogViewPage() {
           content: data.content,
           changes: data.changes,
           contributors: data.contributors,
+          videoData: data.video_data || undefined,
           videoUrl: data.video_url,
         };
 
@@ -92,7 +112,10 @@ export default function BlogViewPage() {
     // Poll for video status every 5 seconds if no video exists yet
     const pollInterval = setInterval(async () => {
       if (!patchNote?.videoUrl) {
-        const statusResponse = await fetch(`/api/videos/status/${params.id}`);
+        if (!patchNoteId) {
+          return;
+        }
+        const statusResponse = await fetch(`/api/videos/status/${patchNoteId}`);
         if (statusResponse.ok) {
           const status = await statusResponse.json();
           if (status.hasVideo && status.videoUrl) {
@@ -105,7 +128,30 @@ export default function BlogViewPage() {
     
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
-  }, [params.id, patchNote?.videoUrl]);
+  }, [patchNoteId, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    if (!patchNoteId) return;
+
+    const fetchThreadJob = async () => {
+      try {
+        const response = await fetch(
+          `/api/patch-notes/${patchNoteId}/typefully`
+        );
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        if (data.job) {
+          setLastThreadJob(data.job);
+        }
+      } catch (error) {
+        console.error("Error fetching Typefully job:", error);
+      }
+    };
+
+    fetchThreadJob();
+  }, [patchNoteId]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -123,7 +169,10 @@ export default function BlogViewPage() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`/api/patch-notes/${params.id}`, {
+      if (!patchNoteId) {
+        throw new Error("Missing patch note identifier");
+      }
+      const response = await fetch(`/api/patch-notes/${patchNoteId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -175,7 +224,10 @@ export default function BlogViewPage() {
     setIsSending(true);
     
     try {
-      const response = await fetch(`/api/patch-notes/${params.id}/send`, {
+      if (!patchNoteId) {
+        throw new Error("Missing patch note identifier");
+      }
+      const response = await fetch(`/api/patch-notes/${patchNoteId}/send`, {
         method: 'POST',
       });
 
@@ -197,7 +249,7 @@ export default function BlogViewPage() {
 
   const handleGenerateVideo = async () => {
     if (!patchNote) return;
-    
+
     setIsGeneratingVideo(true);
     try {
       const response = await fetch('/api/videos/render', {
@@ -233,6 +285,45 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsGeneratingVideo(false);
+    }
+  };
+
+  const handleQueueThread = async () => {
+    if (!patchNoteId) {
+      setQueueStatus("error");
+      setQueueMessage("Missing patch note identifier");
+      return;
+    }
+    if (isQueueingThread) return;
+
+    setIsQueueingThread(true);
+    setQueueStatus("idle");
+    setQueueMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/patch-notes/${patchNoteId}/typefully`,
+        {
+          method: "POST",
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to queue thread");
+      }
+
+      setQueueStatus("success");
+      setQueueMessage("Thread queued successfully.");
+      if (data.job) {
+        setLastThreadJob(data.job);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to queue thread";
+      setQueueStatus("error");
+      setQueueMessage(message);
+    } finally {
+      setIsQueueingThread(false);
     }
   };
 
@@ -367,6 +458,24 @@ export default function BlogViewPage() {
                     </Button>
                   )}
                   <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleQueueThread}
+                    disabled={isQueueingThread}
+                  >
+                    {isQueueingThread ? (
+                      <>
+                        <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                        Queueing...
+                      </>
+                    ) : (
+                      <>
+                        <MegaphoneIcon className="h-4 w-4 mr-2" />
+                        Queue Twitter thread
+                      </>
+                    )}
+                  </Button>
+                  <Button
                     size="sm"
                     onClick={handleSendEmail}
                     disabled={isSending}
@@ -374,6 +483,29 @@ export default function BlogViewPage() {
                     <PaperAirplaneIcon className="h-4 w-4 mr-2" />
                     {isSending ? "Sending..." : "Send Email"}
                   </Button>
+                  {queueMessage && (
+                    <p
+                      className={`w-full text-xs ${
+                        queueStatus === "error"
+                          ? "text-red-500"
+                          : "text-green-600"
+                      }`}
+                      data-testid="typefully-queue-message"
+                    >
+                      {queueMessage}
+                    </p>
+                  )}
+                  {!queueMessage && lastThreadJob && (
+                    <p
+                      className="w-full text-xs text-muted-foreground"
+                      data-testid="typefully-job-status"
+                    >
+                      Last queued {" "}
+                      {new Date(lastThreadJob.updated_at).toLocaleString()} ·
+                      Status: {lastThreadJob.status}
+                      {lastThreadJob.error ? ` – ${lastThreadJob.error}` : ""}
+                    </p>
+                  )}
                 </>
               )}
             </div>
