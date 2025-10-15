@@ -4,7 +4,7 @@ AI-generated patch notes from your GitHub repositories, delivered as beautiful n
 
 ## Overview
 
-Repatch uses LLMs to analyze GitHub repository changes over time periods (daily, weekly, monthly) and generates professional patch notes. The generated content can be edited and sent via email to subscribers.
+Repatch uses LLMs to analyze GitHub repository changes over customizable ranges—quick presets, arbitrary date windows, label/tag filters, or specific releases—and generates professional patch notes. The generated content can be edited and sent via email to subscribers.
 
 ## Tech Stack
 
@@ -85,6 +85,7 @@ supabase db push
 
 # Or via the Supabase Dashboard SQL Editor:
 # Copy and run /supabase/migrations/20250106000000_add_video_url.sql
+# Copy and run /supabase/migrations/20250107000000_add_filter_metadata.sql
 ```
 
 ### 5. Run Development Server
@@ -116,6 +117,28 @@ Repatch automatically generates custom videos for each patch note using Remotion
 - Resolution: 2160x1080 (2K) at 30 FPS
 
 For more details, see [VIDEO_GENERATION.md](./VIDEO_GENERATION.md).
+
+### 🎯 Flexible Filtering Controls
+
+Build summaries from exactly the commits you care about:
+
+- **Quick presets:** Last 24 Hours, Last Week, or Last Month.
+- **Custom ranges:** Provide precise start/end timestamps for ad-hoc reporting.
+- **Release selection:** Check the releases you want to aggregate; Repatch automatically calculates the commit span between tags.
+- **Label & tag filters:** Include/exclude GitHub labels (from linked PRs) or Git tags to highlight the right workstreams.
+
+Example combinations:
+
+```text
+Preset: Last Week
+Include labels: backend, infra
+Exclude tags: legacy-build
+
+Release selection: v1.5.0, v1.5.1
+Custom range: 2025-01-01T00:00 → 2025-01-15T23:59
+```
+
+Every generated patch note stores the filters that were applied so you can audit and regenerate the same slice of work later.
 
 ### 🤖 AI-Powered Summaries
 
