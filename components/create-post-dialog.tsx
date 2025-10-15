@@ -310,10 +310,11 @@ export function CreatePostDialog() {
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isLoading || isFetchingBranches || !selectedBranch}
               className="min-w-[200px]"
+              data-testid="create-patch-note-submit"
             >
               {isLoading ? (
                 <>

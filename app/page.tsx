@@ -146,7 +146,9 @@ export default function Home() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{patchNotes.length}</div>
+              <div data-testid="total-posts" className="text-3xl font-bold">
+                {patchNotes.length}
+              </div>
             </CardContent>
           </Card>
 
@@ -157,7 +159,7 @@ export default function Home() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">
+              <div data-testid="repository-count" className="text-3xl font-bold">
                 {new Set(patchNotes.map((p) => p.repoName)).size}
               </div>
             </CardContent>
@@ -170,7 +172,7 @@ export default function Home() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">
+              <div data-testid="posts-this-month" className="text-3xl font-bold">
                 {
                   patchNotes.filter((p) => {
                     const date = new Date(p.generatedAt);
@@ -190,7 +192,10 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {patchNotes.map((note) => (
             <Link key={note.id} href={`/blog/${note.id}`}>
-              <Card className="h-full hover:shadow-lg transition-all duration-200 hover:scale-[1.02] cursor-pointer group">
+              <Card
+                data-testid={`patch-note-card-${note.id}`}
+                className="h-full hover:shadow-lg transition-all duration-200 hover:scale-[1.02] cursor-pointer group"
+              >
                 <CardHeader>
                   <div className="flex items-center justify-between mb-2">
                     <Badge
