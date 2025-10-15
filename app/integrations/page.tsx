@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   CodeBracketIcon,
   EnvelopeIcon,
+  KeyIcon,
   MagnifyingGlassIcon,
   ArrowTopRightOnSquareIcon,
 } from "@heroicons/react/16/solid";
@@ -50,6 +51,16 @@ const INTEGRATIONS: IntegrationItem[] = [
     configureHref: "/integrations/resend/configure",
     badge: { label: "Email", variant: "outline" },
     icon: <EnvelopeIcon className="h-5 w-5" />,
+  },
+  {
+    id: "api-keys",
+    name: "External API",
+    description:
+      "Issue API keys and expose sanitized patch notes to downstream consumers.",
+    href: "/docs/external-api",
+    configureHref: "/integrations/api-keys",
+    badge: { label: "Public", variant: "outline" },
+    icon: <KeyIcon className="h-5 w-5" />,
   },
 ];
 

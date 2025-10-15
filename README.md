@@ -31,6 +31,7 @@ Create a `.env.local` file with the following:
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # Resend (for sending emails)
 RESEND_API_KEY=your_resend_api_key
@@ -45,6 +46,10 @@ GOOGLE_API_KEY=your_google_api_key
 
 # Optional: App URL for video rendering callbacks
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# External API tuning (optional)
+EXTERNAL_API_RATE_LIMIT=60
+EXTERNAL_API_RATE_WINDOW_MS=60000
 ```
 
 **⚠️ Important**: Without a GitHub token, you'll hit rate limits (60 requests/hour). With a token, you get 5,000 requests/hour.
@@ -125,6 +130,13 @@ Using Google's Gemini 2.5 Flash, Repatch:
 - Creates an overall summary of all changes
 - Processes the top 10 most significant commits
 
+### 🔑 External API Access
+
+- Issue and rotate hashed API keys from the Integrations area.
+- Secure middleware enforces the <code>X-Api-Key</code> header and rate limits access.
+- External endpoints expose sanitized patch note data for marketing sites, dashboards, or partners.
+- See the in-app guide at <code>/docs/external-api</code> for authentication details and usage examples.
+
 ### 📧 Email Newsletters
 
 Send beautiful HTML emails to subscribers with:
@@ -140,6 +152,7 @@ Send beautiful HTML emails to subscribers with:
 - [Video Generation](./VIDEO_GENERATION.md) - Remotion video rendering
 - [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
+- [External API Guide](./docs/external-api.md) - Authentication, endpoints, and rate limits
 
 ## Learn More
 

@@ -126,6 +126,53 @@ export interface Database {
           updated_at?: string;
         };
       };
+      api_keys: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          token_prefix: string;
+          token_last_four: string;
+          hashed_token: string;
+          metadata: Json;
+          last_used_at: string | null;
+          rotated_at: string | null;
+          revoked_at: string | null;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          token_prefix: string;
+          token_last_four: string;
+          hashed_token: string;
+          metadata?: Json;
+          last_used_at?: string | null;
+          rotated_at?: string | null;
+          revoked_at?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          token_prefix?: string;
+          token_last_four?: string;
+          hashed_token?: string;
+          metadata?: Json;
+          last_used_at?: string | null;
+          rotated_at?: string | null;
+          revoked_at?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
