@@ -9,6 +9,47 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      api_keys: {
+        Row: {
+          id: string;
+          name: string;
+          token_prefix: string;
+          hashed_token: string;
+          description: string | null;
+          metadata: Json;
+          last_used_at: string | null;
+          expires_at: string | null;
+          revoked_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          token_prefix: string;
+          hashed_token: string;
+          description?: string | null;
+          metadata?: Json;
+          last_used_at?: string | null;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          token_prefix?: string;
+          hashed_token?: string;
+          description?: string | null;
+          metadata?: Json;
+          last_used_at?: string | null;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       patch_notes: {
         Row: {
           id: string;

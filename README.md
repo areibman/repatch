@@ -119,6 +119,12 @@ For more details, see [VIDEO_GENERATION.md](./VIDEO_GENERATION.md).
 
 ### 🤖 AI-Powered Summaries
 
+### 🔑 External API Access
+
+Provision API keys and consume sanitized patch note data using the read-only
+external API. Review authentication requirements, rate limits, and example
+requests in [docs/external-api.md](./docs/external-api.md).
+
 Using Google's Gemini 2.5 Flash, Repatch:
 - Analyzes commit diffs for each PR
 - Generates concise 1-2 sentence summaries per commit
