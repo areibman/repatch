@@ -1,0 +1,4 @@
+[
+  { "name": "main", "protected": true },
+  { "name": "develop", "protected": false }
+]

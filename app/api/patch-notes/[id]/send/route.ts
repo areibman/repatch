@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
+import { getResendAdapter } from "@/lib/integrations/resend-adapter";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Configure marked for GitHub-flavored markdown
 marked.setOptions({
@@ -27,6 +25,7 @@ export async function POST(
   try {
     const { id } = await params;
     const supabase = await createClient();
+    const resend = getResendAdapter();
 
     // Fetch the patch note
     const { data: patchNote, error: patchNoteError } = await supabase
@@ -46,9 +45,9 @@ export async function POST(
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
     // Get contacts from the audience (we need their emails for the 'to' field)
-    const contacts = await resend.contacts.list({ audienceId });
+    const contacts = await resend.listAudienceContacts(audienceId);
 
-    if (!contacts.data || contacts.data.data.length === 0) {
+    if (!contacts || contacts.length === 0) {
       return NextResponse.json(
         { error: "No subscribers found in audience" },
         { status: 400 }
@@ -56,7 +55,7 @@ export async function POST(
     }
 
     // Filter out unsubscribed contacts and extract emails
-    const activeEmails = contacts.data.data
+    const activeEmails = contacts
       .filter((contact: any) => !contact.unsubscribed)
       .map((contact: any) => contact.email);
 
@@ -394,7 +393,7 @@ export async function POST(
     `;
 
     // Send email using Resend to all active subscribers
-    const { data, error } = await resend.emails.send({
+    const { id: emailId } = await resend.sendEmail({
       from: "Repatch <onboarding@resend.dev>",
       to: activeEmails, // Array of email addresses
       subject: `${(patchNote as PatchNote).title} - ${
@@ -403,18 +402,10 @@ export async function POST(
       html: emailHtml,
     });
 
-    if (error) {
-      console.error("Resend error:", error);
-      return NextResponse.json(
-        { error: error.message || "Failed to send email" },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json({
       success: true,
       sentTo: activeEmails.length,
-      emailId: data?.id,
+      emailId,
     });
   } catch (error) {
     console.error("API error:", error);

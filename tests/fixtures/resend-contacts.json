@@ -1,0 +1,9 @@
+{
+  "data": {
+    "data": [
+      { "email": "product@example.com", "unsubscribed": false },
+      { "email": "churned@example.com", "unsubscribed": true },
+      { "email": "team@example.com", "unsubscribed": false }
+    ]
+  }
+}

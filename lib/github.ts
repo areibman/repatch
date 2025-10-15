@@ -5,6 +5,8 @@
 import { z } from "zod";
 import { systemPrompt } from "../constants";
 import { VideoData } from "../types/patch-note";
+import { loadIntegrationFixture } from "@/lib/testing/mock-fixtures";
+import { usingMockIntegrations } from "@/lib/testing/test-environment";
 
 export interface GitHubCommit {
   sha: string;
@@ -100,6 +102,23 @@ export async function fetchGitHubBranches(
   owner: string,
   repo: string
 ): Promise<{ name: string; protected: boolean }[]> {
+  if (usingMockIntegrations()) {
+    const branches = loadIntegrationFixture<{ name: string; protected?: boolean }[]>(
+      "github-branches",
+      [
+        {
+          name: "main",
+          protected: true,
+        },
+      ]
+    );
+
+    return branches.map((branch) => ({
+      name: branch.name,
+      protected: Boolean(branch.protected),
+    }));
+  }
+
   const allBranches: { name: string; protected: boolean }[] = [];
   let page = 1;
   const perPage = 100;
@@ -166,6 +185,14 @@ export async function fetchGitHubCommits(
   until: string,
   branch?: string
 ): Promise<GitHubCommit[]> {
+  if (usingMockIntegrations()) {
+    const commits = loadIntegrationFixture<GitHubCommit[]>(
+      "github-commits",
+      []
+    );
+    return commits;
+  }
+
   let url = `https://api.github.com/repos/${owner}/${repo}/commits?since=${since}&until=${until}&per_page=100`;
   
   // Add branch parameter if specified
@@ -199,6 +226,14 @@ export async function fetchCommitStats(
   repo: string,
   sha: string
 ): Promise<{ additions: number; deletions: number }> {
+  if (usingMockIntegrations()) {
+    const stats = loadIntegrationFixture<Record<string, { additions: number; deletions: number }>>(
+      "github-commit-stats",
+      {}
+    );
+    return stats[sha] || { additions: 0, deletions: 0 };
+  }
+
   const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`;
 
   const response = await fetch(url, {
@@ -224,6 +259,14 @@ export async function fetchCommitDiff(
   repo: string,
   sha: string
 ): Promise<string> {
+  if (usingMockIntegrations()) {
+    const diffs = loadIntegrationFixture<Record<string, string>>(
+      "github-commit-diffs",
+      {}
+    );
+    return diffs[sha] || "";
+  }
+
   const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`;
 
   const response = await fetch(url, {

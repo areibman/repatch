@@ -56,7 +56,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Trigger video rendering asynchronously (don't wait for it)
-    if (body.video_data && data.id) {
+    const skipVideoRender = process.env.REPATCH_DISABLE_VIDEO_RENDER === "true";
+
+    if (body.video_data && data.id && !skipVideoRender) {
       const videoRenderUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/videos/render`;
       console.log('🎬 Triggering video rendering...');
       console.log('   - Patch Note ID:', data.id);
@@ -86,7 +88,8 @@ export async function POST(request: NextRequest) {
     } else {
       console.log('⚠️  Video rendering NOT triggered:', {
         hasVideoData: !!body.video_data,
-        hasId: !!data.id
+        hasId: !!data.id,
+        skipped: skipVideoRender,
       });
     }
 

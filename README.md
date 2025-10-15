@@ -134,12 +134,24 @@ Send beautiful HTML emails to subscribers with:
 - Contributor list
 - Custom video links (when available)
 
+## Testing
+
+The repository ships with a Playwright-powered suite that exercises critical UI flows and offline API contracts.
+
+```bash
+bun run build
+bun run test:e2e
+```
+
+Set `PLAYWRIGHT_HEADLESS=false` for headed runs or switch to live integrations by exporting `REPATCH_INTEGRATION_MODE=live` alongside your real credentials. See [docs/testing/playwright.md](./docs/testing/playwright.md) for onboarding details, environment toggles, and CI guidance.
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration
 - [Video Generation](./VIDEO_GENERATION.md) - Remotion video rendering
 - [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
+- [Playwright Testing](./docs/testing/playwright.md) - E2E + API contract suite
 
 ## Learn More
 

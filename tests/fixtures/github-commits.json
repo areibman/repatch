@@ -1,0 +1,20 @@
+[
+  {
+    "sha": "abc123",
+    "commit": {
+      "author": { "name": "Alice", "date": "2024-01-02T12:00:00Z" },
+      "message": "Add onboarding flow"
+    },
+    "author": { "login": "alice" },
+    "stats": { "additions": 120, "deletions": 10, "total": 130 }
+  },
+  {
+    "sha": "def456",
+    "commit": {
+      "author": { "name": "Bob", "date": "2024-01-03T12:00:00Z" },
+      "message": "Fix webhook retries"
+    },
+    "author": { "login": "bob" },
+    "stats": { "additions": 45, "deletions": 20, "total": 65 }
+  }
+]
