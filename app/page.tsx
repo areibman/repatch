@@ -48,6 +48,15 @@ export default function Home() {
             changes: { added: number; modified: number; removed: number };
             contributors: string[];
             video_url?: string | null;
+            github_publish_status?: "idle" | "publishing" | "published" | "failed";
+            github_publish_target?: "release" | "discussion" | null;
+            github_release_id?: string | null;
+            github_release_url?: string | null;
+            github_discussion_id?: string | null;
+            github_discussion_url?: string | null;
+            github_publish_attempted_at?: string | null;
+            github_publish_completed_at?: string | null;
+            github_publish_error?: string | null;
           }) => ({
             id: note.id,
             repoName: note.repo_name,
@@ -59,6 +68,19 @@ export default function Home() {
             changes: note.changes,
             contributors: note.contributors,
             videoUrl: note.video_url,
+            githubPublishStatus: note.github_publish_status ?? "idle",
+            githubPublishTarget: note.github_publish_target ?? null,
+            githubReleaseId: note.github_release_id ?? null,
+            githubReleaseUrl: note.github_release_url ?? null,
+            githubDiscussionId: note.github_discussion_id ?? null,
+            githubDiscussionUrl: note.github_discussion_url ?? null,
+            githubPublishAttemptedAt: note.github_publish_attempted_at
+              ? new Date(note.github_publish_attempted_at)
+              : null,
+            githubPublishCompletedAt: note.github_publish_completed_at
+              ? new Date(note.github_publish_completed_at)
+              : null,
+            githubPublishError: note.github_publish_error ?? null,
           })
         );
 

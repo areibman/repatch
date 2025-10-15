@@ -7,6 +7,14 @@ export interface VideoData {
   allChanges: string[];
 }
 
+export type GitHubPublishStatus =
+  | "idle"
+  | "publishing"
+  | "published"
+  | "failed";
+
+export type GitHubPublishTarget = "release" | "discussion";
+
 export interface PatchNote {
   id: string;
   repoName: string;
@@ -23,4 +31,13 @@ export interface PatchNote {
   contributors: string[];
   videoData?: VideoData;
   videoUrl?: string | null;
+  githubPublishStatus: GitHubPublishStatus;
+  githubPublishTarget?: GitHubPublishTarget | null;
+  githubReleaseId?: string | null;
+  githubReleaseUrl?: string | null;
+  githubDiscussionId?: string | null;
+  githubDiscussionUrl?: string | null;
+  githubPublishAttemptedAt?: Date | null;
+  githubPublishCompletedAt?: Date | null;
+  githubPublishError?: string | null;
 }

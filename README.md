@@ -52,7 +52,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 To create a GitHub token:
 
 1. Go to https://github.com/settings/tokens
-2. Generate a new classic token with `public_repo` scope
+2. Generate a new classic token with `repo` (or `public_repo` for public repositories) and `discussions:write` scopes. Add `discussions:read` if you need to publish to GitHub Discussions across organizations.
 3. Add it to `.env.local` as shown above
 
 ### Resend Setup
@@ -133,6 +133,16 @@ Send beautiful HTML emails to subscribers with:
 - Repository statistics
 - Contributor list
 - Custom video links (when available)
+
+### 📢 Publish to GitHub
+
+Keep your changelog visible directly in GitHub without copying content manually:
+
+- Publish any patch note as a GitHub Release or Discussion with one click
+- Store release/discussion identifiers in Supabase for auditing
+- Retry transient GitHub failures automatically up to three times
+- Surface publish status, errors, and quick links in the patch note dashboard
+- Trigger the workflow programmatically via `POST /api/patch-notes/{id}/publish`
 
 ## Documentation
 
