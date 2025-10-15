@@ -12,10 +12,6 @@ export default function FadingOutAudio() {
 
   return (
     <Audio
-      placeholder={() => {}}
-      onPointerEnterCapture={() => {}}
-      onPointerLeaveCapture={() => {}}
-      crossOrigin="anonymous"
       src={staticFile("/audio.mp3")}
       startFrom={20 * fps}
       volume={

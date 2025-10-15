@@ -20,8 +20,8 @@ export async function GET(
     }
     
     return NextResponse.json({ 
-      hasVideo: !!data.video_url,
-      videoUrl: data.video_url 
+      hasVideo: !!(data as any).video_url,
+      videoUrl: (data as any).video_url 
     });
   } catch (error) {
     console.error('Error checking video status:', error);
