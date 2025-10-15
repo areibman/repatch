@@ -18,7 +18,23 @@ export function dbToUiPatchNote(dbNote: DbPatchNote): PatchNote {
     content: dbNote.content,
     changes: dbNote.changes,
     contributors: dbNote.contributors,
-    videoData: dbNote.video_data as unknown as VideoData | undefined,
+    videoData: dbNote.video_data
+      ? (dbNote.video_data as unknown as VideoData)
+      : undefined,
+    videoUrl: dbNote.video_url,
+    githubPublishStatus: dbNote.github_publish_status,
+    githubPublishTarget: dbNote.github_publish_target,
+    githubReleaseId: dbNote.github_release_id,
+    githubReleaseUrl: dbNote.github_release_url,
+    githubDiscussionId: dbNote.github_discussion_id,
+    githubDiscussionUrl: dbNote.github_discussion_url,
+    githubPublishAttemptedAt: dbNote.github_publish_attempted_at
+      ? new Date(dbNote.github_publish_attempted_at)
+      : null,
+    githubPublishCompletedAt: dbNote.github_publish_completed_at
+      ? new Date(dbNote.github_publish_completed_at)
+      : null,
+    githubPublishError: dbNote.github_publish_error,
   };
 }
 
@@ -42,6 +58,38 @@ export function uiToDbPatchNote(
     ...(uiNote.contributors && { contributors: uiNote.contributors }),
     ...(uiNote.videoData !== undefined && {
       video_data: uiNote.videoData as unknown as any,
+    }),
+    ...(uiNote.videoUrl !== undefined && { video_url: uiNote.videoUrl }),
+    ...(uiNote.githubPublishStatus && {
+      github_publish_status: uiNote.githubPublishStatus,
+    }),
+    ...(uiNote.githubPublishTarget !== undefined && {
+      github_publish_target: uiNote.githubPublishTarget ?? null,
+    }),
+    ...(uiNote.githubReleaseId !== undefined && {
+      github_release_id: uiNote.githubReleaseId ?? null,
+    }),
+    ...(uiNote.githubReleaseUrl !== undefined && {
+      github_release_url: uiNote.githubReleaseUrl ?? null,
+    }),
+    ...(uiNote.githubDiscussionId !== undefined && {
+      github_discussion_id: uiNote.githubDiscussionId ?? null,
+    }),
+    ...(uiNote.githubDiscussionUrl !== undefined && {
+      github_discussion_url: uiNote.githubDiscussionUrl ?? null,
+    }),
+    ...(uiNote.githubPublishAttemptedAt !== undefined && {
+      github_publish_attempted_at: uiNote.githubPublishAttemptedAt
+        ? uiNote.githubPublishAttemptedAt.toISOString()
+        : null,
+    }),
+    ...(uiNote.githubPublishCompletedAt !== undefined && {
+      github_publish_completed_at: uiNote.githubPublishCompletedAt
+        ? uiNote.githubPublishCompletedAt.toISOString()
+        : null,
+    }),
+    ...(uiNote.githubPublishError !== undefined && {
+      github_publish_error: uiNote.githubPublishError ?? null,
     }),
   };
 }

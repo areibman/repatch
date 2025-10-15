@@ -9,12 +9,16 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { PatchNote } from "@/types/patch-note";
+import {
+  GitHubPublishTarget,
+  PatchNote,
+} from "@/types/patch-note";
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -28,14 +32,49 @@ import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
 
 import dynamic from "next/dynamic";
+import { Database } from "@/lib/supabase/database.types";
 
 const BaseComp = dynamic(() => import("@/remotion/BaseComp"), {
   ssr: false,
 });
 
+type PatchNoteRow = Database["public"]["Tables"]["patch_notes"]["Row"];
+
+function mapDbPatchNote(row: PatchNoteRow): PatchNote {
+  return {
+    id: row.id,
+    repoName: row.repo_name,
+    repoUrl: row.repo_url,
+    timePeriod: row.time_period,
+    generatedAt: new Date(row.generated_at),
+    title: row.title,
+    content: row.content,
+    changes: row.changes,
+    contributors: row.contributors,
+    videoData: row.video_data
+      ? (row.video_data as PatchNote["videoData"])
+      : undefined,
+    videoUrl: row.video_url,
+    githubPublishStatus: row.github_publish_status,
+    githubPublishTarget: row.github_publish_target,
+    githubReleaseId: row.github_release_id,
+    githubReleaseUrl: row.github_release_url,
+    githubDiscussionId: row.github_discussion_id,
+    githubDiscussionUrl: row.github_discussion_url,
+    githubPublishAttemptedAt: row.github_publish_attempted_at
+      ? new Date(row.github_publish_attempted_at)
+      : null,
+    githubPublishCompletedAt: row.github_publish_completed_at
+      ? new Date(row.github_publish_completed_at)
+      : null,
+    githubPublishError: row.github_publish_error,
+  };
+}
+
 export default function BlogViewPage() {
   const params = useParams();
   const router = useRouter();
+  const patchNoteId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [patchNote, setPatchNote] = useState<PatchNote | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState("");
@@ -43,6 +82,44 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [activePublishTarget, setActivePublishTarget] =
+    useState<GitHubPublishTarget | null>(null);
+  const [publishFeedback, setPublishFeedback] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  const getPublishStatusLabel = (
+    status: PatchNote["githubPublishStatus"]
+  ): string => {
+    switch (status) {
+      case "publishing":
+        return "Publishing";
+      case "published":
+        return "Published";
+      case "failed":
+        return "Publish Failed";
+      default:
+        return "Not Published";
+    }
+  };
+
+  const getPublishStatusBadgeClass = (
+    status: PatchNote["githubPublishStatus"]
+  ): string => {
+    switch (status) {
+      case "published":
+        return "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20";
+      case "publishing":
+        return "bg-blue-500/10 text-blue-600 border border-blue-500/20";
+      case "failed":
+        return "bg-red-500/10 text-red-600 border border-red-500/20";
+      default:
+        return "bg-muted text-muted-foreground";
+    }
+  };
+
+  const formatDateTime = (value?: Date | null) =>
+    value ? value.toLocaleString() : null;
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -57,42 +134,36 @@ export default function BlogViewPage() {
   }, [patchNote?.videoData]);
 
   useEffect(() => {
+    if (!patchNoteId) {
+      return;
+    }
+
     const fetchPatchNote = async () => {
       try {
-        const response = await fetch(`/api/patch-notes/${params.id}`);
+        const response = await fetch(`/api/patch-notes/${patchNoteId}`);
         if (!response.ok) {
           throw new Error("Failed to fetch patch note");
         }
-        const data = await response.json();
+        const data: PatchNoteRow = await response.json();
 
-        // Transform database format to UI format
-        const transformedNote = {
-          id: data.id,
-          repoName: data.repo_name,
-          repoUrl: data.repo_url,
-          timePeriod: data.time_period,
-          generatedAt: new Date(data.generated_at),
-          title: data.title,
-          content: data.content,
-          changes: data.changes,
-          contributors: data.contributors,
-          videoUrl: data.video_url,
-        };
+        const transformedNote = mapDbPatchNote(data);
 
         setPatchNote(transformedNote);
         setEditedContent(transformedNote.content);
         setEditedTitle(transformedNote.title);
+        setPublishFeedback(null);
+        setPublishError(null);
       } catch (error) {
         console.error("Error fetching patch note:", error);
       }
     };
 
     fetchPatchNote();
-    
+
     // Poll for video status every 5 seconds if no video exists yet
     const pollInterval = setInterval(async () => {
       if (!patchNote?.videoUrl) {
-        const statusResponse = await fetch(`/api/videos/status/${params.id}`);
+        const statusResponse = await fetch(`/api/videos/status/${patchNoteId}`);
         if (statusResponse.ok) {
           const status = await statusResponse.json();
           if (status.hasVideo && status.videoUrl) {
@@ -105,7 +176,7 @@ export default function BlogViewPage() {
     
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
-  }, [params.id, patchNote?.videoUrl]);
+  }, [patchNoteId, patchNote?.videoUrl]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -123,7 +194,11 @@ export default function BlogViewPage() {
     setIsSaving(true);
 
     try {
-      const response = await fetch(`/api/patch-notes/${params.id}`, {
+      if (!patchNoteId) {
+        throw new Error("Missing patch note identifier");
+      }
+
+      const response = await fetch(`/api/patch-notes/${patchNoteId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -175,7 +250,11 @@ export default function BlogViewPage() {
     setIsSending(true);
     
     try {
-      const response = await fetch(`/api/patch-notes/${params.id}/send`, {
+      if (!patchNoteId) {
+        throw new Error("Missing patch note identifier");
+      }
+
+      const response = await fetch(`/api/patch-notes/${patchNoteId}/send`, {
         method: 'POST',
       });
 
@@ -192,6 +271,77 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handlePublish = async (target: GitHubPublishTarget) => {
+    if (!patchNoteId || !patchNote) {
+      return;
+    }
+
+    setIsPublishing(true);
+    setActivePublishTarget(target);
+    setPublishFeedback(null);
+    setPublishError(null);
+    setPatchNote((prev) =>
+      prev
+        ? {
+            ...prev,
+            githubPublishStatus: "publishing",
+            githubPublishTarget: target,
+            githubPublishError: null,
+          }
+        : prev
+    );
+
+    try {
+      const response = await fetch(`/api/patch-notes/${patchNoteId}/publish`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ target }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to publish to GitHub");
+      }
+
+      if (!payload?.patchNote) {
+        throw new Error("Publish response did not include patch note data");
+      }
+
+      const updatedRow = payload.patchNote as PatchNoteRow;
+      const updatedNote = mapDbPatchNote(updatedRow);
+
+      setPatchNote(updatedNote);
+      setPublishFeedback(
+        target === "release"
+          ? "Published to GitHub Releases successfully."
+          : "Published to GitHub Discussions successfully."
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to publish to GitHub";
+
+      setPublishError(message);
+      setPatchNote((prev) =>
+        prev
+          ? {
+              ...prev,
+              githubPublishStatus: "failed",
+              githubPublishTarget: target,
+              githubPublishError: message,
+            }
+          : prev
+      );
+    } finally {
+      setIsPublishing(false);
+      setActivePublishTarget(null);
     }
   };
 
@@ -379,6 +529,130 @@ export default function BlogViewPage() {
             </div>
           </div>
         </div>
+
+        <Card className="mb-8" data-testid="github-publish-card">
+          <CardHeader>
+            <CardTitle>Publish to GitHub</CardTitle>
+            <CardDescription>
+              Share this patch note as a GitHub release or discussion to keep
+              your community in the loop.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge
+                variant="outline"
+                className={getPublishStatusBadgeClass(
+                  patchNote.githubPublishStatus
+                )}
+                data-testid="github-publish-status"
+              >
+                {getPublishStatusLabel(patchNote.githubPublishStatus)}
+              </Badge>
+              {patchNote.githubPublishTarget && (
+                <span
+                  className="text-sm text-muted-foreground"
+                  data-testid="github-publish-target"
+                >
+                  Target:{" "}
+                  {patchNote.githubPublishTarget === "release"
+                    ? "GitHub Release"
+                    : "GitHub Discussion"}
+                </span>
+              )}
+            </div>
+            {publishFeedback && (
+              <p
+                className="text-sm text-emerald-600"
+                data-testid="github-publish-feedback"
+              >
+                {publishFeedback}
+              </p>
+            )}
+            {(publishError || patchNote.githubPublishError) && (
+              <p
+                className="text-sm text-destructive"
+                data-testid="github-publish-error"
+              >
+                {publishError || patchNote.githubPublishError}
+              </p>
+            )}
+            <div className="space-y-2 text-sm text-muted-foreground">
+              {patchNote.githubReleaseUrl && (
+                <a
+                  href={patchNote.githubReleaseUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-foreground underline hover:no-underline"
+                  data-testid="github-release-link"
+                >
+                  View published GitHub release
+                </a>
+              )}
+              {patchNote.githubDiscussionUrl && (
+                <a
+                  href={patchNote.githubDiscussionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-foreground underline hover:no-underline"
+                  data-testid="github-discussion-link"
+                >
+                  View published GitHub discussion
+                </a>
+              )}
+              {patchNote.githubPublishAttemptedAt && (
+                <p data-testid="github-publish-attempted">
+                  Last attempted: {formatDateTime(patchNote.githubPublishAttemptedAt)}
+                </p>
+              )}
+              {patchNote.githubPublishCompletedAt && (
+                <p data-testid="github-publish-completed">
+                  Last published: {formatDateTime(patchNote.githubPublishCompletedAt)}
+                </p>
+              )}
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handlePublish("release")}
+              disabled={
+                isPublishing ||
+                patchNote.githubPublishStatus === "publishing"
+              }
+              data-testid="publish-release-button"
+            >
+              {isPublishing && activePublishTarget === "release" ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                "Publish GitHub Release"
+              )}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handlePublish("discussion")}
+              disabled={
+                isPublishing ||
+                patchNote.githubPublishStatus === "publishing"
+              }
+              data-testid="publish-discussion-button"
+            >
+              {isPublishing && activePublishTarget === "discussion" ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                "Publish GitHub Discussion"
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
 
         {/* Remotion Player */}
         <div className="mb-8">
