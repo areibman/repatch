@@ -74,6 +74,61 @@ export interface Database {
           updated_at?: string;
         };
       };
+      typefully_configs: {
+        Row: {
+          id: string;
+          account_label: string | null;
+          api_key: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_label?: string | null;
+          api_key: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          account_label?: string | null;
+          api_key?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      typefully_jobs: {
+        Row: {
+          id: string;
+          patch_note_id: string | null;
+          status: string;
+          thread_id: string | null;
+          video_url: string | null;
+          error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          patch_note_id?: string | null;
+          status?: string;
+          thread_id?: string | null;
+          video_url?: string | null;
+          error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          patch_note_id?: string | null;
+          status?: string;
+          thread_id?: string | null;
+          video_url?: string | null;
+          error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       email_subscribers: {
         Row: {
           id: string;

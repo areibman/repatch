@@ -12,6 +12,7 @@ Repatch uses LLMs to analyze GitHub repository changes over time periods (daily,
 - **Database**: Supabase (PostgreSQL)
 - **UI**: ShadCN UI + Tailwind CSS
 - **Email**: Resend
+- **Social**: Typefully (Twitter/X threads)
 - **AI**: Google Generative AI (Gemini 2.5 Flash) via Vercel AI SDK
 - **Video Generation**: Remotion 4.0
 
@@ -63,6 +64,26 @@ To set up Resend for email sending:
 2. Get your API key from the dashboard
 3. Create an audience for your subscribers:
    - Go to the Audiences section in your Resend dashboard
+### Typefully Setup
+
+Add the following environment variables to `.env.local`:
+
+```
+TYPEFULLY_API_KEY=your_typefully_api_key
+TYPEFULLY_API_BASE=https://api.typefully.com/v1
+# Optional for local media fetch during uploads
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+# To run without real API calls in dev
+MOCK_TYPEFULLY=1
+```
+
+Steps:
+- Visit the Integrations page → Typefully → Connect to save a key to Supabase, or rely on `TYPEFULLY_API_KEY`.
+- Open a patch note detail page and click "Queue Twitter thread". If a video is present, it will be attached.
+
+Notes:
+- Media upload is best-effort; if upload fails, the text post proceeds.
+- See Typefully API docs for limits and formats: https://support.typefully.com/en/articles/8718287-typefully-api
    - Create a new audience (e.g., "Repatch Subscribers")
    - Copy the audience ID
 4. Add both the API key and audience ID to your `.env.local` file
