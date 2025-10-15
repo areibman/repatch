@@ -141,6 +141,40 @@ Send beautiful HTML emails to subscribers with:
 - [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
 
+## End-to-End Testing
+
+This project now ships with Playwright tests that exercise the primary product workflows.
+
+### Run the suite locally
+
+1. Install dependencies (Bun or npm both work):
+
+   ```bash
+   npm install
+   ```
+
+2. Install the Playwright browsers once (skip this if they are already present):
+
+   ```bash
+   npx playwright install --with-deps
+   ```
+
+3. Execute the tests with coverage enabled:
+
+   ```bash
+   npm run test:e2e -- --reporter=list --coverage
+   ```
+
+   The command starts the Next.js dev server automatically, runs the Chromium suite, and writes HTML + text coverage details to `playwright-report/coverage`.
+
+### Current coverage highlights
+
+- **Home dashboard** – verifies the patch note statistics, card grid, and the Create Patch Note dialog through a full happy-path creation flow.
+- **Patch note detail view** – covers inline editing, saving, sending via email, and triggering custom video rendering.
+- **Subscribers area** – exercises subscriber metrics, list rendering, and the empty-state experience.
+
+Open `playwright-report/index.html` after a run for the interactive results, or `playwright-report/coverage/index.html` for the detailed instrumentation report.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

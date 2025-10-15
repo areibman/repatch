@@ -77,6 +77,7 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          videoData: data.video_data,
         };
 
         setPatchNote(transformedNote);
@@ -287,7 +288,10 @@ export default function BlogViewPage() {
               />
             </a>
             {patchNote.videoUrl ? (
-              <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded shadow-md">
+              <div
+                data-testid="custom-video-indicator"
+                className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded shadow-md"
+              >
                 ✓ Custom Video
               </div>
             ) : (
@@ -456,7 +460,10 @@ export default function BlogViewPage() {
                 placeholder="Enter patch notes content..."
               />
             ) : (
-              <div className="prose prose-neutral dark:prose-invert max-w-none">
+              <div
+                data-testid="patch-note-content"
+                className="prose prose-neutral dark:prose-invert max-w-none"
+              >
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {patchNote.content}
                 </ReactMarkdown>

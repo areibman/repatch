@@ -12,7 +12,8 @@
     "fix-videos": "dotenv -e .env.local -- tsx scripts/fix-video-urls.ts",
     "check-db": "dotenv -e .env.local -- tsx scripts/check-video-column.ts",
     "check-video-data": "dotenv -e .env.local -- tsx scripts/check-video-data.ts",
-    "regenerate-videos": "dotenv -e .env.local -- tsx scripts/regenerate-videos.ts"
+    "regenerate-videos": "dotenv -e .env.local -- tsx scripts/regenerate-videos.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@actions/core": "^1.10.0",
@@ -58,6 +59,7 @@
     "@remotion/cli": "4.0.355",
     "@remotion/tailwind-v4": "4.0.355",
     "@tailwindcss/postcss": "^4",
+    "@playwright/test": "^1.49.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

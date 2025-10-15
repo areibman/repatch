@@ -121,13 +121,21 @@ export default function SubscribersPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="p-4 bg-muted rounded-lg">
-                  <div className="text-2xl font-bold">{totalSubscribers}</div>
+                  <div
+                    data-testid="subscriber-total-count"
+                    className="text-2xl font-bold"
+                  >
+                    {totalSubscribers}
+                  </div>
                   <div className="text-sm text-muted-foreground">
                     Total Subscribers
                   </div>
                 </div>
                 <div className="p-4 bg-muted rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">
+                  <div
+                    data-testid="subscriber-active-count"
+                    className="text-2xl font-bold text-green-600"
+                  >
                     {activeSubscribers.length}
                   </div>
                   <div className="text-sm text-muted-foreground">
@@ -135,7 +143,10 @@ export default function SubscribersPage() {
                   </div>
                 </div>
                 <div className="p-4 bg-muted rounded-lg">
-                  <div className="text-2xl font-bold text-orange-600">
+                  <div
+                    data-testid="subscriber-inactive-count"
+                    className="text-2xl font-bold text-orange-600"
+                  >
                     {totalSubscribers - activeSubscribers.length}
                   </div>
                   <div className="text-sm text-muted-foreground">
