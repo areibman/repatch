@@ -12,6 +12,7 @@ export function dbToUiPatchNote(dbNote: DbPatchNote): PatchNote {
     id: dbNote.id,
     repoName: dbNote.repo_name,
     repoUrl: dbNote.repo_url,
+    repoBranch: dbNote.repo_branch,
     timePeriod: dbNote.time_period,
     generatedAt: new Date(dbNote.generated_at),
     title: dbNote.title,
@@ -19,6 +20,9 @@ export function dbToUiPatchNote(dbNote: DbPatchNote): PatchNote {
     changes: dbNote.changes,
     contributors: dbNote.contributors,
     videoData: dbNote.video_data as unknown as VideoData | undefined,
+    aiSummaries: dbNote.ai_summaries as PatchNote["aiSummaries"],
+    aiOverallSummary: dbNote.ai_overall_summary,
+    aiTemplateId: dbNote.ai_template_id,
   };
 }
 
@@ -32,6 +36,7 @@ export function uiToDbPatchNote(
     ...(uiNote.id && { id: uiNote.id }),
     ...(uiNote.repoName && { repo_name: uiNote.repoName }),
     ...(uiNote.repoUrl && { repo_url: uiNote.repoUrl }),
+    ...(uiNote.repoBranch && { repo_branch: uiNote.repoBranch }),
     ...(uiNote.timePeriod && { time_period: uiNote.timePeriod }),
     ...(uiNote.generatedAt && {
       generated_at: uiNote.generatedAt.toISOString(),
@@ -42,6 +47,13 @@ export function uiToDbPatchNote(
     ...(uiNote.contributors && { contributors: uiNote.contributors }),
     ...(uiNote.videoData !== undefined && {
       video_data: uiNote.videoData as unknown as any,
+    }),
+    ...(uiNote.aiSummaries && { ai_summaries: uiNote.aiSummaries }),
+    ...(uiNote.aiOverallSummary !== undefined && {
+      ai_overall_summary: uiNote.aiOverallSummary,
+    }),
+    ...(uiNote.aiTemplateId !== undefined && {
+      ai_template_id: uiNote.aiTemplateId,
     }),
   };
 }

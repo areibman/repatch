@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchGitHubCommits, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
-import { summarizeCommits, generateOverallSummary } from '@/lib/ai-summarizer';
+import { summarizeCommits, generateOverallSummary, SummaryTemplateConfig } from '@/lib/ai-summarizer';
+import { createClient } from '@/lib/supabase/server';
+import { toAiTemplate } from '@/lib/ai-template';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { owner, repo, timePeriod, branch } = body;
+    const { owner, repo, timePeriod, branch, templateId } = body;
 
     if (!owner || !repo || !timePeriod) {
       return NextResponse.json(
@@ -74,8 +76,34 @@ export async function POST(request: NextRequest) {
       }))
     );
 
+    let template: SummaryTemplateConfig | undefined;
+
+    if (templateId) {
+      try {
+        const supabase = await createClient();
+        const { data: templateRow } = await supabase
+          .from('ai_templates')
+          .select('*')
+          .eq('id', templateId)
+          .single();
+
+        if (templateRow) {
+          const parsed = toAiTemplate(templateRow);
+          template = {
+            name: parsed.name,
+            audience: parsed.audience,
+            commitPrompt: parsed.commitPrompt,
+            overallPrompt: parsed.overallPrompt,
+            examples: parsed.examples,
+          };
+        }
+      } catch (templateError) {
+        console.warn('Failed to load AI template', templateError);
+      }
+    }
+
     // Generate AI summaries
-    const summaries = await summarizeCommits(commitsWithDiffs);
+    const summaries = await summarizeCommits(commitsWithDiffs, template);
 
     // Calculate totals
     const totalAdditions = commitsWithStats.reduce((sum, c) => sum + c.additions, 0);
@@ -88,7 +116,8 @@ export async function POST(request: NextRequest) {
       summaries,
       commits.length,
       totalAdditions,
-      totalDeletions
+      totalDeletions,
+      template
     );
 
     return NextResponse.json({

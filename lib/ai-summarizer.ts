@@ -1,5 +1,6 @@
 import { generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { TemplateExamples } from '@/types/ai-template';
 
 export interface CommitSummary {
   sha: string;
@@ -9,6 +10,65 @@ export interface CommitSummary {
   deletions: number;
 }
 
+export interface SummaryTemplateConfig {
+  name: string;
+  audience: string;
+  commitPrompt: string;
+  overallPrompt: string;
+  examples?: TemplateExamples;
+}
+
+const DEFAULT_COMMIT_PROMPT = `You are analyzing a Git commit to create a concise summary for a newsletter.
+
+Summaries should be direct, actionable, and avoid filler like "This commit" or "significantly". Prefer plain English.`;
+
+const DEFAULT_OVERALL_PROMPT = `You are writing a brief newsletter intro for the repository.
+
+Keep the tone informative. Use one or two crisp sentences that highlight the main themes without fluff.`;
+
+function buildCommitPrompt(
+  commitMessage: string,
+  diff: string,
+  additions: number,
+  deletions: number,
+  template?: SummaryTemplateConfig
+): string {
+  const base = template?.commitPrompt?.trim() || DEFAULT_COMMIT_PROMPT;
+
+  const exampleSection =
+    template?.examples?.commitExamples?.length
+      ? `\n\nExample summaries for inspiration:\n${template.examples.commitExamples
+          .map((example, index) => `${index + 1}. ${example.title}: ${example.summary}`)
+          .join('\n')}`
+      : '';
+
+  const fallbackGuard = `\n\nIf the guidance above does not specify tone or length, reply with one sentence under 40 words.`;
+
+  return `${base}${exampleSection}${fallbackGuard}\n\nCommit Message:\n${commitMessage}\n\nCode Changes:\n- Lines added: ${additions}\n- Lines deleted: ${deletions}\n\nDiff Preview (first 2000 characters):\n${diff.substring(0, 2000)}\n\nSummary:`;
+}
+
+function buildOverallPrompt(
+  repoName: string,
+  timePeriod: '1day' | '1week' | '1month',
+  summariesText: string,
+  totalCommits: number,
+  totalAdditions: number,
+  totalDeletions: number,
+  template?: SummaryTemplateConfig
+): string {
+  const base = template?.overallPrompt?.trim() || DEFAULT_OVERALL_PROMPT;
+
+  const exampleSection = template?.examples?.overallExample
+    ? `\n\nExample intro:\n${template.examples.overallExample}`
+    : '';
+
+  const fallbackGuard = `\n\nIf tone is unspecified, keep it neutral and under 45 words.`;
+
+  const periodLabel = timePeriod === '1day' ? 'day' : timePeriod === '1week' ? 'week' : 'month';
+
+  return `${base}${exampleSection}${fallbackGuard}\n\nRepository: ${repoName}\nTime Period: Past ${periodLabel}\nTotal Commits: ${totalCommits}\nLines Added: ${totalAdditions}\nLines Deleted: ${totalDeletions}\n\nKey Changes:\n${summariesText}\n\nIntroduction:`;
+}
+
 /**
  * Generate AI summary for a single commit with its diff
  */
@@ -16,11 +76,12 @@ export async function summarizeCommit(
   commitMessage: string,
   diff: string,
   additions: number,
-  deletions: number
+  deletions: number,
+  template?: SummaryTemplateConfig
 ): Promise<string> {
   try {
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-    
+
     if (!apiKey) {
       console.warn('No Google API key found, skipping AI summarization');
       return commitMessage.split('\n')[0]; // Return first line of commit message
@@ -30,27 +91,13 @@ export async function summarizeCommit(
 
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
-      prompt: `You are analyzing a Git commit to create a concise summary for a newsletter.
-
-Commit Message:
-${commitMessage}
-
-Code Changes:
-- Lines added: ${additions}
-- Lines deleted: ${deletions}
-
-Diff Preview (first 2000 characters):
-${diff.substring(0, 2000)}
-
-Task: Write ONE short sentence (10-15 words max) describing what changed. Use plain, direct language like:
-- "Doubled page loading speed"
-- "Added dark mode toggle"
-- "Fixed login error on mobile"
-
-Do NOT use phrases like "This commit", "This update", "significantly", "streamlines", etc.
-Just state what changed directly and simply.
-
-Summary:`,
+      prompt: buildCommitPrompt(
+        commitMessage,
+        diff,
+        additions,
+        deletions,
+        template
+      ),
     });
 
     return text.trim();
@@ -71,7 +118,8 @@ export async function summarizeCommits(
     diff?: string;
     additions: number;
     deletions: number;
-  }>
+  }>,
+  template?: SummaryTemplateConfig
 ): Promise<CommitSummary[]> {
   const summaries: CommitSummary[] = [];
 
@@ -85,7 +133,8 @@ export async function summarizeCommits(
       commit.message,
       commit.diff || '',
       commit.additions,
-      commit.deletions
+      commit.deletions,
+      template
     );
 
     summaries.push({
@@ -109,17 +158,17 @@ export async function generateOverallSummary(
   commitSummaries: CommitSummary[],
   totalCommits: number,
   totalAdditions: number,
-  totalDeletions: number
+  totalDeletions: number,
+  template?: SummaryTemplateConfig
 ): Promise<string> {
   try {
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-    
+
     if (!apiKey) {
       return `This ${timePeriod} saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
     }
 
     const google = createGoogleGenerativeAI({ apiKey });
-    const periodLabel = timePeriod === '1day' ? 'day' : timePeriod === '1week' ? 'week' : 'month';
 
     const summariesText = commitSummaries
       .map((s, i) => `${i + 1}. ${s.aiSummary}`)
@@ -127,23 +176,15 @@ export async function generateOverallSummary(
 
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
-      prompt: `You are writing a brief newsletter intro for repository "${repoName}".
-
-Time Period: Past ${periodLabel}
-Total Commits: ${totalCommits}
-
-Key Changes:
-${summariesText}
-
-Task: Write 1-2 SHORT sentences (max 25 words total) summarizing what happened. Use plain, direct language:
-- "Focused on performance and bug fixes"
-- "Added new features and improved UI"
-- "Major refactoring and dependency updates"
-
-Do NOT use phrases like "This period saw", "significantly", "substantial", etc.
-Just state what happened directly.
-
-Introduction:`,
+      prompt: buildOverallPrompt(
+        repoName,
+        timePeriod,
+        summariesText,
+        totalCommits,
+        totalAdditions,
+        totalDeletions,
+        template
+      ),
     });
 
     return text.trim();

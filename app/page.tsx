@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PatchNote } from "@/types/patch-note";
+import { AiTemplate } from "@/types/ai-template";
+import { fromApiTemplate } from "@/lib/ai-template";
 import { CreatePostDialog } from "@/components/create-post-dialog";
 import {
   PlusIcon,
@@ -36,22 +38,20 @@ export default function Home() {
         const data = await response.json();
 
         // Transform database format to UI format
-        const transformedData = data.map(
-          (note: {
-            id: string;
-            repo_name: string;
-            repo_url: string;
-            time_period: "1day" | "1week" | "1month";
-            generated_at: string;
-            title: string;
-            content: string;
-            changes: { added: number; modified: number; removed: number };
-            contributors: string[];
-            video_url?: string | null;
-          }) => ({
+        const transformedData = data.map((note: any) => {
+          const template: AiTemplate | null = note.ai_template
+            ? fromApiTemplate(note.ai_template)
+            : null;
+
+          const aiSummaries = Array.isArray(note.ai_summaries)
+            ? (note.ai_summaries as PatchNote["aiSummaries"])
+            : [];
+
+          return {
             id: note.id,
             repoName: note.repo_name,
             repoUrl: note.repo_url,
+            repoBranch: note.repo_branch,
             timePeriod: note.time_period,
             generatedAt: new Date(note.generated_at),
             title: note.title,
@@ -59,8 +59,13 @@ export default function Home() {
             changes: note.changes,
             contributors: note.contributors,
             videoUrl: note.video_url,
-          })
-        );
+            videoData: note.video_data,
+            aiSummaries,
+            aiOverallSummary: note.ai_overall_summary,
+            aiTemplateId: note.ai_template_id,
+            aiTemplate: template,
+          } satisfies PatchNote;
+        });
 
         setPatchNotes(transformedData);
       } catch (err) {

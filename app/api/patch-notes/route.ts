@@ -8,7 +8,9 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("patch_notes")
-      .select("*")
+      .select(
+        "*, ai_template:ai_template_id (id, name, description, audience, commit_prompt, overall_prompt, examples, created_at, updated_at)"
+      )
       .order("generated_at", { ascending: false });
 
     if (error) {
@@ -37,6 +39,7 @@ export async function POST(request: NextRequest) {
           repo_name: body.repo_name,
           repo_url: body.repo_url,
           time_period: body.time_period,
+          repo_branch: body.repo_branch || 'main',
           title: body.title,
           content: body.content,
           changes: body.changes,
@@ -44,10 +47,13 @@ export async function POST(request: NextRequest) {
           video_data: body.video_data,
           ai_summaries: body.ai_summaries || null,
           ai_overall_summary: body.ai_overall_summary || null,
+          ai_template_id: body.ai_template_id || null,
           generated_at: body.generated_at || new Date().toISOString(),
         },
       ])
-      .select()
+      .select(
+        "*, ai_template:ai_template_id (id, name, description, audience, commit_prompt, overall_prompt, examples, created_at, updated_at)"
+      )
       .single();
 
     if (error) {
