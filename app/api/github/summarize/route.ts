@@ -1,11 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchGitHubCommits, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
-import { summarizeCommits, generateOverallSummary } from '@/lib/ai-summarizer';
+import { summarizeCommits, generatePatchNoteContent, SummarizerTemplate } from '@/lib/ai-summarizer';
+import { createClient } from '@/lib/supabase/server';
+
+async function loadTemplate(templateId?: string): Promise<SummarizerTemplate | undefined> {
+  if (!templateId) {
+    return undefined;
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('ai_templates')
+      .select('*')
+      .eq('id', templateId)
+      .single();
+
+    if (error || !data) {
+      console.warn('Unable to load template', error?.message);
+      return undefined;
+    }
+
+    return {
+      name: data.name,
+      audience: data.audience as SummarizerTemplate['audience'],
+      commitPrompt: data.commit_prompt,
+      overallPrompt: data.overall_prompt,
+      exampleInput: data.example_input,
+      exampleOutput: data.example_output,
+    };
+  } catch (error) {
+    console.warn('Failed to fetch template', error);
+    return undefined;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { owner, repo, timePeriod, branch } = body;
+    const { owner, repo, timePeriod, branch, templateId } = body;
 
     if (!owner || !repo || !timePeriod) {
       return NextResponse.json(
@@ -28,6 +61,8 @@ export async function POST(request: NextRequest) {
         since.setMonth(since.getMonth() - 1);
         break;
     }
+
+    const template = await loadTemplate(templateId);
 
     // Fetch commits
     const commits = await fetchGitHubCommits(
@@ -75,28 +110,32 @@ export async function POST(request: NextRequest) {
     );
 
     // Generate AI summaries
-    const summaries = await summarizeCommits(commitsWithDiffs);
+    const summaries = await summarizeCommits(commitsWithDiffs, template);
 
     // Calculate totals
     const totalAdditions = commitsWithStats.reduce((sum, c) => sum + c.additions, 0);
     const totalDeletions = commitsWithStats.reduce((sum, c) => sum + c.deletions, 0);
 
-    // Generate overall summary
-    const overallSummary = await generateOverallSummary(
-      `${owner}/${repo}`,
+    const patchNoteContent = await generatePatchNoteContent({
+      repoName: `${owner}/${repo}`,
       timePeriod,
-      summaries,
-      commits.length,
+      commitSummaries: summaries,
+      totalCommits: commits.length,
       totalAdditions,
-      totalDeletions
-    );
+      totalDeletions,
+      template,
+    });
+
+    const overallSummary = patchNoteContent.split('\n\n')[0]?.trim() || patchNoteContent;
 
     return NextResponse.json({
       summaries,
       overallSummary,
+      patchNoteContent,
       totalCommits: commits.length,
       totalAdditions,
       totalDeletions,
+      templateId: templateId ?? null,
     });
   } catch (error) {
     console.error('Error generating summaries:', error);

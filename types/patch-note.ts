@@ -1,3 +1,6 @@
+import { CommitSummary } from "@/lib/ai-summarizer";
+import { AiTemplate } from "@/types/ai-template";
+
 export interface VideoData {
   langCode: string;
   topChanges: Array<{
@@ -23,4 +26,9 @@ export interface PatchNote {
   contributors: string[];
   videoData?: VideoData;
   videoUrl?: string | null;
+  aiSummaries?: CommitSummary[] | null;
+  aiOverallSummary?: string | null;
+  templateId?: string | null;
+  template?: AiTemplate | null;
+  branch?: string | null;
 }

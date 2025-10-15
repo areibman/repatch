@@ -44,6 +44,8 @@ export async function POST(request: NextRequest) {
           video_data: body.video_data,
           ai_summaries: body.ai_summaries || null,
           ai_overall_summary: body.ai_overall_summary || null,
+          template_id: body.template_id || null,
+          branch: body.branch || null,
           generated_at: body.generated_at || new Date().toISOString(),
         },
       ])
