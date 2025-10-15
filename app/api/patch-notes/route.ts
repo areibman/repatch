@@ -55,8 +55,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const shouldTriggerVideo =
+      process.env.DISABLE_VIDEO_RENDER !== '1' && body.video_data && data.id;
+
     // Trigger video rendering asynchronously (don't wait for it)
-    if (body.video_data && data.id) {
+    if (shouldTriggerVideo) {
       const videoRenderUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/videos/render`;
       console.log('🎬 Triggering video rendering...');
       console.log('   - Patch Note ID:', data.id);
