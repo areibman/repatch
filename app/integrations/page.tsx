@@ -18,6 +18,7 @@ import {
   EnvelopeIcon,
   MagnifyingGlassIcon,
   ArrowTopRightOnSquareIcon,
+  KeyIcon,
 } from "@heroicons/react/16/solid";
 
 type IntegrationItem = {
@@ -40,6 +41,16 @@ const INTEGRATIONS: IntegrationItem[] = [
     configureHref: "/integrations/github/configure",
     badge: { label: "Source", variant: "outline" },
     icon: <CodeBracketIcon className="h-5 w-5" />,
+  },
+  {
+    id: "api-keys",
+    name: "External API",
+    description:
+      "Provision and rotate API keys to share sanitized patch notes with downstream apps.",
+    href: "/integrations/api-keys",
+    configureHref: "/integrations/api-keys",
+    badge: { label: "API", variant: "outline" },
+    icon: <KeyIcon className="h-5 w-5" />,
   },
   {
     id: "resend",
