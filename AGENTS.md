@@ -1,14 +1,19 @@
-This is an app called Repatch that uses LLMs to look at all the patch notes from a github repo (across 1 day, 1 week, 1 month) and creates a newsletter
+# Repository Guidelines
 
-Core features:
-- Blog-style landing page with a grid of patch notes templates
-- Each blog page is AI-generated based on changes that occured in the time period they cover
-- Because the notes are AI-generated, the user can edit the patch notes and save them.
-- There is an email list where the user can add/edit/remove recipient emails.
-- On the main page, you can click to add a repo + time period to summarize the notes. This will be the process that creates the post.
-- In the patch notes page, you can click a button that will send the patch notes as an email to all recipients in the list.
+## Project Structure & Module Organization
+The Next.js App Router lives in `app/`, where route segments own their UI, server actions, and API routes. Shared UI and form primitives belong in `components/`, reusable hooks in `hooks/`, and TypeScript contracts in `types/`. `lib/` centralizes integrations: `github.ts` handles repo history, `ai-summarizer.ts` should wrap LiteLLM requests to AWS Bedrock, and `supabase/` stores SQL migrations. Keep automation scripts in `scripts/`, static assets in `public/`, and Remotion compositions in `remotion/`.
 
-General rules:
-- Use LiteLLM + AWS Bedrock for LLM summarization
-- Use Resend for emails
-- Use bun
+## Build, Test, and Development Commands
+Install dependencies with `bun install`, then launch the local server with `bun dev`. Produce a production bundle via `bun run build` and serve it using `bun start`. Run linting through `bun run lint`, check formatting with `bunx prettier --check .`, and seed demo data using `bun run db:seed`. Render video previews through `bun run preview` before sharing Motion assets.
+
+## Coding Style & Naming Conventions
+Write TypeScript using ES modules, 2-space indentation, and descriptive camelCase symbols. Components and pages should use PascalCase file names that mirror their route segment (e.g., `PatchNotesPage.tsx`). Favor Tailwind utility classes composed with `clsx`/`tailwind-merge`, and avoid bespoke CSS unless necessary. All new code must clear the rules in `eslint.config.mjs`; run Prettier with defaults to normalize formatting. Centralize Bedrock model IDs, prompts, and LiteLLM options inside `lib/ai-summarizer.ts` so newsletter tone stays consistent.
+
+## Testing Guidelines
+Jest is available but not yet wired into CI, so add targeted `*.test.ts` files alongside the modules you touch. Import helpers from `lib/utils.ts` or dedicated fixtures instead of duplicating setup. Execute suites with `bunx jest --runInBand` for deterministic output, and narrow the scope (`bunx jest lib/github`) while iterating. When touching API routes or summarization logic, cover both happy paths and key error states related to missing credentials or GitHub rate limits.
+
+## Commit & Pull Request Guidelines
+Use short, present-tense summaries similar to `proper gh fetch for branches`, and group related changes per commit. Reference issues with `Refs #123` in the body when applicable, and prefer descriptive branch names like `feature/email-drip`. Pull requests should describe the problem, outline the solution, list manual/automated test results, and include screenshots or Loom links for UI updates. Tag reviewers early when adding new environment variables or integrations.
+
+## Security & Configuration Tips
+Secrets belong in `.env.local`; never commit API keys or Supabase credentials. For AWS Bedrock access, export `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION`, then point LiteLLM at the chosen model. Resend keys must match the audience surfaced in `app/subscribers/page.tsx`, and GitHub tokens should include `public_repo` scope to avoid rate limits. Before emailing or rendering videos, confirm Supabase migrations are applied and background jobs have the necessary environment variables.

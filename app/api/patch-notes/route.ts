@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const body = await request.json();
 
-    // @ts-expect-error - Supabase type inference issue with inserts
     const { data, error } = await supabase
       .from("patch_notes")
       .insert([
@@ -54,6 +53,41 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("Supabase error:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Trigger video rendering asynchronously (don't wait for it)
+    if (body.video_data && data.id) {
+      const videoRenderUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/videos/render`;
+      console.log('🎬 Triggering video rendering...');
+      console.log('   - Patch Note ID:', data.id);
+      console.log('   - Repo:', body.repo_name);
+      console.log('   - Video API URL:', videoRenderUrl);
+      console.log('   - Has video_data:', !!body.video_data);
+      
+      fetch(videoRenderUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          patchNoteId: data.id,
+          videoData: body.video_data,
+          repoName: body.repo_name,
+        }),
+      }).then(res => {
+        console.log('✅ Video rendering request sent, status:', res.status);
+        return res.json();
+      }).then(result => {
+        console.log('✅ Video rendering response:', result);
+      }).catch((err) => {
+        console.error('❌ Background video rendering failed:', err);
+        // Don't fail the patch note creation if video rendering fails
+      });
+    } else {
+      console.log('⚠️  Video rendering NOT triggered:', {
+        hasVideoData: !!body.video_data,
+        hasId: !!data.id
+      });
     }
 
     return NextResponse.json(data, { status: 201 });

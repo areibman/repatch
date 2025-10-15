@@ -3,11 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "dev": "next dev",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "preview": "remotion preview remotion/index.ts"
+    "preview": "remotion preview remotion/index.ts",
+    "db:seed": "dotenv -e .env.local -- tsx scripts/add-sample-data.ts",
+    "fix-videos": "dotenv -e .env.local -- tsx scripts/fix-video-urls.ts",
+    "check-db": "dotenv -e .env.local -- tsx scripts/check-video-column.ts",
+    "check-video-data": "dotenv -e .env.local -- tsx scripts/check-video-data.ts",
+    "regenerate-videos": "dotenv -e .env.local -- tsx scripts/regenerate-videos.ts"
   },
   "dependencies": {
     "@actions/core": "^1.10.0",

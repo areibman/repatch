@@ -369,6 +369,48 @@ ${stats.contributors.join(", ")}
 /**
  * Generate video data using AI based on repository stats and commit messages
  */
+// Generate video data from AI summaries (preferred method)
+export function generateVideoDataFromAI(
+  aiSummaries: Array<{
+    sha: string;
+    message: string;
+    aiSummary: string;
+    additions: number;
+    deletions: number;
+  }>,
+  overallSummary?: string
+): VideoData {
+  console.log('📹 generateVideoDataFromAI called with', aiSummaries.length, 'summaries');
+  
+  // Take top 3 AI summaries for the main video content
+  const topChanges = aiSummaries.slice(0, 3).map((summary) => {
+    const commitTitle = summary.message.split("\n")[0];
+    const title = commitTitle.length > 60 ? commitTitle.substring(0, 60) + "..." : commitTitle;
+    console.log(`   ✨ Top Change: "${title}" → "${summary.aiSummary.substring(0, 50)}..."`);
+    return {
+      title,
+      description: summary.aiSummary,
+    };
+  });
+
+  // All changes list - shorter format for scrolling text
+  const allChanges = aiSummaries.map((summary) => {
+    const commitTitle = summary.message.split("\n")[0];
+    return `${commitTitle}: ${summary.aiSummary}`;
+  });
+
+  console.log('📹 Generated video data:');
+  console.log('   - Top changes:', topChanges.length);
+  console.log('   - All changes:', allChanges.length);
+
+  return {
+    langCode: "en",
+    topChanges,
+    allChanges,
+  };
+}
+
+// Generate video data from raw GitHub stats (fallback if no AI summaries)
 export async function generateVideoData(
   repoName: string,
   timePeriod: "1day" | "1week" | "1month",

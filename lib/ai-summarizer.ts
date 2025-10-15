@@ -42,10 +42,13 @@ Code Changes:
 Diff Preview (first 2000 characters):
 ${diff.substring(0, 2000)}
 
-Task: Provide a 1-2 sentence summary of the CORE changes made in this commit. Focus on:
-- What functionality was added, changed, or removed
-- The purpose or impact of the change
-- Avoid technical jargon when possible
+Task: Write ONE short sentence (10-15 words max) describing what changed. Use plain, direct language like:
+- "Doubled page loading speed"
+- "Added dark mode toggle"
+- "Fixed login error on mobile"
+
+Do NOT use phrases like "This commit", "This update", "significantly", "streamlines", etc.
+Just state what changed directly and simply.
 
 Summary:`,
     });
@@ -124,17 +127,21 @@ export async function generateOverallSummary(
 
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
-      prompt: `You are writing a newsletter introduction for repository "${repoName}".
+      prompt: `You are writing a brief newsletter intro for repository "${repoName}".
 
 Time Period: Past ${periodLabel}
 Total Commits: ${totalCommits}
-Lines Added: ${totalAdditions}
-Lines Deleted: ${totalDeletions}
 
 Key Changes:
 ${summariesText}
 
-Task: Write a 2-3 sentence introduction summarizing the overall development activity and main themes of work during this period. Make it engaging and accessible to developers.
+Task: Write 1-2 SHORT sentences (max 25 words total) summarizing what happened. Use plain, direct language:
+- "Focused on performance and bug fixes"
+- "Added new features and improved UI"
+- "Major refactoring and dependency updates"
+
+Do NOT use phrases like "This period saw", "significantly", "substantial", etc.
+Just state what happened directly.
 
 Introduction:`,
     });

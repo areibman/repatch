@@ -22,4 +22,5 @@ export interface PatchNote {
   };
   contributors: string[];
   videoData?: VideoData;
+  videoUrl?: string | null;
 }

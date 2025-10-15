@@ -24,6 +24,7 @@ import {
 import { PlusIcon, Loader2Icon } from "lucide-react";
 import {
   generateVideoData,
+  generateVideoDataFromAI,
   parseGitHubUrl,
   generateBoilerplateContent,
 } from "@/lib/github";
@@ -145,12 +146,15 @@ export function CreatePostDialog() {
             stats
           );
 
-      // Generate video data
-      const videoData = await generateVideoData(
-        `${repoInfo.owner}/${repoInfo.repo}`,
-        timePeriod,
-        stats
-      );
+      // Generate video data - use AI summaries if available, otherwise fallback to raw stats
+      console.log(`🎬 Generating video data using ${aiSummaries.length > 0 ? 'AI summaries' : 'raw GitHub stats'}`);
+      const videoData = aiSummaries.length > 0
+        ? generateVideoDataFromAI(aiSummaries, aiOverallSummary || undefined)
+        : await generateVideoData(
+            `${repoInfo.owner}/${repoInfo.repo}`,
+            timePeriod,
+            stats
+          );
 
       const periodLabel =
         timePeriod === "1day"

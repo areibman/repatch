@@ -47,6 +47,7 @@ export default function Home() {
             content: string;
             changes: { added: number; modified: number; removed: number };
             contributors: string[];
+            video_url?: string | null;
           }) => ({
             id: note.id,
             repoName: note.repo_name,
@@ -57,6 +58,7 @@ export default function Home() {
             content: note.content,
             changes: note.changes,
             contributors: note.contributors,
+            videoUrl: note.video_url,
           })
         );
 

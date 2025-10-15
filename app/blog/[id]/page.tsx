@@ -22,6 +22,7 @@ import {
   PaperAirplaneIcon,
   XMarkIcon,
 } from "@heroicons/react/16/solid";
+import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
@@ -41,6 +42,7 @@ export default function BlogViewPage() {
   const [editedTitle, setEditedTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -74,6 +76,7 @@ export default function BlogViewPage() {
           content: data.content,
           changes: data.changes,
           contributors: data.contributors,
+          videoUrl: data.video_url,
         };
 
         setPatchNote(transformedNote);
@@ -85,7 +88,24 @@ export default function BlogViewPage() {
     };
 
     fetchPatchNote();
-  }, [params.id]);
+    
+    // Poll for video status every 5 seconds if no video exists yet
+    const pollInterval = setInterval(async () => {
+      if (!patchNote?.videoUrl) {
+        const statusResponse = await fetch(`/api/videos/status/${params.id}`);
+        if (statusResponse.ok) {
+          const status = await statusResponse.json();
+          if (status.hasVideo && status.videoUrl) {
+            console.log('Video is ready! Refreshing...');
+            fetchPatchNote(); // Refresh the patch note data
+          }
+        }
+      }
+    }, 5000);
+    
+    // Cleanup interval on unmount
+    return () => clearInterval(pollInterval);
+  }, [params.id, patchNote?.videoUrl]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -175,6 +195,47 @@ export default function BlogViewPage() {
     }
   };
 
+  const handleGenerateVideo = async () => {
+    if (!patchNote) return;
+    
+    setIsGeneratingVideo(true);
+    try {
+      const response = await fetch('/api/videos/render', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          patchNoteId: patchNote.id,
+          videoData: patchNote.videoData,
+          repoName: patchNote.repoName,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate video');
+      }
+
+      const data = await response.json();
+      
+      // Update the patch note with the new video URL
+      setPatchNote({
+        ...patchNote,
+        videoUrl: data.videoUrl,
+      });
+      
+      alert('✅ Video generated successfully! The page will refresh.');
+      window.location.reload();
+    } catch (error) {
+      console.error('Error generating video:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate video';
+      alert(`❌ Error: ${errorMessage}`);
+    } finally {
+      setIsGeneratingVideo(false);
+    }
+  };
+
   const getTimePeriodLabel = (period: string) => {
     switch (period) {
       case "1day":
@@ -212,19 +273,28 @@ export default function BlogViewPage() {
           </Button>
 
           {/* Hero Image/Video */}
-          <div className="mb-6 rounded-lg overflow-hidden shadow-lg">
+          <div className="mb-6 rounded-lg overflow-hidden shadow-lg relative">
             <a 
-              href="https://openedit-uploads.openchatui.com/basecomp.mp4" 
+              href={patchNote.videoUrl || "https://openedit-uploads.openchatui.com/basecomp.mp4"} 
               target="_blank" 
               rel="noopener noreferrer"
               className="block hover:opacity-90 transition-opacity"
             >
               <img 
                 src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png" 
-                alt="Watch Repatch Demo Video" 
+                alt="Watch Patch Note Video" 
                 className="w-full h-auto"
               />
             </a>
+            {patchNote.videoUrl ? (
+              <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded shadow-md">
+                ✓ Custom Video
+              </div>
+            ) : (
+              <div className="absolute top-2 right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded shadow-md animate-pulse">
+                🎬 Checking for video...
+              </div>
+            )}
           </div>
 
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -259,7 +329,7 @@ export default function BlogViewPage() {
               </a>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {isEditing ? (
                 <>
                   <Button variant="outline" size="sm" onClick={handleCancel}>
@@ -277,6 +347,25 @@ export default function BlogViewPage() {
                     <PencilIcon className="h-4 w-4 mr-2" />
                     Edit
                   </Button>
+                  {!patchNote.videoUrl && (
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerateVideo} 
+                      disabled={isGeneratingVideo || !patchNote.videoData}
+                    >
+                      {isGeneratingVideo ? (
+                        <>
+                          <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          🎬 Generate Video
+                        </>
+                      )}
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     onClick={handleSendEmail}

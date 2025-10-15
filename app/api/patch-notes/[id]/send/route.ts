@@ -73,6 +73,16 @@ export async function POST(
     // Convert markdown content to HTML
     const htmlContent = markdownToHtml((patchNote as PatchNote).content);
 
+    // Get the base URL for absolute links
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
+                    'http://localhost:3000');
+    
+    // Convert relative video URL to absolute URL
+    const videoUrl = (patchNote as PatchNote).video_url 
+      ? `${baseUrl}${(patchNote as PatchNote).video_url}`
+      : 'https://openedit-uploads.openchatui.com/basecomp.mp4';
+
     // Create styled HTML email
     const emailHtml = `
 <!DOCTYPE html>
@@ -298,8 +308,8 @@ export async function POST(
 <body>
   <div class="container">
     <div class="hero-image">
-      <a href="https://openedit-uploads.openchatui.com/basecomp.mp4" target="_blank">
-        <img src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png" alt="Repatch Demo Video" />
+      <a href="${videoUrl}" target="_blank">
+        <img src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png" alt="Watch Patch Note Video" />
       </a>
     </div>
     

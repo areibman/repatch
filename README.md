@@ -11,8 +11,9 @@ Repatch uses LLMs to analyze GitHub repository changes over time periods (daily,
 - **Framework**: Next.js 15 with App Router
 - **Database**: Supabase (PostgreSQL)
 - **UI**: ShadCN UI + Tailwind CSS
-- **Email**: Resend (planned)
-- **AI**: LiteLLM + AWS Bedrock (planned)
+- **Email**: Resend
+- **AI**: Google Generative AI (Gemini 2.5 Flash) via Vercel AI SDK
+- **Video Generation**: Remotion 4.0
 
 ## Getting Started
 
@@ -37,6 +38,13 @@ RESEND_AUDIENCE_ID=your_resend_audience_id
 
 # GitHub (REQUIRED to avoid rate limits)
 GITHUB_TOKEN=ghp_yourTokenHere
+
+# Google AI (for Gemini 2.5 Flash)
+GEMINI_API_KEY=your_gemini_api_key
+GOOGLE_API_KEY=your_google_api_key
+
+# Optional: App URL for video rendering callbacks
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 **⚠️ Important**: Without a GitHub token, you'll hit rate limits (60 requests/hour). With a token, you get 5,000 requests/hour.
@@ -67,7 +75,19 @@ Follow the instructions in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to:
 - Run migrations
 - Add test data
 
-### 4. Run Development Server
+### 4. Run Database Migrations
+
+Make sure to run all migrations, including the latest video_url migration:
+
+```bash
+# Run the video_url migration via Supabase CLI
+supabase db push
+
+# Or via the Supabase Dashboard SQL Editor:
+# Copy and run /supabase/migrations/20250106000000_add_video_url.sql
+```
+
+### 5. Run Development Server
 
 ```bash
 npm run dev
@@ -84,6 +104,42 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+
+## Features
+
+### 🎬 Dynamic Video Generation
+
+Repatch automatically generates custom videos for each patch note using Remotion! Videos are:
+- Generated in the background after creating a patch note
+- Stored locally in `/public/videos/`
+- Displayed in blog posts and email newsletters
+- Resolution: 2160x1080 (2K) at 30 FPS
+
+For more details, see [VIDEO_GENERATION.md](./VIDEO_GENERATION.md).
+
+### 🤖 AI-Powered Summaries
+
+Using Google's Gemini 2.5 Flash, Repatch:
+- Analyzes commit diffs for each PR
+- Generates concise 1-2 sentence summaries per commit
+- Creates an overall summary of all changes
+- Processes the top 10 most significant commits
+
+### 📧 Email Newsletters
+
+Send beautiful HTML emails to subscribers with:
+- Styled patch note content
+- Embedded hero image/video link
+- Repository statistics
+- Contributor list
+- Custom video links (when available)
+
+## Documentation
+
+- [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration
+- [Video Generation](./VIDEO_GENERATION.md) - Remotion video rendering
+- [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
+- [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
 
 ## Learn More
 
