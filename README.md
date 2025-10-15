@@ -140,6 +140,7 @@ Send beautiful HTML emails to subscribers with:
 - [Video Generation](./VIDEO_GENERATION.md) - Remotion video rendering
 - [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
+- [Playwright Testing](./docs/testing/playwright.md) - End-to-end and contract test suite
 
 ## Learn More
 

@@ -2,9 +2,15 @@
  * GitHub API utilities for fetching repository data
  */
 
-import { z } from "zod";
-import { systemPrompt } from "../constants";
 import { VideoData } from "../types/patch-note";
+import { useIntegrationMocks } from "./integration-mode";
+import {
+  getMockBranches,
+  getMockCommits,
+  getMockCommitDiff,
+  getMockCommitStats,
+  getMockRepoStats,
+} from "./mocks/github";
 
 export interface GitHubCommit {
   sha: string;
@@ -100,6 +106,10 @@ export async function fetchGitHubBranches(
   owner: string,
   repo: string
 ): Promise<{ name: string; protected: boolean }[]> {
+  if (useIntegrationMocks()) {
+    return getMockBranches();
+  }
+
   const allBranches: { name: string; protected: boolean }[] = [];
   let page = 1;
   const perPage = 100;
@@ -166,6 +176,10 @@ export async function fetchGitHubCommits(
   until: string,
   branch?: string
 ): Promise<GitHubCommit[]> {
+  if (useIntegrationMocks()) {
+    return getMockCommits();
+  }
+
   let url = `https://api.github.com/repos/${owner}/${repo}/commits?since=${since}&until=${until}&per_page=100`;
   
   // Add branch parameter if specified
@@ -199,6 +213,10 @@ export async function fetchCommitStats(
   repo: string,
   sha: string
 ): Promise<{ additions: number; deletions: number }> {
+  if (useIntegrationMocks()) {
+    return getMockCommitStats(sha);
+  }
+
   const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`;
 
   const response = await fetch(url, {
@@ -224,6 +242,10 @@ export async function fetchCommitDiff(
   repo: string,
   sha: string
 ): Promise<string> {
+  if (useIntegrationMocks()) {
+    return getMockCommitDiff(sha);
+  }
+
   const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`;
 
   const response = await fetch(url, {
@@ -249,6 +271,10 @@ export async function getRepoStats(
   timePeriod: '1day' | '1week' | '1month',
   branch?: string
 ): Promise<RepoStats> {
+  if (useIntegrationMocks()) {
+    return getMockRepoStats();
+  }
+
   const { since, until } = getDateRange(timePeriod);
   const commits = await fetchGitHubCommits(owner, repo, since, until, branch);
 
