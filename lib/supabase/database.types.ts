@@ -126,6 +126,70 @@ export interface Database {
           updated_at?: string;
         };
       };
+      typefully_configs: {
+        Row: {
+          id: string;
+          api_key: string;
+          profile_id: string;
+          team_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          api_key: string;
+          profile_id: string;
+          team_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          api_key?: string;
+          profile_id?: string;
+          team_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      typefully_jobs: {
+        Row: {
+          id: string;
+          patch_note_id: string;
+          status: Database["public"]["Enums"]["typefully_job_status"];
+          thread_id: string | null;
+          video_url: string | null;
+          error: string | null;
+          request_payload: Json | null;
+          response_payload: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          patch_note_id: string;
+          status?: Database["public"]["Enums"]["typefully_job_status"];
+          thread_id?: string | null;
+          video_url?: string | null;
+          error?: string | null;
+          request_payload?: Json | null;
+          response_payload?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          patch_note_id?: string;
+          status?: Database["public"]["Enums"]["typefully_job_status"];
+          thread_id?: string | null;
+          video_url?: string | null;
+          error?: string | null;
+          request_payload?: Json | null;
+          response_payload?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
@@ -135,6 +199,7 @@ export interface Database {
     };
     Enums: {
       time_period_type: "1day" | "1week" | "1month";
+      typefully_job_status: "queued" | "processing" | "succeeded" | "failed";
     };
   };
 }

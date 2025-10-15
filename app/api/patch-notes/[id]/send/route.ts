@@ -56,9 +56,10 @@ export async function POST(
     }
 
     // Filter out unsubscribed contacts and extract emails
-    const activeEmails = contacts.data.data
-      .filter((contact: any) => !contact.unsubscribed)
-      .map((contact: any) => contact.email);
+    type ResendContact = { unsubscribed?: boolean; email: string };
+    const activeEmails = (contacts.data.data as ResendContact[])
+      .filter((contact) => !contact.unsubscribed)
+      .map((contact) => contact.email);
 
     if (activeEmails.length === 0) {
       return NextResponse.json(
