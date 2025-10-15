@@ -1,0 +1,21 @@
+{
+  "patch_notes": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "repo_name": "acme/awesome-app",
+      "repo_url": "https://github.com/acme/awesome-app",
+      "time_period": "1week",
+      "title": "Weekly Update - awesome-app",
+      "content": "# Weekly Highlights\n\n- Added dashboard widgets\n- Fixed billing webhook retries",
+      "changes": { "added": 230, "modified": 90, "removed": 40 },
+      "contributors": ["@alice", "@bob"],
+      "generated_at": "2024-01-01T00:00:00.000Z",
+      "created_at": "2024-01-01T00:00:00.000Z",
+      "updated_at": "2024-01-01T00:00:00.000Z",
+      "video_data": null,
+      "video_url": null
+    }
+  ],
+  "github_configs": [],
+  "email_subscribers": []
+}

@@ -66,6 +66,15 @@ export default function GitHubConfigurePage() {
               {state.error}
             </p>
           )}
+          {state.ok && state.id && (
+            <p
+              className="text-sm text-emerald-600"
+              role="status"
+              aria-live="polite"
+            >
+              GitHub connection saved successfully.
+            </p>
+          )}
         </CardContent>
         <CardFooter className="justify-end gap-2">
           <Button variant="ghost" asChild>

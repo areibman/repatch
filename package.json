@@ -12,7 +12,10 @@
     "fix-videos": "dotenv -e .env.local -- tsx scripts/fix-video-urls.ts",
     "check-db": "dotenv -e .env.local -- tsx scripts/check-video-column.ts",
     "check-video-data": "dotenv -e .env.local -- tsx scripts/check-video-data.ts",
-    "regenerate-videos": "dotenv -e .env.local -- tsx scripts/regenerate-videos.ts"
+    "regenerate-videos": "dotenv -e .env.local -- tsx scripts/regenerate-videos.ts",
+    "test:e2e": "REPATCH_INTEGRATION_MODE=mock REPATCH_SUPABASE_MODE=mock REPATCH_SUPABASE_SEED=tests/fixtures/supabase-seed.json REPATCH_DISABLE_VIDEO_RENDER=true playwright test",
+    "test:e2e:headed": "PLAYWRIGHT_HEADLESS=false bun run test:e2e",
+    "test:e2e:ci": "REPATCH_INTEGRATION_MODE=mock REPATCH_SUPABASE_MODE=mock REPATCH_SUPABASE_SEED=tests/fixtures/supabase-seed.json REPATCH_DISABLE_VIDEO_RENDER=true playwright test --reporter=github"
   },
   "dependencies": {
     "@actions/core": "^1.10.0",
@@ -76,6 +79,7 @@
     "postcss-loader": "^7.3.0",
     "postcss-preset-env": "^8.3.2",
     "prettier": "^2.8.8",
+    "@playwright/test": "^1.49.0",
     "style-loader": "^3.3.2",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.20.6",
