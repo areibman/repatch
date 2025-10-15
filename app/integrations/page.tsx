@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmailProviderSummary } from "@/lib/email/types";
 import {
   CodeBracketIcon,
   EnvelopeIcon,
@@ -21,13 +22,14 @@ import {
 } from "@heroicons/react/16/solid";
 
 type IntegrationItem = {
-  id: "github" | "resend";
+  id: "github" | "resend" | "customerio";
   name: string;
   description: string;
   href: string;
   configureHref: string;
   badge?: { label: string; variant?: "default" | "secondary" | "outline" };
   icon: React.ReactNode;
+  providerId?: "resend" | "customerio";
 };
 
 const INTEGRATIONS: IntegrationItem[] = [
@@ -50,11 +52,49 @@ const INTEGRATIONS: IntegrationItem[] = [
     configureHref: "/integrations/resend/configure",
     badge: { label: "Email", variant: "outline" },
     icon: <EnvelopeIcon className="h-5 w-5" />,
+    providerId: "resend",
+  },
+  {
+    id: "customerio",
+    name: "Customer.io",
+    description:
+      "Deliver campaigns through Customer.io's transactional messaging API.",
+    href: "/integrations/customerio",
+    configureHref: "/integrations/customerio/configure",
+    badge: { label: "Email", variant: "outline" },
+    icon: <EnvelopeIcon className="h-5 w-5" />,
+    providerId: "customerio",
   },
 ];
 
 export default function IntegrationsPage() {
   const [query, setQuery] = useState("");
+  const [providers, setProviders] = useState<EmailProviderSummary[]>([]);
+  const [activeProvider, setActiveProvider] = useState<EmailProviderSummary | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProviders = async () => {
+      try {
+        const response = await fetch("/api/email/providers");
+        if (!response.ok) {
+          throw new Error("Failed to load email providers");
+        }
+
+        const data = await response.json();
+        setProviders(data.providers || []);
+        setActiveProvider(data.active || null);
+        setProviderError(null);
+      } catch (error) {
+        console.error(error);
+        setProviderError(
+          error instanceof Error ? error.message : "Failed to load providers"
+        );
+      }
+    };
+
+    fetchProviders();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -86,37 +126,59 @@ export default function IntegrationsPage() {
         />
       </div>
 
+      {providerError && (
+        <p className="text-sm text-destructive mb-4">{providerError}</p>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filtered.map((item) => (
-          <Card key={item.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
+        {filtered.map((item) => {
+          const providerSummary = item.providerId
+            ? providers.find((provider) => provider.id === item.providerId)
+            : undefined;
+          const isActive =
+            item.providerId && activeProvider?.id === item.providerId;
+
+          return (
+            <Card key={item.id}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {item.icon}
+                    <CardTitle className="text-base">{item.name}</CardTitle>
+                  </div>
                 <div className="flex items-center gap-2">
-                  {item.icon}
-                  <CardTitle className="text-base">{item.name}</CardTitle>
+                  {isActive && (
+                    <Badge variant="secondary">Active</Badge>
+                  )}
+                  {item.badge && (
+                    <Badge variant={item.badge.variant}>{item.badge.label}</Badge>
+                  )}
                 </div>
-                {item.badge && (
-                  <Badge variant={item.badge.variant}>{item.badge.label}</Badge>
-                )}
-              </div>
-              <CardDescription className="mt-2">
-                {item.description}
-              </CardDescription>
-            </CardHeader>
-            <CardContent />
-            <CardFooter className="flex items-center justify-between">
-              <Button asChild>
-                <Link href={item.configureHref}>Connect</Link>
-              </Button>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href={item.href} className="flex items-center gap-1">
-                  Learn more
-                  <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
+                </div>
+                <CardDescription className="mt-2">
+                  {item.description}
+                  {providerSummary?.fromEmail && (
+                    <span className="block text-xs text-muted-foreground mt-2">
+                      Sender: {providerSummary.fromEmail}
+                    </span>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardContent />
+              <CardFooter className="flex items-center justify-between">
+                <Button asChild>
+                  <Link href={item.configureHref}>Connect</Link>
+                </Button>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href={item.href} className="flex items-center gap-1">
+                    Learn more
+                    <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
