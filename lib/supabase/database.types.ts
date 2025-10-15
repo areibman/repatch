@@ -126,6 +126,64 @@ export interface Database {
           updated_at?: string;
         };
       };
+      typefully_configs: {
+        Row: {
+          id: string;
+          api_key: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          api_key: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          api_key?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      typefully_jobs: {
+        Row: {
+          id: string;
+          patch_note_id: string;
+          thread_id: string | null;
+          status: string;
+          video_uploaded: boolean;
+          error_message: string | null;
+          queued_at: string;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          patch_note_id: string;
+          thread_id?: string | null;
+          status?: string;
+          video_uploaded?: boolean;
+          error_message?: string | null;
+          queued_at?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          patch_note_id?: string;
+          thread_id?: string | null;
+          status?: string;
+          video_uploaded?: boolean;
+          error_message?: string | null;
+          queued_at?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
