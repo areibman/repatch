@@ -36,6 +36,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 RESEND_API_KEY=your_resend_api_key
 RESEND_AUDIENCE_ID=your_resend_audience_id
 
+# Typefully (for Twitter/X threads)
+TYPEFULLY_API_KEY=your_typefully_api_key
+TYPEFULLY_WORKSPACE_ID=wrk_...
+TYPEFULLY_PROFILE_ID=pro_...
+
 # GitHub (REQUIRED to avoid rate limits)
 GITHUB_TOKEN=ghp_yourTokenHere
 
@@ -45,6 +50,10 @@ GOOGLE_API_KEY=your_google_api_key
 
 # Optional: App URL for video rendering callbacks
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+# Optional: Override Typefully API base and enable mocks for local testing
+# TYPEFULLY_API_URL=https://api.typefully.com/v1
+# TYPEFULLY_MOCK_MODE=true
+# TYPEFULLY_SKIP_RENDER=true
 ```
 
 **⚠️ Important**: Without a GitHub token, you'll hit rate limits (60 requests/hour). With a token, you get 5,000 requests/hour.
@@ -134,12 +143,23 @@ Send beautiful HTML emails to subscribers with:
 - Contributor list
 - Custom video links (when available)
 
+### 🐦 Typefully Threads
+
+Publish threaded release notes to X / Twitter without leaving the app. When you queue a thread, Repatch will:
+
+- Render the latest Remotion video (respecting `TYPEFULLY_SKIP_RENDER=true` in local mock environments)
+- Upload the clip to Typefully via their API
+- Split highlights into 280-character posts and queue the thread for your configured profile
+
+Follow the [Typefully API guide](https://support.typefully.com/en/articles/8718287-typefully-api) for rate limits (30 requests/minute) and workspace/profile requirements.
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration
 - [Video Generation](./VIDEO_GENERATION.md) - Remotion video rendering
 - [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
+- [Typefully Integration](./TYPEFULLY_INTEGRATION.md) - Social publishing workflow
 
 ## Learn More
 

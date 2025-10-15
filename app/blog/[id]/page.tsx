@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,6 +21,7 @@ import {
   CheckIcon,
   PaperAirplaneIcon,
   XMarkIcon,
+  MegaphoneIcon,
 } from "@heroicons/react/16/solid";
 import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
@@ -33,6 +34,15 @@ const BaseComp = dynamic(() => import("@/remotion/BaseComp"), {
   ssr: false,
 });
 
+type TypefullyJob = {
+  id: string;
+  status: string;
+  thread_id: string | null;
+  video_asset_url: string | null;
+  error: string | null;
+  updated_at: string;
+};
+
 export default function BlogViewPage() {
   const params = useParams();
   const router = useRouter();
@@ -43,6 +53,27 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [typefullyJob, setTypefullyJob] = useState<TypefullyJob | null>(null);
+  const [isQueueingThread, setIsQueueingThread] = useState(false);
+  const [isLoadingTypefullyJob, setIsLoadingTypefullyJob] = useState(false);
+
+  const fetchTypefullyJobStatus = useCallback(async () => {
+    setIsLoadingTypefullyJob(true);
+    try {
+      const response = await fetch(
+        `/api/patch-notes/${params.id}/typefully/jobs`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to load Typefully job");
+      }
+      const job = await response.json();
+      setTypefullyJob(job);
+    } catch (error) {
+      console.error("Error fetching Typefully job:", error);
+    } finally {
+      setIsLoadingTypefullyJob(false);
+    }
+  }, [params.id]);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -88,6 +119,7 @@ export default function BlogViewPage() {
     };
 
     fetchPatchNote();
+    fetchTypefullyJobStatus();
     
     // Poll for video status every 5 seconds if no video exists yet
     const pollInterval = setInterval(async () => {
@@ -105,7 +137,7 @@ export default function BlogViewPage() {
     
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
-  }, [params.id, patchNote?.videoUrl]);
+  }, [params.id, patchNote?.videoUrl, fetchTypefullyJobStatus]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -197,7 +229,7 @@ export default function BlogViewPage() {
 
   const handleGenerateVideo = async () => {
     if (!patchNote) return;
-    
+
     setIsGeneratingVideo(true);
     try {
       const response = await fetch('/api/videos/render', {
@@ -233,6 +265,38 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsGeneratingVideo(false);
+    }
+  };
+
+  const handleQueueTypefullyThread = async () => {
+    if (isQueueingThread) {
+      return;
+    }
+
+    setIsQueueingThread(true);
+    try {
+      const response = await fetch(
+        `/api/patch-notes/${params.id}/typefully/queue`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to queue Typefully thread");
+      }
+
+      await response.json();
+      await fetchTypefullyJobStatus();
+      alert("✅ Thread queued with Typefully!");
+    } catch (error) {
+      console.error("Error queueing Typefully thread:", error);
+      const message =
+        error instanceof Error ? error.message : "Failed to queue thread";
+      alert(`❌ Error: ${message}`);
+    } finally {
+      setIsQueueingThread(false);
     }
   };
 
@@ -348,10 +412,10 @@ export default function BlogViewPage() {
                     Edit
                   </Button>
                   {!patchNote.videoUrl && (
-                    <Button 
+                    <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleGenerateVideo} 
+                      onClick={handleGenerateVideo}
                       disabled={isGeneratingVideo || !patchNote.videoData}
                     >
                       {isGeneratingVideo ? (
@@ -367,6 +431,24 @@ export default function BlogViewPage() {
                     </Button>
                   )}
                   <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleQueueTypefullyThread}
+                    disabled={isQueueingThread}
+                  >
+                    {isQueueingThread ? (
+                      <>
+                        <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                        Queueing...
+                      </>
+                    ) : (
+                      <>
+                        <MegaphoneIcon className="h-4 w-4 mr-2" />
+                        Queue Twitter thread
+                      </>
+                    )}
+                  </Button>
+                  <Button
                     size="sm"
                     onClick={handleSendEmail}
                     disabled={isSending}
@@ -376,6 +458,35 @@ export default function BlogViewPage() {
                   </Button>
                 </>
               )}
+            </div>
+            <div className="w-full text-xs text-muted-foreground mt-2">
+              {isLoadingTypefullyJob
+                ? "Checking Typefully status..."
+                : typefullyJob
+                ? (
+                  <span>
+                    Latest Typefully job:
+                    <span
+                      className={`ml-1 font-medium ${
+                        typefullyJob.status === "failed"
+                          ? "text-destructive"
+                          : typefullyJob.status === "queued"
+                            ? "text-emerald-600"
+                            : "text-amber-600"
+                      }`}
+                    >
+                      {typefullyJob.status}
+                    </span>
+                    {typefullyJob.thread_id && (
+                      <span className="ml-2">• Thread {typefullyJob.thread_id}</span>
+                    )}
+                    {typefullyJob.error && (
+                      <span className="ml-2">• {typefullyJob.error}</span>
+                    )}
+                  </span>
+                ) : (
+                  "No Typefully thread queued yet."
+                )}
             </div>
           </div>
         </div>
