@@ -126,6 +126,91 @@ export interface Database {
           updated_at?: string;
         };
       };
+      typefully_configs: {
+        Row: {
+          id: string;
+          api_key: string;
+          auto_thread: boolean;
+          schedule_time: string | null;
+          schedule_timezone: string;
+          twitter_username: string | null;
+          twitter_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          api_key: string;
+          auto_thread?: boolean;
+          schedule_time?: string | null;
+          schedule_timezone?: string;
+          twitter_username?: string | null;
+          twitter_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          api_key?: string;
+          auto_thread?: boolean;
+          schedule_time?: string | null;
+          schedule_timezone?: string;
+          twitter_username?: string | null;
+          twitter_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      typefully_jobs: {
+        Row: {
+          id: string;
+          patch_note_id: string;
+          typefully_draft_id: string | null;
+          typefully_post_url: string | null;
+          thread_content: Json;
+          video_url: string | null;
+          status: "pending" | "queued" | "scheduled" | "published" | "failed";
+          error_message: string | null;
+          scheduled_for: string | null;
+          published_at: string | null;
+          retry_count: number;
+          max_retries: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          patch_note_id: string;
+          typefully_draft_id?: string | null;
+          typefully_post_url?: string | null;
+          thread_content: Json;
+          video_url?: string | null;
+          status?: "pending" | "queued" | "scheduled" | "published" | "failed";
+          error_message?: string | null;
+          scheduled_for?: string | null;
+          published_at?: string | null;
+          retry_count?: number;
+          max_retries?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          patch_note_id?: string;
+          typefully_draft_id?: string | null;
+          typefully_post_url?: string | null;
+          thread_content?: Json;
+          video_url?: string | null;
+          status?: "pending" | "queued" | "scheduled" | "published" | "failed";
+          error_message?: string | null;
+          scheduled_for?: string | null;
+          published_at?: string | null;
+          retry_count?: number;
+          max_retries?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
