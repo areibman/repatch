@@ -43,6 +43,7 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [isQueueingThread, setIsQueueingThread] = useState(false);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -192,6 +193,31 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleQueueTypefully = async () => {
+    if (!patchNote) return;
+    if (isQueueingThread) return;
+    setIsQueueingThread(true);
+    try {
+      const response = await fetch('/api/typefully/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patchNoteId: patchNote.id, attachVideo: Boolean(patchNote.videoUrl) }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to queue thread');
+      }
+      const data = await response.json();
+      alert(`✅ Thread queued! ID: ${data.threadId}`);
+    } catch (error) {
+      console.error('Error queueing thread:', error);
+      const msg = error instanceof Error ? error.message : 'Failed to queue thread';
+      alert(`❌ Error: ${msg}`);
+    } finally {
+      setIsQueueingThread(false);
     }
   };
 
@@ -366,6 +392,14 @@ export default function BlogViewPage() {
                       )}
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleQueueTypefully}
+                    disabled={isQueueingThread}
+                  >
+                    {isQueueingThread ? 'Queueing…' : 'Queue Twitter thread'}
+                  </Button>
                   <Button
                     size="sm"
                     onClick={handleSendEmail}
