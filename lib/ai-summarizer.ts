@@ -1,5 +1,7 @@
 import { generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { PatchNoteFilters } from '@/types/patch-note';
+import { formatFilterSummary, formatFilterDetailLabel } from './filter-utils';
 
 export interface CommitSummary {
   sha: string;
@@ -105,7 +107,7 @@ export async function summarizeCommits(
  */
 export async function generateOverallSummary(
   repoName: string,
-  timePeriod: '1day' | '1week' | '1month',
+  filters: PatchNoteFilters | undefined,
   commitSummaries: CommitSummary[],
   totalCommits: number,
   totalAdditions: number,
@@ -113,13 +115,29 @@ export async function generateOverallSummary(
 ): Promise<string> {
   try {
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-    
+
     if (!apiKey) {
-      return `This ${timePeriod} saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
+      const label = formatFilterSummary(
+        filters,
+        filters?.mode === 'release'
+          ? 'release'
+          : filters?.mode === 'custom'
+          ? 'custom'
+          : filters?.preset ?? '1week'
+      );
+      return `This ${label.toLowerCase()} window saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
     }
 
     const google = createGoogleGenerativeAI({ apiKey });
-    const periodLabel = timePeriod === '1day' ? 'day' : timePeriod === '1week' ? 'week' : 'month';
+    const summaryLabel = formatFilterSummary(
+      filters,
+      filters?.mode === 'release'
+        ? 'release'
+        : filters?.mode === 'custom'
+        ? 'custom'
+        : filters?.preset ?? '1week'
+    );
+    const detailLabel = formatFilterDetailLabel(filters) || summaryLabel;
 
     const summariesText = commitSummaries
       .map((s, i) => `${i + 1}. ${s.aiSummary}`)
@@ -129,7 +147,7 @@ export async function generateOverallSummary(
       model: google('gemini-2.5-flash'),
       prompt: `You are writing a brief newsletter intro for repository "${repoName}".
 
-Time Period: Past ${periodLabel}
+Range: ${detailLabel}
 Total Commits: ${totalCommits}
 
 Key Changes:
@@ -149,7 +167,15 @@ Introduction:`,
     return text.trim();
   } catch (error) {
     console.error('Error generating overall summary:', error);
-    return `This ${timePeriod} saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
+    const fallbackLabel = formatFilterSummary(
+      filters,
+      filters?.mode === 'release'
+        ? 'release'
+        : filters?.mode === 'custom'
+        ? 'custom'
+        : filters?.preset ?? '1week'
+    );
+    return `This ${fallbackLabel.toLowerCase()} window saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
   }
 }
 

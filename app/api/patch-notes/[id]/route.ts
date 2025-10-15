@@ -53,6 +53,8 @@ export async function PUT(
     if (body.contributors !== undefined)
       updateData.contributors = body.contributors;
     if (body.video_data !== undefined) updateData.video_data = body.video_data;
+    if (body.filter_metadata !== undefined)
+      updateData.filter_metadata = body.filter_metadata;
 
     const { data, error } = await supabase
       .from("patch_notes")
