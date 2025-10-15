@@ -74,6 +74,53 @@ export interface Database {
           updated_at?: string;
         };
       };
+      api_keys: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          created_by: string | null;
+          token_hash: string;
+          last_four: string;
+          rate_limit_per_minute: number;
+          metadata: Json | null;
+          last_used_at: string | null;
+          revoked_at: string | null;
+          rotated_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          created_by?: string | null;
+          token_hash: string;
+          last_four: string;
+          rate_limit_per_minute?: number;
+          metadata?: Json | null;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+          rotated_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          created_by?: string | null;
+          token_hash?: string;
+          last_four?: string;
+          rate_limit_per_minute?: number;
+          metadata?: Json | null;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+          rotated_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       email_subscribers: {
         Row: {
           id: string;
