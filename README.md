@@ -134,6 +134,44 @@ Send beautiful HTML emails to subscribers with:
 - Contributor list
 - Custom video links (when available)
 
+### 🚀 GitHub Publishing
+
+Share your patch notes with wider audiences directly from Repatch:
+
+- Publish rich GitHub releases using the stored markdown content and metadata.
+- Cross-post to repository discussions to start conversations with your community.
+- Track release/discussion links and status on each patch note, with real-time feedback in the UI.
+
+#### Required GitHub scopes
+
+- **`repo`** (or `public_repo` for public repositories) to create releases.
+- **`write:discussion`** to post in repository discussions.
+
+Store per-repository tokens and metadata in Supabase via the GitHub integration form (writes to the `github_configs` table). Tokens are never sent to the browser; the server-side publisher retrieves them when you trigger a publish.
+
+#### API endpoint
+
+Publish a patch note programmatically:
+
+```http
+POST /api/patch-notes/:id/publish
+Content-Type: application/json
+
+{
+  "target": "release" | "discussion" | "both",
+  "tagName": "repatch-owner-repo-2025-01-01",
+  "discussionCategoryName": "Announcements"
+}
+```
+
+The response contains the normalized status (`idle`, `pending`, `published`, `partial`, `failed`), the release/discussion identifiers, and the refreshed Supabase row. On failure the API returns `502` with `status: "failed"` and preserves the error message in `github_publish_error`.
+
+#### Error handling & retries
+
+- Each GitHub request is retried up to three times with exponential backoff for 5xx/429 responses.
+- Partial successes (e.g., release succeeds but discussion fails) are marked as `partial`, keeping any successful identifiers.
+- The UI surfaces `Publish to GitHub` progress, error messages, and quick links to the created assets.
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration

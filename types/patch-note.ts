@@ -23,4 +23,10 @@ export interface PatchNote {
   contributors: string[];
   videoData?: VideoData;
   videoUrl?: string | null;
+  githubPublishStatus: "idle" | "pending" | "published" | "failed" | "partial";
+  githubPublishTarget?: "release" | "discussion" | "both" | null;
+  githubPublishError?: string | null;
+  githubPublishedAt?: Date | null;
+  githubRelease?: { id: number; url: string } | null;
+  githubDiscussion?: { id: number; url: string } | null;
 }

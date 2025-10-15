@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PatchNote } from "@/types/patch-note";
+import { dbToUiPatchNote } from "@/lib/transformers";
+import type { Database } from "@/lib/supabase/database.types";
 import { CreatePostDialog } from "@/components/create-post-dialog";
 import {
   PlusIcon,
@@ -36,30 +38,8 @@ export default function Home() {
         const data = await response.json();
 
         // Transform database format to UI format
-        const transformedData = data.map(
-          (note: {
-            id: string;
-            repo_name: string;
-            repo_url: string;
-            time_period: "1day" | "1week" | "1month";
-            generated_at: string;
-            title: string;
-            content: string;
-            changes: { added: number; modified: number; removed: number };
-            contributors: string[];
-            video_url?: string | null;
-          }) => ({
-            id: note.id,
-            repoName: note.repo_name,
-            repoUrl: note.repo_url,
-            timePeriod: note.time_period,
-            generatedAt: new Date(note.generated_at),
-            title: note.title,
-            content: note.content,
-            changes: note.changes,
-            contributors: note.contributors,
-            videoUrl: note.video_url,
-          })
+        const transformedData = data.map((note: Database["public"]["Tables"]["patch_notes"]["Row"]) =>
+          dbToUiPatchNote(note)
         );
 
         setPatchNotes(transformedData);
