@@ -18,9 +18,9 @@ import {
 } from "@heroicons/react/16/solid";
 import { useEmailIntegrations } from "@/hooks/use-email-integrations";
 
-export default function ResendIntegrationPage() {
+export default function CustomerIoIntegrationPage() {
   const { providers, loading, error } = useEmailIntegrations();
-  const resend = providers.find((provider) => provider.id === "resend");
+  const customerio = providers.find((provider) => provider.id === "customerio");
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -36,19 +36,19 @@ export default function ResendIntegrationPage() {
         <div className="flex items-center gap-3">
           <EnvelopeIcon className="h-6 w-6" />
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Resend</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Customer.io</h1>
             <p className="text-muted-foreground">
-              Send your patch notes newsletter to subscribers with Resend.
+              Trigger transactional patch note emails via Customer.io.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Button asChild>
-            <Link href="/integrations/resend/configure">Connect</Link>
+            <Link href="/integrations/customerio/configure">Connect</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link
-              href="https://resend.com/docs"
+              href="https://customer.io/docs/api/"
               target="_blank"
               className="flex items-center gap-1"
             >
@@ -62,8 +62,8 @@ export default function ResendIntegrationPage() {
         <CardHeader>
           <CardTitle>What you get</CardTitle>
           <CardDescription>
-            Repatch uses your Resend API key and sender to deliver the
-            newsletter.
+            Repatch uses the Customer.io transactional API and your track key to
+            deliver newsletters while keeping audiences in sync.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -74,36 +74,36 @@ export default function ResendIntegrationPage() {
                 <span className="text-muted-foreground">Loading…</span>
               ) : error ? (
                 <span className="text-destructive">{error}</span>
-              ) : resend ? (
-                <Badge variant={resend.isActive ? "default" : "outline"}>
-                  {resend.isActive ? "Active" : "Inactive"}
+              ) : customerio ? (
+                <Badge variant={customerio.isActive ? "default" : "outline"}>
+                  {customerio.isActive ? "Active" : "Inactive"}
                 </Badge>
               ) : (
                 <Badge variant="outline">Not configured</Badge>
               )}
             </div>
-            {resend?.defaultSender && (
+            {customerio?.defaultSender && (
               <div>
                 <span className="text-muted-foreground">Default sender:</span>{" "}
-                <span className="font-medium">{resend.defaultSender}</span>
+                <span className="font-medium">{customerio.defaultSender}</span>
               </div>
             )}
-            {resend?.source === "env" && (
+            {customerio?.source === "env" && (
               <div className="text-muted-foreground">
                 Credentials loaded from environment variables. Save them in
-                Supabase to edit from the dashboard.
+                Supabase to manage from this dashboard.
               </div>
             )}
           </div>
           <ul className="list-disc pl-6 space-y-2 text-sm text-muted-foreground">
-            <li>Send to your managed subscriber list</li>
-            <li>Reliable delivery and sender customization</li>
-            <li>Works directly from each patch note page</li>
+            <li>Transactional API delivery with inline HTML support</li>
+            <li>Subscriber management through Customer.io audiences</li>
+            <li>Switchable provider support within Repatch</li>
           </ul>
         </CardContent>
         <CardFooter className="justify-end">
           <Button asChild>
-            <Link href="/integrations/resend/configure">Get set up</Link>
+            <Link href="/integrations/customerio/configure">Get set up</Link>
           </Button>
         </CardFooter>
       </Card>

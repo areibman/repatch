@@ -16,16 +16,17 @@ import {
 import { ArrowLeftIcon } from "@heroicons/react/16/solid";
 import { useEmailIntegrations } from "@/hooks/use-email-integrations";
 
-export default function ResendConfigurePage() {
-  const { providers, loading, error, refresh } =
-    useEmailIntegrations();
-  const resend = useMemo(
-    () => providers.find((provider) => provider.id === "resend"),
+export default function CustomerIoConfigurePage() {
+  const { providers, loading, error, refresh } = useEmailIntegrations();
+  const customerio = useMemo(
+    () => providers.find((provider) => provider.id === "customerio"),
     [providers]
   );
 
-  const [apiKey, setApiKey] = useState("");
-  const [audienceId, setAudienceId] = useState("");
+  const [siteId, setSiteId] = useState("");
+  const [trackApiKey, setTrackApiKey] = useState("");
+  const [appApiKey, setAppApiKey] = useState("");
+  const [transactionalMessageId, setTransactionalMessageId] = useState("");
   const [fromEmail, setFromEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [activating, setActivating] = useState(false);
@@ -33,9 +34,8 @@ export default function ResendConfigurePage() {
   const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
-    setFromEmail(resend?.defaultSender ?? "");
-    setAudienceId(resend?.audienceId ?? "");
-  }, [resend?.defaultSender, resend?.audienceId]);
+    setFromEmail(customerio?.defaultSender ?? "");
+  }, [customerio?.defaultSender]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -45,40 +45,52 @@ export default function ResendConfigurePage() {
     try {
       const credentials: Record<string, string> = {};
 
-      if (apiKey.trim()) {
-        credentials.apiKey = apiKey.trim();
+      if (siteId.trim()) {
+        credentials.siteId = siteId.trim();
+      }
+
+      if (trackApiKey.trim()) {
+        credentials.trackApiKey = trackApiKey.trim();
+      }
+
+      if (appApiKey.trim()) {
+        credentials.appApiKey = appApiKey.trim();
+      }
+
+      if (transactionalMessageId.trim()) {
+        credentials.transactionalMessageId = transactionalMessageId.trim();
       }
 
       if (fromEmail.trim()) {
         credentials.fromEmail = fromEmail.trim();
       }
 
-      if (audienceId.trim()) {
-        credentials.audienceId = audienceId.trim();
-      }
-
       const response = await fetch("/api/email-integrations", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          provider: "resend",
+          provider: "customerio",
           credentials,
           defaultSender: fromEmail.trim(),
-          audienceId: audienceId.trim(),
         }),
       });
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || "Failed to save Resend settings");
+        throw new Error(payload.error || "Failed to save Customer.io settings");
       }
 
-      setStatusMessage("Resend settings saved");
-      setApiKey("");
+      setStatusMessage("Customer.io settings saved");
+      setSiteId("");
+      setTrackApiKey("");
+      setAppApiKey("");
+      setTransactionalMessageId("");
       await refresh();
     } catch (err) {
       setStatusError(
-        err instanceof Error ? err.message : "Failed to save Resend settings"
+        err instanceof Error
+          ? err.message
+          : "Failed to save Customer.io settings"
       );
     } finally {
       setSaving(false);
@@ -94,19 +106,21 @@ export default function ResendConfigurePage() {
       const response = await fetch("/api/email-integrations", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activeProvider: "resend" }),
+        body: JSON.stringify({ activeProvider: "customerio" }),
       });
 
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || "Failed to activate Resend");
+        throw new Error(payload.error || "Failed to activate Customer.io");
       }
 
-      setStatusMessage("Resend set as active provider");
+      setStatusMessage("Customer.io set as active provider");
       await refresh();
     } catch (err) {
       setStatusError(
-        err instanceof Error ? err.message : "Failed to activate Resend"
+        err instanceof Error
+          ? err.message
+          : "Failed to activate Customer.io"
       );
     } finally {
       setActivating(false);
@@ -117,7 +131,7 @@ export default function ResendConfigurePage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center gap-2 mb-6">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/integrations/resend" className="flex items-center gap-1">
+          <Link href="/integrations/customerio" className="flex items-center gap-1">
             <ArrowLeftIcon className="h-4 w-4" /> Back
           </Link>
         </Button>
@@ -125,10 +139,10 @@ export default function ResendConfigurePage() {
 
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>Connect Resend</CardTitle>
+          <CardTitle>Connect Customer.io</CardTitle>
           <CardDescription>
-            Provide your Resend API key, sender, and audience to sync with
-            Repatch.
+            Provide the site ID, track key, and transactional key used for
+            sending newsletters.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -138,9 +152,9 @@ export default function ResendConfigurePage() {
               <span className="text-muted-foreground">Loading…</span>
             ) : error ? (
               <span className="text-destructive">{error}</span>
-            ) : resend ? (
-              <Badge variant={resend.isActive ? "default" : "outline"}>
-                {resend.isActive ? "Active" : "Inactive"}
+            ) : customerio ? (
+              <Badge variant={customerio.isActive ? "default" : "outline"}>
+                {customerio.isActive ? "Active" : "Inactive"}
               </Badge>
             ) : (
               <Badge variant="outline">Not configured</Badge>
@@ -153,19 +167,48 @@ export default function ResendConfigurePage() {
             <div className="text-sm text-destructive">{statusError}</div>
           )}
           <div>
-            <label className="text-sm font-medium">API Key</label>
+            <label className="text-sm font-medium">Site ID</label>
+            <Input
+              placeholder="site_..."
+              value={siteId}
+              onChange={(e) => setSiteId(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Track API Key</label>
             <Input
               type="password"
-              placeholder="re_..."
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="track_..."
+              value={trackApiKey}
+              onChange={(e) => setTrackApiKey(e.target.value)}
             />
-            {resend?.hasCredentials && (
+            {customerio?.hasCredentials && (
               <p className="text-xs text-muted-foreground mt-1">
-                Enter a new API key to rotate credentials. Existing keys are
-                hidden for security.
+                Enter a new key to rotate credentials. Existing keys remain
+                hidden.
               </p>
             )}
+          </div>
+          <div>
+            <label className="text-sm font-medium">Transactional API Key</label>
+            <Input
+              type="password"
+              placeholder="app_..."
+              value={appApiKey}
+              onChange={(e) => setAppApiKey(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Transactional Message ID</label>
+            <Input
+              placeholder="msg_..."
+              value={transactionalMessageId}
+              onChange={(e) => setTransactionalMessageId(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Optional: send through a specific transactional template. Leave
+              blank to send fully custom content.
+            </p>
           </div>
           <div>
             <label className="text-sm font-medium">From Email</label>
@@ -176,24 +219,12 @@ export default function ResendConfigurePage() {
               onChange={(e) => setFromEmail(e.target.value)}
             />
           </div>
-          <div>
-            <label className="text-sm font-medium">Audience ID</label>
-            <Input
-              placeholder="aud_..."
-              value={audienceId}
-              onChange={(e) => setAudienceId(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Resend audience that tracks your subscribers. Leave blank to use
-              the default sample audience.
-            </p>
-          </div>
         </CardContent>
         <CardFooter className="justify-end gap-2">
           <Button
             variant="outline"
             onClick={handleActivate}
-            disabled={resend?.isActive || activating}
+            disabled={customerio?.isActive || activating}
           >
             {activating ? "Setting active…" : "Set Active"}
           </Button>

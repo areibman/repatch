@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +17,8 @@ import {
   ExclamationTriangleIcon,
   PlusIcon,
 } from "@heroicons/react/16/solid";
+import { Badge } from "@/components/ui/badge";
+import { useEmailIntegrations } from "@/hooks/use-email-integrations";
 
 interface Subscriber {
   id: string;
@@ -30,9 +32,19 @@ export default function SubscribersPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const {
+    providers,
+    activeProvider,
+    loading: providersLoading,
+    error: providersError,
+  } = useEmailIntegrations();
 
-  // Hardcoded audience ID from the docs
-  const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+  const activeIntegration = useMemo(() => {
+    if (activeProvider) {
+      return providers.find((provider) => provider.id === activeProvider);
+    }
+    return providers[0];
+  }, [providers, activeProvider]);
 
   useEffect(() => {
     const fetchSubscribers = async () => {
@@ -75,11 +87,11 @@ export default function SubscribersPage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
             <Link
-              href="https://resend.com"
+              href={activeIntegration?.manageUrl ?? "https://resend.com"}
               target="_blank"
               className="flex items-center gap-1"
             >
-              Manage in Resend{" "}
+              Manage in {activeIntegration?.name ?? "your provider"}{" "}
               <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
             </Link>
           </Button>
@@ -94,19 +106,61 @@ export default function SubscribersPage() {
             Audience Configuration
           </CardTitle>
           <CardDescription>
-            Your Resend audience for patch notes subscribers
+            {activeIntegration
+              ? `Your ${activeIntegration.name} configuration for patch note subscribers`
+              : "Connect an email provider to manage subscribers"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm">
+              <span>Provider status:</span>
+              {providersLoading ? (
+                <span className="text-muted-foreground">Loading…</span>
+              ) : providersError ? (
+                <span className="text-destructive">{providersError}</span>
+              ) : activeIntegration ? (
+                <Badge variant={activeIntegration.isActive ? "default" : "outline"}>
+                  {activeIntegration.isActive ? "Active" : "Inactive"}
+                </Badge>
+              ) : (
+                <Badge variant="outline">Not configured</Badge>
+              )}
+            </div>
             <div>
               <label className="text-sm font-medium text-muted-foreground">
-                Audience ID
+                Provider
               </label>
-              <div className="mt-1 p-3 bg-muted rounded-md font-mono text-sm">
-                {audienceId}
+              <div className="mt-1 p-3 bg-muted rounded-md text-sm">
+                {activeIntegration?.name ?? "Not connected"}
               </div>
             </div>
+            {activeIntegration?.audienceId && (
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Audience ID
+                </label>
+                <div className="mt-1 p-3 bg-muted rounded-md font-mono text-sm">
+                  {activeIntegration.audienceId}
+                </div>
+              </div>
+            )}
+            {activeIntegration?.defaultSender && (
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Default sender
+                </label>
+                <div className="mt-1 p-3 bg-muted rounded-md text-sm">
+                  {activeIntegration.defaultSender}
+                </div>
+              </div>
+            )}
+            {activeIntegration?.source === "env" && (
+              <p className="text-xs text-muted-foreground">
+                Provider credentials are currently sourced from environment
+                variables. Save them in Supabase to edit from the dashboard.
+              </p>
+            )}
 
             {loading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -149,11 +203,11 @@ export default function SubscribersPage() {
         <CardFooter className="justify-end">
           <Button variant="outline" asChild>
             <Link
-              href="https://resend.com"
+              href={activeIntegration?.manageUrl ?? "https://resend.com"}
               target="_blank"
               className="flex items-center gap-1"
             >
-              Manage in Resend{" "}
+              Manage in {activeIntegration?.name ?? "your provider"}{" "}
               <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
             </Link>
           </Button>
@@ -199,11 +253,11 @@ export default function SubscribersPage() {
           <CardFooter className="justify-end">
             <Button variant="outline" asChild>
               <Link
-                href="https://resend.com"
+                href={activeIntegration?.manageUrl ?? "https://resend.com"}
                 target="_blank"
                 className="flex items-center gap-1"
               >
-                View All in Resend{" "}
+                View All in {activeIntegration?.name ?? "your provider"}{" "}
                 <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -218,17 +272,19 @@ export default function SubscribersPage() {
             <UsersIcon className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No subscribers yet</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Your audience is empty. Add subscribers through Resend or your
-              signup forms.
+              Your audience is empty. Add subscribers through
+              {" "}
+              {activeIntegration?.name ?? "your provider"} or your signup
+              forms.
             </p>
             <Button variant="outline" asChild>
               <Link
-                href="https://resend.com"
+                href={activeIntegration?.manageUrl ?? "https://resend.com"}
                 target="_blank"
                 className="flex items-center gap-1"
               >
                 <PlusIcon className="h-4 w-4" />
-                Add Subscribers in Resend
+                Add Subscribers in {activeIntegration?.name ?? "your provider"}
               </Link>
             </Button>
           </CardContent>

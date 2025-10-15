@@ -21,7 +21,7 @@ import {
 } from "@heroicons/react/16/solid";
 
 type IntegrationItem = {
-  id: "github" | "resend";
+  id: "github" | "resend" | "customerio";
   name: string;
   description: string;
   href: string;
@@ -48,6 +48,16 @@ const INTEGRATIONS: IntegrationItem[] = [
       "Send your patch notes newsletter via Resend with your preferred sender.",
     href: "/integrations/resend",
     configureHref: "/integrations/resend/configure",
+    badge: { label: "Email", variant: "outline" },
+    icon: <EnvelopeIcon className="h-5 w-5" />,
+  },
+  {
+    id: "customerio",
+    name: "Customer.io",
+    description:
+      "Deliver campaigns through Customer.io's transactional API with audience insights.",
+    href: "/integrations/customerio",
+    configureHref: "/integrations/customerio/configure",
     badge: { label: "Email", variant: "outline" },
     icon: <EnvelopeIcon className="h-5 w-5" />,
   },

@@ -126,6 +126,35 @@ export interface Database {
           updated_at?: string;
         };
       };
+      email_integrations: {
+        Row: {
+          id: string;
+          provider: "resend" | "customerio";
+          credentials: Json;
+          default_sender: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          provider: "resend" | "customerio";
+          credentials?: Json;
+          default_sender?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider?: "resend" | "customerio";
+          credentials?: Json;
+          default_sender?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
