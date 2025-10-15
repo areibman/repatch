@@ -1,17 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchGitHubCommits, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
-import { summarizeCommits, generateOverallSummary } from '@/lib/ai-summarizer';
+import {
+  summarizeCommits,
+  generateOverallSummary,
+  type SummaryTemplate,
+} from '@/lib/ai-summarizer';
+import { createClient } from '@/lib/supabase/server';
+import { mapTemplateRow } from '@/lib/templates';
+
+type TemplateOverridePayload = {
+  commitPrompt: string;
+  overallPrompt: string;
+  examples?: SummaryTemplate['examples'];
+};
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { owner, repo, timePeriod, branch } = body;
+    const body = (await request.json()) as {
+      owner?: string;
+      repo?: string;
+      timePeriod?: '1day' | '1week' | '1month';
+      branch?: string;
+      templateId?: string;
+      templateOverride?: TemplateOverridePayload;
+    };
+    const { owner, repo, timePeriod, branch, templateId, templateOverride } = body;
 
     if (!owner || !repo || !timePeriod) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
       );
+    }
+
+    let template: SummaryTemplate | undefined;
+
+    if (templateId) {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from('ai_templates')
+        .select('*')
+        .eq('id', templateId)
+        .single();
+
+      if (error || !data) {
+        return NextResponse.json(
+          { error: 'Template not found' },
+          { status: 404 }
+        );
+      }
+
+      const mapped = mapTemplateRow(data);
+      template = {
+        id: mapped.id,
+        name: mapped.name,
+        commitPrompt: mapped.commitPrompt,
+        overallPrompt: mapped.overallPrompt,
+        examples: mapped.examples,
+      };
+    } else if (
+      templateOverride &&
+      typeof templateOverride.commitPrompt === 'string' &&
+      typeof templateOverride.overallPrompt === 'string'
+    ) {
+      template = {
+        commitPrompt: templateOverride.commitPrompt,
+        overallPrompt: templateOverride.overallPrompt,
+        examples: templateOverride.examples,
+      };
     }
 
     // Calculate date range
@@ -75,7 +131,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Generate AI summaries
-    const summaries = await summarizeCommits(commitsWithDiffs);
+    const summaries = await summarizeCommits(commitsWithDiffs, template);
 
     // Calculate totals
     const totalAdditions = commitsWithStats.reduce((sum, c) => sum + c.additions, 0);
@@ -88,7 +144,8 @@ export async function POST(request: NextRequest) {
       summaries,
       commits.length,
       totalAdditions,
-      totalDeletions
+      totalDeletions,
+      template
     );
 
     return NextResponse.json({
