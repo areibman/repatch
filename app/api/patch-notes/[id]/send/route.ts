@@ -4,9 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
 
+const isMock = process.env.REPATCH_TEST_MODE === "mock";
+
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const createResendClient = () => new Resend(process.env.RESEND_API_KEY);
 
 // Configure marked for GitHub-flavored markdown
 marked.setOptions({
@@ -26,6 +28,21 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    if (isMock) {
+      const { getPatchNoteById, getActiveSubscriberEmails } = await import("@/lib/testing/mockStore");
+      const patchNote = getPatchNoteById(id);
+      if (!patchNote) {
+        return NextResponse.json({ error: "Patch note not found" }, { status: 404 });
+      }
+      const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+      const recipients = getActiveSubscriberEmails();
+      return NextResponse.json({
+        mode: "mock",
+        sentTo: recipients.length,
+        audienceId,
+      });
+    }
+
     const supabase = await createClient();
 
     // Fetch the patch note
@@ -46,6 +63,7 @@ export async function POST(
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
     // Get contacts from the audience (we need their emails for the 'to' field)
+    const resend = createResendClient();
     const contacts = await resend.contacts.list({ audienceId });
 
     if (!contacts.data || contacts.data.data.length === 0) {

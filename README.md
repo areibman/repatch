@@ -105,6 +105,10 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Testing
+
+Playwright powers the automated smoke and API contract suites. Follow the onboarding guide in [docs/testing/playwright.md](./docs/testing/playwright.md) for installation steps, environment variable toggles, and troubleshooting tips.
+
 ## Features
 
 ### 🎬 Dynamic Video Generation

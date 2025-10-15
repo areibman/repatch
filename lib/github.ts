@@ -5,6 +5,15 @@
 import { z } from "zod";
 import { systemPrompt } from "../constants";
 import { VideoData } from "../types/patch-note";
+import {
+  mockBranches,
+  mockCommits,
+  mockCommitStats,
+  mockCommitDiff,
+  getMockRepoStats,
+} from "@/lib/__fixtures__/github";
+
+const isMock = process.env.REPATCH_TEST_MODE === "mock";
 
 export interface GitHubCommit {
   sha: string;
@@ -100,6 +109,9 @@ export async function fetchGitHubBranches(
   owner: string,
   repo: string
 ): Promise<{ name: string; protected: boolean }[]> {
+  if (isMock) {
+    return mockBranches.map((branch) => ({ ...branch }));
+  }
   const allBranches: { name: string; protected: boolean }[] = [];
   let page = 1;
   const perPage = 100;
@@ -166,6 +178,9 @@ export async function fetchGitHubCommits(
   until: string,
   branch?: string
 ): Promise<GitHubCommit[]> {
+  if (isMock) {
+    return mockCommits.map((commit) => ({ ...commit }));
+  }
   let url = `https://api.github.com/repos/${owner}/${repo}/commits?since=${since}&until=${until}&per_page=100`;
   
   // Add branch parameter if specified
@@ -199,6 +214,9 @@ export async function fetchCommitStats(
   repo: string,
   sha: string
 ): Promise<{ additions: number; deletions: number }> {
+  if (isMock) {
+    return mockCommitStats[sha] ?? { additions: 0, deletions: 0 };
+  }
   const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`;
 
   const response = await fetch(url, {
@@ -224,6 +242,9 @@ export async function fetchCommitDiff(
   repo: string,
   sha: string
 ): Promise<string> {
+  if (isMock) {
+    return mockCommitDiff[sha] ?? "";
+  }
   const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}`;
 
   const response = await fetch(url, {
@@ -249,6 +270,9 @@ export async function getRepoStats(
   timePeriod: '1day' | '1week' | '1month',
   branch?: string
 ): Promise<RepoStats> {
+  if (isMock) {
+    return getMockRepoStats();
+  }
   const { since, until } = getDateRange(timePeriod);
   const commits = await fetchGitHubCommits(owner, repo, since, until, branch);
 

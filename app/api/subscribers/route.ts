@@ -1,14 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const isMock = process.env.REPATCH_TEST_MODE === "mock";
+const createResendClient = () => new Resend(process.env.RESEND_API_KEY);
 
 // GET /api/subscribers - Fetch all email subscribers from Resend audience
 export async function GET() {
   try {
-    // Use hardcoded audience ID from the docs
+    if (isMock) {
+      const { listSubscribers } = await import("@/lib/testing/mockStore");
+      const subscribers = listSubscribers().map((subscriber) => ({
+        id: subscriber.id,
+        email: subscriber.email,
+        active: !subscriber.unsubscribed,
+        created_at: subscriber.created_at,
+        updated_at: subscriber.updated_at,
+      }));
+      return NextResponse.json(subscribers);
+    }
+
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
+    const resend = createResendClient();
     const contacts = await resend.contacts.list({ audienceId });
 
     if (!contacts.data) {
@@ -18,7 +31,6 @@ export async function GET() {
       );
     }
 
-    // Transform Resend contacts to match the expected format
     const subscribers = contacts.data.data.map((contact: any) => ({
       id: contact.id,
       email: contact.email,
@@ -39,12 +51,10 @@ export async function GET() {
 // POST /api/subscribers - Add a new email subscriber to Resend audience
 export async function POST(request: NextRequest) {
   try {
-    // Use hardcoded audience ID from the docs
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
     const body = await request.json();
 
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(body.email)) {
       return NextResponse.json(
@@ -53,7 +63,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Add contact to Resend audience
+    if (isMock) {
+      try {
+        const { addSubscriber } = await import("@/lib/testing/mockStore");
+        const subscriber = addSubscriber(body.email);
+        return NextResponse.json(
+          {
+            id: subscriber.id,
+            email: subscriber.email,
+            active: true,
+            created_at: subscriber.created_at,
+            updated_at: subscriber.updated_at,
+            mode: "mock",
+          },
+          { status: 201 }
+        );
+      } catch (error: any) {
+        if (error instanceof Error && error.message.includes("already")) {
+          return NextResponse.json(
+            { error: "Email already subscribed" },
+            { status: 409 }
+          );
+        }
+        throw error;
+      }
+    }
+
+    const resend = createResendClient();
     const contact = await resend.contacts.create({
       email: body.email,
       firstName: body.firstName || "",
@@ -69,11 +105,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Transform the response to match expected format
     const subscriber = {
       id: contact.data.id,
-      email: body.email, // Use the email from the request body
-      active: true, // New contacts are active by default
+      email: body.email,
+      active: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -116,6 +151,16 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Remove contact from Resend audience
+    if (isMock) {
+      const { removeSubscriber } = await import("@/lib/testing/mockStore");
+      const removed = removeSubscriber({ id: id ?? undefined, email: email ?? undefined });
+      if (!removed) {
+        return NextResponse.json({ error: "Subscriber not found" }, { status: 404 });
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    const resend = createResendClient();
     const result = await resend.contacts.remove({
       ...(id ? { id } : { email: email! }),
       audienceId: audienceId,
@@ -154,6 +199,23 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update contact in Resend audience
+    if (isMock) {
+      const { updateSubscriber } = await import("@/lib/testing/mockStore");
+      const updated = updateSubscriber({ id: id ?? undefined, email: email ?? undefined }, { unsubscribed });
+      if (!updated) {
+        return NextResponse.json({ error: "Subscriber not found" }, { status: 404 });
+      }
+      return NextResponse.json({
+        id: updated.id,
+        email: updated.email,
+        active: !updated.unsubscribed,
+        created_at: updated.created_at,
+        updated_at: updated.updated_at,
+        mode: "mock",
+      });
+    }
+
+    const resend = createResendClient();
     const result = await resend.contacts.update({
       ...(id ? { id } : { email }),
       audienceId: audienceId,
@@ -167,10 +229,9 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Transform the response to match expected format
     const subscriber = {
       id: result.data.id,
-      email: email || id || "", // Use the email or id from the request
+      email: email || id || "",
       active: !(unsubscribed ?? false),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

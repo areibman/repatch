@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { Database } from "@/lib/supabase/database.types";
 
+const isMock = process.env.REPATCH_TEST_MODE === "mock";
+
 type PatchNoteUpdate = Database["public"]["Tables"]["patch_notes"]["Update"];
 
 // GET /api/patch-notes/[id] - Fetch a single patch note
@@ -11,6 +13,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    if (isMock) {
+      const { getPatchNoteById } = await import("@/lib/testing/mockStore");
+      const note = getPatchNoteById(id);
+      if (!note) {
+        return NextResponse.json({ error: "Patch note not found" }, { status: 404 });
+      }
+      return NextResponse.json(note);
+    }
     const supabase = await createClient();
 
     const { data, error } = await supabase
@@ -39,8 +49,18 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
     const body = await request.json();
+
+    if (isMock) {
+      const { updatePatchNote } = await import("@/lib/testing/mockStore");
+      const updated = updatePatchNote(id, body);
+      if (!updated) {
+        return NextResponse.json({ error: "Patch note not found" }, { status: 404 });
+      }
+      return NextResponse.json(updated);
+    }
+
+    const supabase = await createClient();
 
     const updateData: PatchNoteUpdate = {};
     if (body.title !== undefined) updateData.title = body.title;
@@ -82,6 +102,14 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    if (isMock) {
+      const { deletePatchNote } = await import("@/lib/testing/mockStore");
+      const deleted = deletePatchNote(id);
+      if (!deleted) {
+        return NextResponse.json({ error: "Patch note not found" }, { status: 404 });
+      }
+      return NextResponse.json({ success: true });
+    }
     const supabase = await createClient();
 
     const { error } = await supabase.from("patch_notes").delete().eq("id", id);

@@ -61,6 +61,11 @@ export default function GitHubConfigurePage() {
               Your token is stored securely and never shared.
             </p>
           </div>
+          {state.ok && (
+            <p className="text-sm text-green-600" role="status" data-testid="github-config-success">
+              GitHub repository connected successfully.
+            </p>
+          )}
           {state.error && (
             <p className="text-sm text-destructive" role="alert">
               {state.error}
