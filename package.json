@@ -57,6 +57,7 @@
     "@remotion/bundler": "4.0.355",
     "@remotion/cli": "4.0.355",
     "@remotion/tailwind-v4": "4.0.355",
+    "@playwright/test": "^1.48.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

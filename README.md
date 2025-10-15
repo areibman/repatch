@@ -134,6 +134,41 @@ Send beautiful HTML emails to subscribers with:
 - Contributor list
 - Custom video links (when available)
 
+### 🔑 External API
+
+Repatch exposes a read-only external API secured by user-managed keys. Administrators can issue, rotate, and revoke credentials from the **External API keys** page at `/api-keys`. Each key stores hashed secrets in Supabase and may carry custom rate limits to throttle partner integrations.
+
+#### Authentication
+
+- Include an `X-Api-Key` header with the issued token (format `rp_<prefix>_<secret>`).
+- Requests without a valid key receive `401` (missing/invalid) or `403` (revoked) responses.
+- Middleware enforces per-key rate limits and responds with `429` plus a `Retry-After` header when exceeded.
+
+#### Endpoints
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/api/external/patch-notes` | Returns the most recent sanitized patch notes. Accepts an optional `limit` query parameter (default 25). |
+| `GET` | `/api/external/patch-notes/{id}` | Returns a single sanitized patch note by id. |
+
+Sanitized payloads strip HTML tags from patch note content and trim AI summaries while still returning contributors, repo metadata, and change statistics.
+
+#### Usage example
+
+```bash
+curl \
+  -H "X-Api-Key: rp_feedface_1234567890abcdef1234567890abcdef" \
+  "https://your-app.example.com/api/external/patch-notes?limit=5"
+```
+
+#### Required environment variables
+
+In addition to the anon key, the service depends on the Supabase service role key for server-side validation and auditing:
+
+```
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_key
+```
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration
