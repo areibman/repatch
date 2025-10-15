@@ -12,9 +12,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  EnvelopeIcon,
   ArrowLeftIcon,
   ArrowTopRightOnSquareIcon,
+  EnvelopeIcon,
 } from "@heroicons/react/16/solid";
 
 type ProviderState = {
@@ -24,13 +24,13 @@ type ProviderState = {
   managedByEnv?: boolean;
 };
 
-export default function ResendIntegrationPage() {
+export default function CustomerIOIntegrationPage() {
   const [provider, setProvider] = useState<ProviderState | null>(null);
 
   useEffect(() => {
     const loadProvider = async () => {
       try {
-        const response = await fetch("/api/email/providers/resend");
+        const response = await fetch("/api/email/providers/customerio");
         if (!response.ok) {
           throw new Error("Failed to load provider");
         }
@@ -54,42 +54,45 @@ export default function ResendIntegrationPage() {
         </Button>
       </div>
 
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <EnvelopeIcon className="h-6 w-6" />
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Resend</h1>
-              <p className="text-muted-foreground">
-                Send your patch notes newsletter to subscribers with Resend.
-              </p>
-              {provider && (
-                <div className="mt-2 text-xs text-muted-foreground">
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
-                      provider.isActive
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {provider.isActive ? "Active provider" : "Not active"}
-                    {provider.managedByEnv && " • env"}
-                  </span>
-                  {provider.fromEmail && (
-                    <div className="mt-2 font-mono text-xs text-muted-foreground/80">
-                      {provider.fromEmail}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+      <div className="flex items-start justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <EnvelopeIcon className="h-6 w-6" />
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Customer.io
+            </h1>
+            <p className="text-muted-foreground">
+              Deliver transactional newsletters via Customer.io campaigns or
+              journeys.
+            </p>
+            {provider && (
+              <div className="mt-2 text-xs text-muted-foreground">
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                    provider.isActive
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {provider.isActive ? "Active provider" : "Not active"}
+                  {provider.managedByEnv && " • env"}
+                </span>
+                {provider.fromEmail && (
+                  <div className="mt-2 font-mono text-xs text-muted-foreground/80">
+                    {provider.fromEmail}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <Button asChild>
-            <Link href="/integrations/resend/configure">Connect</Link>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button asChild>
+            <Link href="/integrations/customerio/configure">Connect</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link
-              href="https://resend.com/docs"
+              href="https://customer.io/docs/transactional-api/"
               target="_blank"
               className="flex items-center gap-1"
             >
@@ -103,20 +106,20 @@ export default function ResendIntegrationPage() {
         <CardHeader>
           <CardTitle>What you get</CardTitle>
           <CardDescription>
-            Repatch uses your Resend API key and sender to deliver the
-            newsletter.
+            Repatch uses your Customer.io transactional message and credentials
+            to deliver newsletters.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="list-disc pl-6 space-y-2 text-sm text-muted-foreground">
-            <li>Send to your managed subscriber list</li>
-            <li>Reliable delivery and sender customization</li>
-            <li>Works directly from each patch note page</li>
+            <li>Use transactional messages for direct campaign sends</li>
+            <li>Control suppression states through Customer.io</li>
+            <li>Supports US and EU regions</li>
           </ul>
         </CardContent>
         <CardFooter className="justify-end">
           <Button asChild>
-            <Link href="/integrations/resend/configure">Get set up</Link>
+            <Link href="/integrations/customerio/configure">Get set up</Link>
           </Button>
         </CardFooter>
       </Card>

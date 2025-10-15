@@ -14,17 +14,20 @@ import {
 } from "@/components/ui/card";
 import { ArrowLeftIcon } from "@heroicons/react/16/solid";
 
-type ProviderState = {
+interface ProviderState {
   fromEmail?: string;
   isActive?: boolean;
   configured?: boolean;
   managedByEnv?: boolean;
-};
+}
 
-export default function ResendConfigurePage() {
+export default function CustomerIOConfigurePage() {
+  const [siteId, setSiteId] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [appKey, setAppKey] = useState("");
+  const [transactionalMessageId, setTransactionalMessageId] = useState("");
+  const [region, setRegion] = useState("us");
   const [fromEmail, setFromEmail] = useState("");
-  const [audienceId, setAudienceId] = useState("");
   const [isActive, setIsActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -35,7 +38,7 @@ export default function ResendConfigurePage() {
   useEffect(() => {
     const loadProvider = async () => {
       try {
-        const response = await fetch("/api/email/providers/resend");
+        const response = await fetch("/api/email/providers/customerio");
         if (!response.ok) {
           throw new Error("Failed to load provider");
         }
@@ -45,9 +48,7 @@ export default function ResendConfigurePage() {
         setIsActive(Boolean(data.isActive));
       } catch (err) {
         console.error(err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load provider"
-        );
+        setError(err instanceof Error ? err.message : "Failed to load");
       } finally {
         setLoading(false);
       }
@@ -61,31 +62,38 @@ export default function ResendConfigurePage() {
     setError(null);
 
     const trimmedFromEmail = fromEmail.trim();
+    const trimmedSiteId = siteId.trim();
     const trimmedApiKey = apiKey.trim();
-    const trimmedAudienceId = audienceId.trim();
+    const trimmedAppKey = appKey.trim();
+    const trimmedTransactional = transactionalMessageId.trim();
+    const trimmedRegion = region.trim();
 
     if (!trimmedFromEmail) {
       setError("From email is required");
       return;
     }
 
-    if (!trimmedApiKey && !providerState.configured) {
-      setError("Resend API key is required");
-      return;
+    const requiresAll = !providerState.configured;
+
+    if (requiresAll) {
+      if (!trimmedSiteId || !trimmedApiKey || !trimmedAppKey || !trimmedTransactional) {
+        setError("All Customer.io credentials are required");
+        return;
+      }
     }
 
     setSaving(true);
 
     try {
       const credentials: Record<string, string> = {};
-      if (trimmedApiKey) {
-        credentials.apiKey = trimmedApiKey;
-      }
-      if (trimmedAudienceId) {
-        credentials.audienceId = trimmedAudienceId;
-      }
+      if (trimmedSiteId) credentials.siteId = trimmedSiteId;
+      if (trimmedApiKey) credentials.apiKey = trimmedApiKey;
+      if (trimmedAppKey) credentials.appKey = trimmedAppKey;
+      if (trimmedTransactional)
+        credentials.transactionalMessageId = trimmedTransactional;
+      if (trimmedRegion) credentials.region = trimmedRegion;
 
-      const response = await fetch("/api/email/providers/resend", {
+      const response = await fetch("/api/email/providers/customerio", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -101,15 +109,13 @@ export default function ResendConfigurePage() {
       }
 
       const data = await response.json();
-      setStatus("Resend configuration saved");
+      setStatus("Customer.io configuration saved");
       setProviderState(data);
       setFromEmail(data.fromEmail ?? trimmedFromEmail);
-      if (trimmedApiKey) {
-        setApiKey("");
-      }
-      if (trimmedAudienceId) {
-        setAudienceId("");
-      }
+      if (trimmedSiteId) setSiteId("");
+      if (trimmedApiKey) setApiKey("");
+      if (trimmedAppKey) setAppKey("");
+      if (trimmedTransactional) setTransactionalMessageId("");
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -122,7 +128,7 @@ export default function ResendConfigurePage() {
     <div className="container mx-auto px-4 py-8">
       <div className="flex items-center gap-2 mb-6">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/integrations/resend" className="flex items-center gap-1">
+          <Link href="/integrations/customerio" className="flex items-center gap-1">
             <ArrowLeftIcon className="h-4 w-4" /> Back
           </Link>
         </Button>
@@ -130,16 +136,17 @@ export default function ResendConfigurePage() {
 
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>Connect Resend</CardTitle>
+          <CardTitle>Connect Customer.io</CardTitle>
           <CardDescription>
-            Provide your Resend API key and default sender email address.
+            Provide your Customer.io credentials and transactional message to
+            deliver patch notes.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {providerState.managedByEnv && (
             <div className="rounded-md border border-dashed border-muted-foreground/30 p-3 text-xs text-muted-foreground">
-              Resend is currently configured via environment variables. Saving
-              here will store credentials in Supabase instead.
+              Customer.io is currently configured via environment variables.
+              Saving will store credentials in Supabase instead.
             </div>
           )}
           {status && (
@@ -153,50 +160,79 @@ export default function ResendConfigurePage() {
             </div>
           )}
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
+            <div>
+              <label className="text-sm font-medium">Site ID</label>
+              <Input
+                value={siteId}
+                onChange={(e) => setSiteId(e.target.value)}
+                placeholder="your-site-id"
+                disabled={loading || saving}
+              />
+            </div>
+            <div>
               <label className="text-sm font-medium">API Key</label>
               <Input
                 type="password"
-                placeholder="re_..."
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
+                placeholder="cio_api_key"
                 disabled={loading || saving}
               />
+            </div>
+            <div>
+              <label className="text-sm font-medium">App API Key</label>
+              <Input
+                type="password"
+                value={appKey}
+                onChange={(e) => setAppKey(e.target.value)}
+                placeholder="cio_app_key"
+                disabled={loading || saving}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">
+                Transactional Message ID
+              </label>
+              <Input
+                value={transactionalMessageId}
+                onChange={(e) => setTransactionalMessageId(e.target.value)}
+                placeholder="123456"
+                disabled={loading || saving}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Region</label>
+              <select
+                className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                disabled={loading || saving}
+              >
+                <option value="us">US</option>
+                <option value="eu">EU</option>
+              </select>
             </div>
             <div className="md:col-span-2">
               <label className="text-sm font-medium">From Email</label>
               <Input
                 type="email"
-                placeholder="Patch Notes <patch@yourdomain.com>"
                 value={fromEmail}
                 onChange={(e) => setFromEmail(e.target.value)}
+                placeholder="Patch Notes <patch@yourdomain.com>"
                 disabled={loading || saving}
               />
-            </div>
-            <div className="md:col-span-2">
-              <label className="text-sm font-medium">Audience ID</label>
-              <Input
-                placeholder="fa2a9141-3fa1-4d41-a873-5883074e6516"
-                value={audienceId}
-                onChange={(e) => setAudienceId(e.target.value)}
-                disabled={loading || saving}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Optional. Defaults to your existing Resend audience ID if left
-                blank.
-              </p>
             </div>
             <div className="flex items-center gap-2 md:col-span-2">
               <input
-                id="resend-active"
+                id="customerio-active"
                 type="checkbox"
                 className="h-4 w-4 rounded border-muted"
                 checked={isActive}
                 onChange={(e) => setIsActive(e.target.checked)}
                 disabled={loading || saving}
               />
-              <label htmlFor="resend-active" className="text-sm">
-                Set Resend as the active email provider
+              <label htmlFor="customerio-active" className="text-sm">
+                Set Customer.io as the active email provider
               </label>
             </div>
           </div>

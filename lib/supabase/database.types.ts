@@ -97,6 +97,35 @@ export interface Database {
           updated_at?: string;
         };
       };
+      email_integrations: {
+        Row: {
+          id: string;
+          provider: "resend" | "customerio";
+          from_email: string;
+          credentials: Json;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          provider: "resend" | "customerio";
+          from_email: string;
+          credentials?: Json;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          provider?: "resend" | "customerio";
+          from_email?: string;
+          credentials?: Json;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       github_configs: {
         Row: {
           id: string;
@@ -135,6 +164,7 @@ export interface Database {
     };
     Enums: {
       time_period_type: "1day" | "1week" | "1month";
+      email_provider_type: "resend" | "customerio";
     };
   };
 }

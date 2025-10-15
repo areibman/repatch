@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.51.1",
     "@remotion/bundler": "4.0.355",
     "@remotion/cli": "4.0.355",
     "@remotion/tailwind-v4": "4.0.355",
