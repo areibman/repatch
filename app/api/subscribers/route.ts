@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
+import { getResendClient } from "@/lib/resend/client";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = getResendClient();
 
 // GET /api/subscribers - Fetch all email subscribers from Resend audience
 export async function GET() {

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
+import { getResendClient } from "@/lib/resend/client";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = getResendClient();
 
 // Configure marked for GitHub-flavored markdown
 marked.setOptions({
