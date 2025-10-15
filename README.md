@@ -105,6 +105,16 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Testing
+
+### Playwright end-to-end suite
+
+1. Install the Playwright browsers once: `bunx playwright install --with-deps`
+2. Run the full UI suite: `bun run test:e2e`
+3. Generate an HTML report with coverage: `bun run test:e2e:coverage`
+
+The coverage workflow stores results in `coverage/playwright` and opens an interactive HTML dashboard under `playwright-report`. The [tests/e2e/COVERAGE.md](tests/e2e/COVERAGE.md) guide outlines the user journeys currently automated so you can identify additional gaps quickly.
+
 ## Features
 
 ### 🎬 Dynamic Video Generation
