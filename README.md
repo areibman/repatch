@@ -45,6 +45,10 @@ GOOGLE_API_KEY=your_google_api_key
 
 # Optional: App URL for video rendering callbacks
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Typefully (social thread integration)
+TYPEFULLY_API_BASE_URL=https://api.typefully.com # optional override
+TYPEFULLY_RENDER_STRATEGY=remotion              # set to "mock" for tests to skip heavy rendering
 ```
 
 **⚠️ Important**: Without a GitHub token, you'll hit rate limits (60 requests/hour). With a token, you get 5,000 requests/hour.
@@ -133,6 +137,14 @@ Send beautiful HTML emails to subscribers with:
 - Repository statistics
 - Contributor list
 - Custom video links (when available)
+
+### 🧵 Social Threads via Typefully
+
+- Store your Typefully API key and profile ID inside the Integrations dashboard
+- Queue Twitter/X threads directly from a patch note, optionally attaching Remotion video renders
+- Recorded jobs persist in Supabase (`typefully_jobs`) for easy audit and retry
+- Respect Typefully's rate limits and per-thread post caps—see the [Typefully API docs](https://support.typefully.com/en/articles/8718287-typefully-api) for the latest constraints
+- Set `TYPEFULLY_RENDER_STRATEGY=mock` in CI to reuse fixture videos instead of invoking Remotion
 
 ## Documentation
 

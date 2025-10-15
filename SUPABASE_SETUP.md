@@ -44,6 +44,38 @@ Stores email addresses for newsletter distribution.
 - `idx_email_subscribers_email` - On `email` for fast lookups
 - `idx_email_subscribers_active` - On `active` for filtering active subscribers
 
+#### `typefully_configs`
+Stores Typefully credentials (API key, profile metadata). The table is designed as a singleton row with `slug = 'default'`.
+
+| Column       | Type                     | Description                                      |
+|--------------|--------------------------|--------------------------------------------------|
+| id           | UUID (PK)                | Unique identifier                                |
+| slug         | TEXT (UNIQUE)            | Defaults to `default` for singleton upserts      |
+| display_name | TEXT                     | Optional display label for the profile           |
+| profile_id   | TEXT                     | Typefully profile identifier                     |
+| api_key      | TEXT                     | Typefully API key                                |
+| team_id      | TEXT                     | Optional Typefully team identifier               |
+| created_at   | TIMESTAMP WITH TIME ZONE | Record creation timestamp                        |
+| updated_at   | TIMESTAMP WITH TIME ZONE | Record last update timestamp                     |
+
+#### `typefully_jobs`
+Audit log for queued Typefully threads.
+
+| Column         | Type                     | Description                                             |
+|----------------|--------------------------|---------------------------------------------------------|
+| id             | UUID (PK)                | Unique identifier                                       |
+| patch_note_id  | UUID (FK)                | References `patch_notes.id`                             |
+| config_id      | UUID (FK)                | References `typefully_configs.id`                       |
+| status         | TEXT                     | Job status (`queued`, `failed`, etc.)                   |
+| draft_id       | TEXT                     | Typefully draft identifier                              |
+| thread_id      | TEXT                     | Typefully thread identifier                             |
+| media_asset_id | TEXT                     | Uploaded media asset identifier (if video attached)     |
+| payload        | JSONB                    | Outgoing payload (draft + queue request bodies)         |
+| response       | JSONB                    | Typefully responses for traceability                    |
+| error_message  | TEXT                     | Optional error details                                  |
+| created_at     | TIMESTAMP WITH TIME ZONE | Record creation timestamp                               |
+| updated_at     | TIMESTAMP WITH TIME ZONE | Record last update timestamp                            |
+
 ### Row Level Security (RLS)
 Both tables have RLS enabled with permissive policies (all CRUD operations allowed for now). Adjust these policies based on your authentication requirements.
 
@@ -65,6 +97,7 @@ You have two options to run the migration:
 2. Navigate to **SQL Editor**
 3. Copy the contents of `/supabase/migrations/20250104000000_initial_schema.sql`
 4. Paste into the SQL editor and click **Run**
+5. Repeat for `/supabase/migrations/20251115090000_typefully_integration.sql` to enable the Typefully integration tables
 
 #### Option B: Using Supabase CLI
 ```bash
@@ -84,7 +117,7 @@ supabase db push
 ### 3. Verify Setup
 After running the migration, verify the tables were created:
 1. Go to **Table Editor** in Supabase dashboard
-2. You should see `patch_notes` and `email_subscribers` tables
+2. You should see `patch_notes`, `email_subscribers`, `typefully_configs`, and `typefully_jobs` tables
 
 ## API Endpoints
 
@@ -211,7 +244,8 @@ curl -X POST http://localhost:3000/api/patch-notes \
 2. **Add test data** to verify everything works
 3. **Integrate LiteLLM + AWS Bedrock** for AI generation
 4. **Integrate Resend** for email sending
-5. **Add authentication** (optional) and update RLS policies
+5. **Integrate Typefully** for social thread queueing (ensure `typefully_configs` has credentials)
+6. **Add authentication** (optional) and update RLS policies
 
 ## Troubleshooting
 
