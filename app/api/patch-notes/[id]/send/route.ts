@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
+import {
+  createEmailProvider,
+  getActiveIntegration,
+  loadEmailIntegrations,
+} from "@/lib/email/registry";
+import { EmailProviderError } from "@/lib/email/errors";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Configure marked for GitHub-flavored markdown
 marked.setOptions({
@@ -42,27 +45,37 @@ export async function POST(
       );
     }
 
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+    const integrations = await loadEmailIntegrations(supabase);
+    const activeIntegration = getActiveIntegration(integrations);
 
-    // Get contacts from the audience (we need their emails for the 'to' field)
-    const contacts = await resend.contacts.list({ audienceId });
+    let providerLabel = "";
+    let providerMessageId: string | undefined;
 
-    if (!contacts.data || contacts.data.data.length === 0) {
+    const provider = createEmailProvider(activeIntegration);
+    providerLabel = provider.label;
+
+    const subscribers = await provider.listSubscribers();
+
+    if (!subscribers.length) {
       return NextResponse.json(
-        { error: "No subscribers found in audience" },
+        {
+          error: "No subscribers found",
+          provider: providerLabel,
+        },
         { status: 400 }
       );
     }
 
-    // Filter out unsubscribed contacts and extract emails
-    const activeEmails = contacts.data.data
-      .filter((contact: any) => !contact.unsubscribed)
-      .map((contact: any) => contact.email);
+    const activeEmails = subscribers
+      .filter((subscriber) => subscriber.active)
+      .map((subscriber) => subscriber.email);
 
     if (activeEmails.length === 0) {
       return NextResponse.json(
-        { error: "No active subscribers found" },
+        {
+          error: "No active subscribers found",
+          provider: providerLabel,
+        },
         { status: 400 }
       );
     }
@@ -393,31 +406,33 @@ export async function POST(
 </html>
     `;
 
-    // Send email using Resend to all active subscribers
-    const { data, error } = await resend.emails.send({
-      from: "Repatch <onboarding@resend.dev>",
-      to: activeEmails, // Array of email addresses
+    // Send email using the configured provider to all active subscribers
+    const result = await provider.sendPatchNote({
       subject: `${(patchNote as PatchNote).title} - ${
         (patchNote as PatchNote).repo_name
       }`,
       html: emailHtml,
+      to: activeEmails,
     });
 
-    if (error) {
-      console.error("Resend error:", error);
-      return NextResponse.json(
-        { error: error.message || "Failed to send email" },
-        { status: 500 }
-      );
-    }
+    providerMessageId = result.providerMessageId;
 
     return NextResponse.json({
       success: true,
       sentTo: activeEmails.length,
-      emailId: data?.id,
+      provider: providerLabel,
+      emailId: providerMessageId,
     });
   } catch (error) {
     console.error("API error:", error);
+
+    if (error instanceof EmailProviderError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Failed to send email",
