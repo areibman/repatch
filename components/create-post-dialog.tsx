@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -26,8 +26,9 @@ import {
   generateVideoData,
   generateVideoDataFromAI,
   parseGitHubUrl,
-  generateBoilerplateContent,
 } from "@/lib/github";
+import { buildPatchNoteContent } from "@/lib/ai-template-utils";
+import type { AiTemplate } from "@/types/ai-template";
 
 export function CreatePostDialog() {
   const router = useRouter();
@@ -39,6 +40,69 @@ export function CreatePostDialog() {
   const [branches, setBranches] = useState<{ name: string; protected: boolean }[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [timePeriod, setTimePeriod] = useState<'1day' | '1week' | '1month'>('1week');
+  const [templates, setTemplates] = useState<AiTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('default');
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId),
+    [selectedTemplateId, templates]
+  );
+
+  useEffect(() => {
+    if (!open || templates.length > 0 || isLoadingTemplates) {
+      return;
+    }
+
+    const fetchTemplates = async () => {
+      try {
+        setIsLoadingTemplates(true);
+        setTemplateError(null);
+        const response = await fetch('/api/ai-templates');
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to load templates');
+        }
+
+        const data: Array<{
+          id: string;
+          name: string;
+          description: string | null;
+          narrative_type: string;
+          commit_prompt: string;
+          overall_prompt: string;
+          examples: AiTemplate['examples'];
+          created_at: string;
+          updated_at: string;
+        }> = await response.json();
+
+        setTemplates(
+          data.map((template) => ({
+            id: template.id,
+            name: template.name,
+            description: template.description,
+            narrativeType: template.narrative_type,
+            commitPrompt: template.commit_prompt,
+            overallPrompt: template.overall_prompt,
+            examples: Array.isArray(template.examples) ? template.examples : [],
+            createdAt: template.created_at,
+            updatedAt: template.updated_at,
+          }))
+        );
+      } catch (error) {
+        console.error('Error fetching templates:', error);
+        setTemplateError(
+          error instanceof Error ? error.message : 'Failed to load templates'
+        );
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    };
+
+    fetchTemplates();
+  }, [open, templates.length, isLoadingTemplates]);
 
   const handleRepoUrlChange = async (url: string) => {
     setRepoUrl(url);
@@ -121,6 +185,7 @@ export function CreatePostDialog() {
           repo: repoInfo.repo,
           timePeriod,
           branch: selectedBranch,
+          templateId: selectedTemplateId === 'default' ? undefined : selectedTemplateId,
         }),
       });
 
@@ -138,13 +203,13 @@ export function CreatePostDialog() {
 
       // Use AI summary as content, or fallback to boilerplate
       setLoadingStep('✍️ Generating patch note content...');
-      const content = aiOverallSummary 
-        ? `${aiOverallSummary}\n\n## Key Changes\n\n${aiSummaries.map((s: any) => `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`).join('\n\n')}`
-        : generateBoilerplateContent(
-            `${repoInfo.owner}/${repoInfo.repo}`,
-            timePeriod,
-            stats
-          );
+      const content = buildPatchNoteContent({
+        repoName: `${repoInfo.owner}/${repoInfo.repo}`,
+        timePeriod,
+        summaries: aiSummaries,
+        overallSummary: aiOverallSummary,
+        stats,
+      });
 
       // Generate video data - use AI summaries if available, otherwise fallback to raw stats
       console.log(`🎬 Generating video data using ${aiSummaries.length > 0 ? 'AI summaries' : 'raw GitHub stats'}`);
@@ -185,6 +250,8 @@ export function CreatePostDialog() {
           video_data: videoData,
           ai_summaries: aiSummaries,
           ai_overall_summary: aiOverallSummary,
+          ai_template_id:
+            selectedTemplateId === 'default' ? null : selectedTemplateId,
           generated_at: new Date().toISOString(),
         }),
       });
@@ -201,6 +268,7 @@ export function CreatePostDialog() {
       setRepoUrl('');
       setBranches([]);
       setSelectedBranch('');
+      setSelectedTemplateId('default');
       setLoadingStep('');
       router.push(`/blog/${data.id}`);
       router.refresh();
@@ -298,6 +366,75 @@ export function CreatePostDialog() {
               <p className="text-xs text-muted-foreground">
                 Choose the time range for analyzing changes
               </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="template">Summary Template</Label>
+              <Select
+                value={selectedTemplateId}
+                onValueChange={setSelectedTemplateId}
+                disabled={isLoading || isLoadingTemplates}
+              >
+                <SelectTrigger id="template" data-testid="template-select">
+                  <SelectValue placeholder="Select template" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
+                  <SelectItem value="default">
+                    Default technical tone
+                  </SelectItem>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name} · {template.narrativeType}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {isLoadingTemplates
+                  ? 'Loading templates...'
+                  : templateError
+                  ? templateError
+                  : 'Pick how summaries should sound. Edit options in Settings.'}
+              </p>
+
+              {selectedTemplate && (
+                <div
+                  className="rounded-md border bg-muted/40 p-3 text-sm"
+                  data-testid="template-preview"
+                >
+                  <p className="font-semibold">
+                    {selectedTemplate.name}
+                    <span className="ml-2 text-xs uppercase tracking-wide text-muted-foreground">
+                      {selectedTemplate.narrativeType}
+                    </span>
+                  </p>
+                  {selectedTemplate.description && (
+                    <p className="mt-1 text-muted-foreground">
+                      {selectedTemplate.description}
+                    </p>
+                  )}
+                  {selectedTemplate.examples?.length ? (
+                    <div className="mt-3 space-y-2">
+                      {selectedTemplate.examples.map((example, index) => (
+                        <div
+                          key={`${example.title}-${index}`}
+                          className="rounded border border-dashed p-2"
+                        >
+                          <p className="text-xs font-semibold text-muted-foreground">
+                            Example {index + 1}: {example.title}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Input: {example.input}
+                          </p>
+                          <p className="mt-1 text-xs">
+                            Output: {example.output}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
 

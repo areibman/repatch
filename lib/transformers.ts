@@ -19,6 +19,9 @@ export function dbToUiPatchNote(dbNote: DbPatchNote): PatchNote {
     changes: dbNote.changes,
     contributors: dbNote.contributors,
     videoData: dbNote.video_data as unknown as VideoData | undefined,
+    aiSummaries: (dbNote.ai_summaries as unknown as PatchNote["aiSummaries"]) || undefined,
+    aiOverallSummary: dbNote.ai_overall_summary,
+    aiTemplateId: dbNote.ai_template_id,
   };
 }
 
@@ -42,6 +45,15 @@ export function uiToDbPatchNote(
     ...(uiNote.contributors && { contributors: uiNote.contributors }),
     ...(uiNote.videoData !== undefined && {
       video_data: uiNote.videoData as unknown as any,
+    }),
+    ...(uiNote.aiSummaries !== undefined && {
+      ai_summaries: uiNote.aiSummaries as unknown as any,
+    }),
+    ...(uiNote.aiOverallSummary !== undefined && {
+      ai_overall_summary: uiNote.aiOverallSummary,
+    }),
+    ...(uiNote.aiTemplateId !== undefined && {
+      ai_template_id: uiNote.aiTemplateId,
     }),
   };
 }

@@ -27,6 +27,7 @@ export interface Database {
           video_url: string | null;
           ai_summaries: Json | null;
           ai_overall_summary: string | null;
+          ai_template_id: string | null;
           generated_at: string;
           created_at: string;
           updated_at: string;
@@ -48,6 +49,7 @@ export interface Database {
           video_url?: string | null;
           ai_summaries?: Json | null;
           ai_overall_summary?: string | null;
+          ai_template_id?: string | null;
           generated_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -69,7 +71,43 @@ export interface Database {
           video_url?: string | null;
           ai_summaries?: Json | null;
           ai_overall_summary?: string | null;
+          ai_template_id?: string | null;
           generated_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      ai_templates: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          narrative_type: string;
+          commit_prompt: string;
+          overall_prompt: string;
+          examples: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          narrative_type?: string;
+          commit_prompt: string;
+          overall_prompt: string;
+          examples?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          narrative_type?: string;
+          commit_prompt?: string;
+          overall_prompt?: string;
+          examples?: Json;
           created_at?: string;
           updated_at?: string;
         };

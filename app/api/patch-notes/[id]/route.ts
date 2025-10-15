@@ -53,6 +53,11 @@ export async function PUT(
     if (body.contributors !== undefined)
       updateData.contributors = body.contributors;
     if (body.video_data !== undefined) updateData.video_data = body.video_data;
+    if (body.ai_summaries !== undefined) updateData.ai_summaries = body.ai_summaries;
+    if (body.ai_overall_summary !== undefined)
+      updateData.ai_overall_summary = body.ai_overall_summary;
+    if (body.ai_template_id !== undefined)
+      updateData.ai_template_id = body.ai_template_id;
 
     const { data, error } = await supabase
       .from("patch_notes")
