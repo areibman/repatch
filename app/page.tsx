@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PatchNote } from "@/types/patch-note";
+import { formatFilterSummary } from "@/lib/filter-utils";
 import { CreatePostDialog } from "@/components/create-post-dialog";
 import {
   PlusIcon,
@@ -41,13 +42,14 @@ export default function Home() {
             id: string;
             repo_name: string;
             repo_url: string;
-            time_period: "1day" | "1week" | "1month";
+            time_period: "1day" | "1week" | "1month" | "custom" | "release";
             generated_at: string;
             title: string;
             content: string;
             changes: { added: number; modified: number; removed: number };
             contributors: string[];
             video_url?: string | null;
+            filter_metadata?: any;
           }) => ({
             id: note.id,
             repoName: note.repo_name,
@@ -59,6 +61,7 @@ export default function Home() {
             changes: note.changes,
             contributors: note.contributors,
             videoUrl: note.video_url,
+            filterMetadata: note.filter_metadata ?? null,
           })
         );
 
@@ -73,18 +76,8 @@ export default function Home() {
     fetchPatchNotes();
   }, []);
 
-  const getTimePeriodLabel = (period: string) => {
-    switch (period) {
-      case "1day":
-        return "Daily";
-      case "1week":
-        return "Weekly";
-      case "1month":
-        return "Monthly";
-      default:
-        return period;
-    }
-  };
+  const getFilterLabel = (note: PatchNote) =>
+    formatFilterSummary(note.filterMetadata, note.timePeriod);
 
   const getTimePeriodColor = (period: string) => {
     switch (period) {
@@ -94,6 +87,10 @@ export default function Home() {
         return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
       case "1month":
         return "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20";
+      case "custom":
+        return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20";
+      case "release":
+        return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20";
       default:
         return "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20";
     }
@@ -197,7 +194,7 @@ export default function Home() {
                       variant="outline"
                       className={getTimePeriodColor(note.timePeriod)}
                     >
-                      {getTimePeriodLabel(note.timePeriod)}
+                      {getFilterLabel(note)}
                     </Badge>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <CalendarIcon className="h-3 w-3" />
