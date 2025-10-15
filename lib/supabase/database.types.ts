@@ -126,6 +126,82 @@ export interface Database {
           updated_at?: string;
         };
       };
+      typefully_configs: {
+        Row: {
+          id: string;
+          slug: string;
+          display_name: string | null;
+          profile_id: string;
+          api_key: string;
+          team_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug?: string;
+          display_name?: string | null;
+          profile_id: string;
+          api_key: string;
+          team_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          display_name?: string | null;
+          profile_id?: string;
+          api_key?: string;
+          team_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      typefully_jobs: {
+        Row: {
+          id: string;
+          patch_note_id: string;
+          config_id: string;
+          status: string;
+          draft_id: string | null;
+          thread_id: string | null;
+          media_asset_id: string | null;
+          payload: Json | null;
+          response: Json | null;
+          error_message: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          patch_note_id: string;
+          config_id: string;
+          status: string;
+          draft_id?: string | null;
+          thread_id?: string | null;
+          media_asset_id?: string | null;
+          payload?: Json | null;
+          response?: Json | null;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          patch_note_id?: string;
+          config_id?: string;
+          status?: string;
+          draft_id?: string | null;
+          thread_id?: string | null;
+          media_asset_id?: string | null;
+          payload?: Json | null;
+          response?: Json | null;
+          error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;

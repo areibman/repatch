@@ -21,6 +21,7 @@ import {
   CheckIcon,
   PaperAirplaneIcon,
   XMarkIcon,
+  HashtagIcon,
 } from "@heroicons/react/16/solid";
 import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
@@ -43,6 +44,20 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [isQueueingThread, setIsQueueingThread] = useState(false);
+  const [queueSuccessMessage, setQueueSuccessMessage] = useState<string | null>(
+    null
+  );
+  const [queueErrorMessage, setQueueErrorMessage] = useState<string | null>(null);
+  const [typefullyStatus, setTypefullyStatus] = useState<
+    | {
+        connected: boolean;
+        profileId?: string | null;
+        displayName?: string | null;
+        updatedAt?: string | null;
+      }
+    | null
+  >(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -77,6 +92,7 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          videoData: data.video_data ?? undefined,
         };
 
         setPatchNote(transformedNote);
@@ -106,6 +122,24 @@ export default function BlogViewPage() {
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    const fetchTypefullyStatus = async () => {
+      try {
+        const response = await fetch("/api/integrations/typefully/status");
+        if (!response.ok) {
+          throw new Error("Failed to load Typefully status");
+        }
+        const status = await response.json();
+        setTypefullyStatus(status);
+      } catch (error) {
+        console.error("Error fetching Typefully status:", error);
+        setTypefullyStatus({ connected: false });
+      }
+    };
+
+    fetchTypefullyStatus();
+  }, []);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -197,7 +231,7 @@ export default function BlogViewPage() {
 
   const handleGenerateVideo = async () => {
     if (!patchNote) return;
-    
+
     setIsGeneratingVideo(true);
     try {
       const response = await fetch('/api/videos/render', {
@@ -233,6 +267,52 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsGeneratingVideo(false);
+    }
+  };
+
+  const handleQueueThread = async () => {
+    if (isQueueingThread) {
+      return;
+    }
+
+    if (!typefullyStatus?.connected) {
+      setQueueErrorMessage("Connect Typefully before queueing a thread.");
+      return;
+    }
+
+    setQueueErrorMessage(null);
+    setQueueSuccessMessage(null);
+    setIsQueueingThread(true);
+
+    try {
+      const response = await fetch(`/api/patch-notes/${params.id}/typefully`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          includeVideo: Boolean(patchNote?.videoData || patchNote?.videoUrl),
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to queue thread");
+      }
+
+      setQueueSuccessMessage(
+        data?.threadId
+          ? `Thread queued! Typefully thread ID: ${data.threadId}`
+          : "Thread queued in Typefully."
+      );
+    } catch (error) {
+      console.error("Error queueing Typefully thread:", error);
+      setQueueErrorMessage(
+        error instanceof Error ? error.message : "Failed to queue thread"
+      );
+    } finally {
+      setIsQueueingThread(false);
     }
   };
 
@@ -348,10 +428,10 @@ export default function BlogViewPage() {
                     Edit
                   </Button>
                   {!patchNote.videoUrl && (
-                    <Button 
+                    <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleGenerateVideo} 
+                      onClick={handleGenerateVideo}
                       disabled={isGeneratingVideo || !patchNote.videoData}
                     >
                       {isGeneratingVideo ? (
@@ -367,6 +447,31 @@ export default function BlogViewPage() {
                     </Button>
                   )}
                   <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleQueueThread}
+                    disabled={
+                      isQueueingThread || !typefullyStatus?.connected
+                    }
+                  >
+                    {isQueueingThread ? (
+                      <>
+                        <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                        Queueing...
+                      </>
+                    ) : queueSuccessMessage ? (
+                      <>
+                        <HashtagIcon className="h-4 w-4 mr-2" />
+                        Queued!
+                      </>
+                    ) : (
+                      <>
+                        <HashtagIcon className="h-4 w-4 mr-2" />
+                        Queue Twitter thread
+                      </>
+                    )}
+                  </Button>
+                  <Button
                     size="sm"
                     onClick={handleSendEmail}
                     disabled={isSending}
@@ -377,6 +482,17 @@ export default function BlogViewPage() {
                 </>
               )}
             </div>
+            {typefullyStatus?.connected === false && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Connect Typefully to enable thread queueing.
+              </p>
+            )}
+            {queueSuccessMessage && (
+              <p className="text-xs text-green-600 mt-2">{queueSuccessMessage}</p>
+            )}
+            {queueErrorMessage && (
+              <p className="text-xs text-destructive mt-2">{queueErrorMessage}</p>
+            )}
           </div>
         </div>
 

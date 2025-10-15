@@ -14,14 +14,15 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  ArrowTopRightOnSquareIcon,
+  ChatBubbleBottomCenterTextIcon,
   CodeBracketIcon,
   EnvelopeIcon,
   MagnifyingGlassIcon,
-  ArrowTopRightOnSquareIcon,
 } from "@heroicons/react/16/solid";
 
 type IntegrationItem = {
-  id: "github" | "resend";
+  id: "github" | "resend" | "typefully";
   name: string;
   description: string;
   href: string;
@@ -50,6 +51,16 @@ const INTEGRATIONS: IntegrationItem[] = [
     configureHref: "/integrations/resend/configure",
     badge: { label: "Email", variant: "outline" },
     icon: <EnvelopeIcon className="h-5 w-5" />,
+  },
+  {
+    id: "typefully",
+    name: "Typefully",
+    description:
+      "Queue threaded Twitter posts with optional video clips generated from your patch notes.",
+    href: "/integrations/typefully",
+    configureHref: "/integrations/typefully/configure",
+    badge: { label: "Social", variant: "outline" },
+    icon: <ChatBubbleBottomCenterTextIcon className="h-5 w-5" />,
   },
 ];
 

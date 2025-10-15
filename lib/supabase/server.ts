@@ -1,8 +1,17 @@
 import { createServerClient } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { Database } from './database.types';
 
 export async function createClient() {
+  const testClient = (globalThis as {
+    __SUPABASE_TEST_CLIENT?: SupabaseClient<Database>;
+  }).__SUPABASE_TEST_CLIENT;
+
+  if (process.env.NODE_ENV === 'test' && testClient) {
+    return testClient;
+  }
+
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
