@@ -12,6 +12,7 @@ Repatch uses LLMs to analyze GitHub repository changes over time periods (daily,
 - **Database**: Supabase (PostgreSQL)
 - **UI**: ShadCN UI + Tailwind CSS
 - **Email**: Resend
+- **Social Media**: Typefully (Twitter/X threads)
 - **AI**: Google Generative AI (Gemini 2.5 Flash) via Vercel AI SDK
 - **Video Generation**: Remotion 4.0
 
@@ -66,6 +67,16 @@ To set up Resend for email sending:
    - Create a new audience (e.g., "Repatch Subscribers")
    - Copy the audience ID
 4. Add both the API key and audience ID to your `.env.local` file
+
+### Typefully Setup (Optional - for Twitter/X Integration)
+
+To enable Twitter/X thread posting:
+
+1. Go to https://typefully.com and create an account
+2. Connect your Twitter/X account to Typefully
+3. Navigate to Settings > API and generate an API key
+4. In Repatch, go to Integrations > Typefully and add your API key
+5. Queue threads directly from any patch note page
 
 ### 3. Set Up Supabase
 
@@ -134,12 +145,22 @@ Send beautiful HTML emails to subscribers with:
 - Contributor list
 - Custom video links (when available)
 
+### 🐦 Twitter/X Thread Integration
+
+Queue patch notes as Twitter/X threads via Typefully:
+- Automatically converts long patch notes into tweet-sized chunks
+- Includes video attachments (when available)
+- Schedule threads for optimal engagement times
+- Track publishing status and thread URLs
+- Smart thread formatting with numbering and proper content splitting
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration
 - [Video Generation](./VIDEO_GENERATION.md) - Remotion video rendering
 - [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
+- [Typefully Integration](./TYPEFULLY_INTEGRATION.md) - Twitter/X thread posting
 
 ## Learn More
 

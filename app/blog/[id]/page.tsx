@@ -21,6 +21,7 @@ import {
   CheckIcon,
   PaperAirplaneIcon,
   XMarkIcon,
+  ChatBubbleLeftEllipsisIcon,
 } from "@heroicons/react/16/solid";
 import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
@@ -43,6 +44,8 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [isQueueingThread, setIsQueueingThread] = useState(false);
+  const [threadStatus, setThreadStatus] = useState<any>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -77,6 +80,7 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          videoData: data.video_data,
         };
 
         setPatchNote(transformedNote);
@@ -87,7 +91,20 @@ export default function BlogViewPage() {
       }
     };
 
+    const fetchThreadStatus = async () => {
+      try {
+        const response = await fetch(`/api/patch-notes/${params.id}/queue-thread`);
+        if (response.ok) {
+          const data = await response.json();
+          setThreadStatus(data);
+        }
+      } catch (error) {
+        console.error("Error fetching thread status:", error);
+      }
+    };
+
     fetchPatchNote();
+    fetchThreadStatus();
     
     // Poll for video status every 5 seconds if no video exists yet
     const pollInterval = setInterval(async () => {
@@ -236,6 +253,86 @@ export default function BlogViewPage() {
     }
   };
 
+  const handleQueueThread = async () => {
+    if (!patchNote) return;
+
+    // Check if video is needed and not available
+    if (!patchNote.videoUrl) {
+      const shouldGenerateVideo = confirm(
+        'No video has been generated for this patch note. Would you like to generate one now to include in the thread?'
+      );
+      
+      if (shouldGenerateVideo) {
+        // Generate video first, then queue thread
+        setIsGeneratingVideo(true);
+        try {
+          const videoResponse = await fetch('/api/videos/render', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              patchNoteId: patchNote.id,
+              videoData: patchNote.videoData,
+              repoName: patchNote.repoName,
+            }),
+          });
+
+          if (!videoResponse.ok) {
+            const error = await videoResponse.json();
+            throw new Error(error.error || 'Failed to generate video');
+          }
+
+          const videoData = await videoResponse.json();
+          patchNote.videoUrl = videoData.videoUrl;
+        } catch (error) {
+          console.error('Error generating video:', error);
+          if (!confirm('Video generation failed. Continue without video?')) {
+            setIsGeneratingVideo(false);
+            return;
+          }
+        } finally {
+          setIsGeneratingVideo(false);
+        }
+      }
+    }
+
+    setIsQueueingThread(true);
+    try {
+      const response = await fetch(`/api/patch-notes/${patchNote.id}/queue-thread`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          includeVideo: !!patchNote.videoUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to queue thread');
+      }
+
+      const data = await response.json();
+      
+      alert(`✅ Twitter thread queued successfully!\n\nView on Typefully: ${data.draftUrl}`);
+      
+      // Refresh thread status
+      const statusResponse = await fetch(`/api/patch-notes/${patchNote.id}/queue-thread`);
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        setThreadStatus(statusData);
+      }
+    } catch (error) {
+      console.error('Error queueing thread:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to queue thread';
+      alert(`❌ Error: ${errorMessage}`);
+    } finally {
+      setIsQueueingThread(false);
+    }
+  };
+
   const getTimePeriodLabel = (period: string) => {
     switch (period) {
       case "1day":
@@ -373,6 +470,19 @@ export default function BlogViewPage() {
                   >
                     <PaperAirplaneIcon className="h-4 w-4 mr-2" />
                     {isSending ? "Sending..." : "Send Email"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleQueueThread}
+                    disabled={isQueueingThread || threadStatus?.hasActiveJob}
+                  >
+                    <ChatBubbleLeftEllipsisIcon className="h-4 w-4 mr-2" />
+                    {isQueueingThread 
+                      ? "Queueing..." 
+                      : threadStatus?.hasActiveJob 
+                        ? "Thread Queued"
+                        : "Queue Twitter Thread"}
                   </Button>
                 </>
               )}
