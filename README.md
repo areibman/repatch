@@ -12,6 +12,7 @@ Repatch uses LLMs to analyze GitHub repository changes over time periods (daily,
 - **Database**: Supabase (PostgreSQL)
 - **UI**: ShadCN UI + Tailwind CSS
 - **Email**: Resend
+- **Social**: Typefully (Twitter/X threads)
 - **AI**: Google Generative AI (Gemini 2.5 Flash) via Vercel AI SDK
 - **Video Generation**: Remotion 4.0
 
@@ -45,6 +46,14 @@ GOOGLE_API_KEY=your_google_api_key
 
 # Optional: App URL for video rendering callbacks
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Typefully (for Twitter/X threads)
+# Option A: Store in DB via Integrations > Typefully > Connect
+# Option B: Provide env vars (fallback)
+TYPEFULLY_API_KEY=your_typefully_api_key
+TYPEFULLY_PROFILE_ID=your_typefully_profile_id
+# Optional: Only if you use teams
+TYPEFULLY_TEAM_ID=your_typefully_team_id
 ```
 
 **⚠️ Important**: Without a GitHub token, you'll hit rate limits (60 requests/hour). With a token, you get 5,000 requests/hour.
@@ -66,6 +75,16 @@ To set up Resend for email sending:
    - Create a new audience (e.g., "Repatch Subscribers")
    - Copy the audience ID
 4. Add both the API key and audience ID to your `.env.local` file
+
+### Typefully Setup
+
+To queue Twitter/X threads via Typefully:
+
+1. Read the API docs at https://support.typefully.com/en/articles/8718287-typefully-api
+2. Get an API key and your profile ID (and optionally a team ID)
+3. Configure via the app UI: Integrations → Typefully → Connect
+   - Or set env vars: `TYPEFULLY_API_KEY`, `TYPEFULLY_PROFILE_ID`, and optionally `TYPEFULLY_TEAM_ID`
+4. On a patch note page, click "Queue Twitter thread" (or "+ video" to render and attach the Remotion video first)
 
 ### 3. Set Up Supabase
 

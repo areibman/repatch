@@ -42,6 +42,7 @@ export default function BlogViewPage() {
   const [editedTitle, setEditedTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isQueueingThread, setIsQueueingThread] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
 
   // Calculate duration from patch note's video data
@@ -192,6 +193,25 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleQueueThread = async (includeVideo: boolean) => {
+    if (!patchNote || isQueueingThread) return;
+    setIsQueueingThread(true);
+    try {
+      const res = await fetch(`/api/patch-notes/${params.id}/typefully`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ includeVideo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to queue thread");
+      alert(`✅ Thread queued!${data.threadId ? ` ID: ${data.threadId}` : ""}`);
+    } catch (e: any) {
+      alert(`❌ ${e.message || "Failed to queue thread"}`);
+    } finally {
+      setIsQueueingThread(false);
     }
   };
 
@@ -373,6 +393,22 @@ export default function BlogViewPage() {
                   >
                     <PaperAirplaneIcon className="h-4 w-4 mr-2" />
                     {isSending ? "Sending..." : "Send Email"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleQueueThread(false)}
+                    disabled={isQueueingThread}
+                  >
+                    {isQueueingThread ? "Queueing..." : "Queue Twitter thread"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleQueueThread(true)}
+                    disabled={isQueueingThread}
+                  >
+                    {isQueueingThread ? "Queueing..." : "Queue thread + video"}
                   </Button>
                 </>
               )}
