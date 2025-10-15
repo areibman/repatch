@@ -1,186 +1,221 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
+import { z } from "zod";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { createClient } from "@/lib/supabase/server";
+import { resolveActiveEmailProvider } from "@/lib/email/service";
+import { EmailSubscriber } from "@/lib/email/types";
 
-// GET /api/subscribers - Fetch all email subscribers from Resend audience
+const createSubscriberSchema = z.object({
+  email: z.string().email(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+});
+
+const updateSubscriberSchema = z.object({
+  email: z.string().email(),
+  active: z.boolean().optional(),
+});
+
+function mapSubscriber(row: {
+  id: string;
+  email: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}): EmailSubscriber & {
+  created_at: string;
+  updated_at: string;
+} {
+  return {
+    id: row.id,
+    email: row.email,
+    active: row.active,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export async function GET() {
-  try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+  const supabase = await createClient();
+  const active = await resolveActiveEmailProvider(supabase);
 
-    const contacts = await resend.contacts.list({ audienceId });
+  const { data: supabaseRows, error } = await supabase
+    .from("email_subscribers")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-    if (!contacts.data) {
-      return NextResponse.json(
-        { error: "Failed to fetch contacts from Resend" },
-        { status: 500 }
-      );
-    }
-
-    // Transform Resend contacts to match the expected format
-    const subscribers = contacts.data.data.map((contact: any) => ({
-      id: contact.id,
-      email: contact.email,
-      active: !contact.unsubscribed,
-      created_at: contact.created_at,
-      updated_at: contact.updated_at,
-    }));
-
-    return NextResponse.json(subscribers);
-  } catch (error) {
+  if (error) {
     return NextResponse.json(
-      { error: "Failed to fetch subscribers" },
+      { error: "Failed to load subscribers" },
       { status: 500 }
     );
   }
+
+  let subscribers = (supabaseRows ?? []).map(mapSubscriber);
+  let source: "database" | "provider" = "database";
+
+  if (
+    subscribers.length === 0 &&
+    active.provider?.capabilities.canListSubscribers &&
+    typeof active.provider.listSubscribers === "function"
+  ) {
+    try {
+      const externalSubscribers = await active.provider.listSubscribers();
+      subscribers = externalSubscribers.map((subscriber) => ({
+        id: subscriber.id ?? subscriber.email,
+        email: subscriber.email,
+        active: subscriber.active,
+        created_at: subscriber.createdAt ?? new Date().toISOString(),
+        updated_at: subscriber.updatedAt ?? new Date().toISOString(),
+        createdAt: subscriber.createdAt,
+        updatedAt: subscriber.updatedAt,
+      }));
+      source = "provider";
+    } catch (providerError) {
+      console.error("Failed to fetch subscribers from provider", providerError);
+    }
+  }
+
+  return NextResponse.json({
+    subscribers,
+    provider: active.summary,
+    source,
+  });
 }
 
-// POST /api/subscribers - Add a new email subscriber to Resend audience
 export async function POST(request: NextRequest) {
-  try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+  const body = await request.json().catch(() => null);
+  const parsed = createSubscriberSchema.safeParse(body);
 
-    const body = await request.json();
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(body.email)) {
-      return NextResponse.json(
-        { error: "Invalid email format" },
-        { status: 400 }
-      );
-    }
+  const supabase = await createClient();
+  const active = await resolveActiveEmailProvider(supabase);
 
-    // Add contact to Resend audience
-    const contact = await resend.contacts.create({
-      email: body.email,
-      firstName: body.firstName || "",
-      lastName: body.lastName || "",
-      unsubscribed: false,
-      audienceId: audienceId,
-    });
+  const { data, error } = await supabase
+    .from("email_subscribers")
+    .insert({
+      email: parsed.data.email,
+      active: true,
+    })
+    .select()
+    .single();
 
-    if (!contact.data) {
-      return NextResponse.json(
-        { error: "Failed to add contact to Resend audience" },
-        { status: 500 }
-      );
-    }
-
-    // Transform the response to match expected format
-    const subscriber = {
-      id: contact.data.id,
-      email: body.email, // Use the email from the request body
-      active: true, // New contacts are active by default
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    return NextResponse.json(subscriber, { status: 201 });
-  } catch (error: any) {
-    // Handle duplicate email error from Resend
-    if (
-      error.message?.includes("already exists") ||
-      error.message?.includes("duplicate")
-    ) {
+  if (error) {
+    if (error.code === "23505") {
       return NextResponse.json(
         { error: "Email already subscribed" },
         { status: 409 }
       );
     }
-
     return NextResponse.json(
       { error: "Failed to add subscriber" },
       { status: 500 }
     );
   }
-}
 
-// DELETE /api/subscribers - Remove a subscriber from Resend audience
-export async function DELETE(request: NextRequest) {
-  try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
-
-    const { searchParams } = new URL(request.url);
-    const email = searchParams.get("email");
-    const id = searchParams.get("id");
-
-    if (!email && !id) {
-      return NextResponse.json(
-        { error: "Email or ID parameter is required" },
-        { status: 400 }
-      );
+  if (
+    active.provider?.capabilities.canManageSubscribers &&
+    typeof active.provider.createSubscriber === "function"
+  ) {
+    try {
+      await active.provider.createSubscriber(parsed.data);
+    } catch (providerError) {
+      console.error("Provider subscriber create failed", providerError);
     }
-
-    // Remove contact from Resend audience
-    const result = await resend.contacts.remove({
-      ...(id ? { id } : { email: email! }),
-      audienceId: audienceId,
-    });
-
-    if (!result.data) {
-      return NextResponse.json(
-        { error: "Failed to remove contact from Resend audience" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to remove subscriber" },
-      { status: 500 }
-    );
   }
+
+  return NextResponse.json({
+    subscriber: mapSubscriber(data),
+    provider: active.summary,
+  });
 }
 
-// PUT /api/subscribers - Update a subscriber (e.g., unsubscribe)
 export async function PUT(request: NextRequest) {
-  try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+  const body = await request.json().catch(() => null);
+  const parsed = updateSubscriberSchema.safeParse(body);
 
-    const body = await request.json();
-    const { email, id, unsubscribed } = body;
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
 
-    if (!email && !id) {
-      return NextResponse.json(
-        { error: "Email or ID is required" },
-        { status: 400 }
-      );
-    }
+  const supabase = await createClient();
+  const active = await resolveActiveEmailProvider(supabase);
 
-    // Update contact in Resend audience
-    const result = await resend.contacts.update({
-      ...(id ? { id } : { email }),
-      audienceId: audienceId,
-      unsubscribed: unsubscribed ?? false,
-    });
+  const { data, error } = await supabase
+    .from("email_subscribers")
+    .update({ active: parsed.data.active ?? true })
+    .eq("email", parsed.data.email)
+    .select()
+    .single();
 
-    if (!result.data) {
-      return NextResponse.json(
-        { error: "Failed to update contact in Resend audience" },
-        { status: 500 }
-      );
-    }
-
-    // Transform the response to match expected format
-    const subscriber = {
-      id: result.data.id,
-      email: email || id || "", // Use the email or id from the request
-      active: !(unsubscribed ?? false),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    return NextResponse.json(subscriber);
-  } catch (error) {
+  if (error || !data) {
     return NextResponse.json(
       { error: "Failed to update subscriber" },
       { status: 500 }
     );
   }
+
+  if (
+    active.provider?.capabilities.canManageSubscribers &&
+    typeof active.provider.updateSubscriber === "function"
+  ) {
+    try {
+      await active.provider.updateSubscriber({
+        email: parsed.data.email,
+        active: parsed.data.active,
+      });
+    } catch (providerError) {
+      console.error("Provider subscriber update failed", providerError);
+    }
+  }
+
+  return NextResponse.json({
+    subscriber: mapSubscriber(data),
+    provider: active.summary,
+  });
+}
+
+export async function DELETE(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const email = searchParams.get("email");
+
+  if (!email) {
+    return NextResponse.json(
+      { error: "Email query parameter is required" },
+      { status: 400 }
+    );
+  }
+
+  const supabase = await createClient();
+  const active = await resolveActiveEmailProvider(supabase);
+
+  const { error } = await supabase
+    .from("email_subscribers")
+    .delete()
+    .eq("email", email);
+
+  if (error) {
+    return NextResponse.json(
+      { error: "Failed to remove subscriber" },
+      { status: 500 }
+    );
+  }
+
+  if (
+    active.provider?.capabilities.canManageSubscribers &&
+    typeof active.provider.deleteSubscriber === "function"
+  ) {
+    try {
+      await active.provider.deleteSubscriber(email);
+    } catch (providerError) {
+      console.error("Provider subscriber delete failed", providerError);
+    }
+  }
+
+  return NextResponse.json({ success: true });
 }

@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
+import { resolveActiveEmailProvider } from "@/lib/email/service";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Configure marked for GitHub-flavored markdown
 marked.setOptions({
@@ -42,33 +40,52 @@ export async function POST(
       );
     }
 
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+    const activeProvider = await resolveActiveEmailProvider(supabase);
 
-    // Get contacts from the audience (we need their emails for the 'to' field)
-    const contacts = await resend.contacts.list({ audienceId });
-
-    if (!contacts.data || contacts.data.data.length === 0) {
+    if (!activeProvider.provider) {
       return NextResponse.json(
-        { error: "No subscribers found in audience" },
-        { status: 400 }
+        { error: "No email provider configured" },
+        { status: 503 }
       );
     }
 
-    // Filter out unsubscribed contacts and extract emails
-    const activeEmails = contacts.data.data
-      .filter((contact: any) => !contact.unsubscribed)
-      .map((contact: any) => contact.email);
+    const provider = activeProvider.provider;
+    const fromAddress = provider.getFromAddress();
 
-    if (activeEmails.length === 0) {
+    const { data: localSubscribers, error: subscribersError } = await supabase
+      .from("email_subscribers")
+      .select("email")
+      .eq("active", true);
+
+    if (subscribersError) {
+      console.error("Failed to load subscribers", subscribersError);
+    }
+
+    let recipientEmails = (localSubscribers ?? []).map((subscriber) => subscriber.email);
+
+    if (
+      recipientEmails.length === 0 &&
+      provider.capabilities.canListSubscribers &&
+      typeof provider.listSubscribers === "function"
+    ) {
+      try {
+        const providerSubscribers = await provider.listSubscribers();
+        recipientEmails = providerSubscribers
+          .filter((subscriber) => subscriber.active)
+          .map((subscriber) => subscriber.email);
+      } catch (providerError) {
+        console.error("Failed to fetch subscribers from provider", providerError);
+      }
+    }
+
+    recipientEmails = Array.from(new Set(recipientEmails.filter(Boolean)));
+
+    if (recipientEmails.length === 0) {
       return NextResponse.json(
-        { error: "No active subscribers found" },
+        { error: "No subscribers found" },
         { status: 400 }
       );
     }
-
-    // Add a small delay to avoid hitting rate limits (2 req/sec = 500ms between calls)
-    await new Promise(resolve => setTimeout(resolve, 600));
 
     // Convert markdown content to HTML
     const htmlContent = markdownToHtml((patchNote as PatchNote).content);
@@ -393,28 +410,27 @@ export async function POST(
 </html>
     `;
 
-    // Send email using Resend to all active subscribers
-    const { data, error } = await resend.emails.send({
-      from: "Repatch <onboarding@resend.dev>",
-      to: activeEmails, // Array of email addresses
+    const replyTo =
+      typeof activeProvider.summary?.additional?.replyTo === "string"
+        ? (activeProvider.summary.additional.replyTo as string)
+        : undefined;
+
+    const sendResult = await provider.sendEmail({
+      from: fromAddress,
+      to: recipientEmails,
       subject: `${(patchNote as PatchNote).title} - ${
         (patchNote as PatchNote).repo_name
       }`,
       html: emailHtml,
+      previewText: `Highlights from ${(patchNote as PatchNote).repo_name}`,
+      replyTo,
     });
-
-    if (error) {
-      console.error("Resend error:", error);
-      return NextResponse.json(
-        { error: error.message || "Failed to send email" },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,
-      sentTo: activeEmails.length,
-      emailId: data?.id,
+      sentTo: recipientEmails.length,
+      emailId: sendResult.id,
+      provider: activeProvider.summary,
     });
   } catch (error) {
     console.error("API error:", error);

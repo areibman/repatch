@@ -11,7 +11,7 @@ Repatch uses LLMs to analyze GitHub repository changes over time periods (daily,
 - **Framework**: Next.js 15 with App Router
 - **Database**: Supabase (PostgreSQL)
 - **UI**: ShadCN UI + Tailwind CSS
-- **Email**: Resend
+- **Email**: Resend or Customer.io
 - **AI**: Google Generative AI (Gemini 2.5 Flash) via Vercel AI SDK
 - **Video Generation**: Remotion 4.0
 
@@ -35,6 +35,17 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 # Resend (for sending emails)
 RESEND_API_KEY=your_resend_api_key
 RESEND_AUDIENCE_ID=your_resend_audience_id
+RESEND_FROM_EMAIL=team@yourdomain.com
+RESEND_FROM_NAME=Your Product Name
+RESEND_REPLY_TO=support@yourdomain.com
+
+# Customer.io (optional transactional sending)
+CUSTOMERIO_TRANSACTIONAL_API_KEY=cio_yourTransactionalKey
+CUSTOMERIO_TRANSACTIONAL_MESSAGE_ID=your_message_id
+CUSTOMERIO_FROM_EMAIL=team@yourdomain.com
+CUSTOMERIO_FROM_NAME=Your Product Name
+CUSTOMERIO_REPLY_TO=support@yourdomain.com
+CUSTOMERIO_REGION=us # or eu
 
 # GitHub (REQUIRED to avoid rate limits)
 GITHUB_TOKEN=ghp_yourTokenHere
@@ -55,17 +66,29 @@ To create a GitHub token:
 2. Generate a new classic token with `public_repo` scope
 3. Add it to `.env.local` as shown above
 
-### Resend Setup
+### Email Provider Setup
 
-To set up Resend for email sending:
+Repatch supports both Resend and Customer.io for delivering newsletters. Configure either provider in the **Integrations → Email** section of the app after running migrations and seeding data.
 
-1. Go to https://resend.com and create an account
-2. Get your API key from the dashboard
+#### Resend
+
+1. Go to https://resend.com and create an account.
+2. Generate an API key from the dashboard.
 3. Create an audience for your subscribers:
-   - Go to the Audiences section in your Resend dashboard
-   - Create a new audience (e.g., "Repatch Subscribers")
-   - Copy the audience ID
-4. Add both the API key and audience ID to your `.env.local` file
+   - Navigate to **Audiences** in Resend.
+   - Create a new audience (e.g., "Repatch Subscribers").
+   - Copy the audience ID.
+4. Add the API key and audience ID to `.env.local` if you plan to rely on environment defaults.
+5. In the app, open **Integrations → Resend** and paste the credentials. Toggle "Set Resend as the active provider" to make it live.
+
+#### Customer.io
+
+1. Log in at https://customer.io and ensure your workspace has transactional messaging enabled.
+2. Create or reuse a transactional message for newsletters and copy its **Transactional Message ID**.
+3. Generate a **Transactional API Key** under **Integrations → Customer.io → API Credentials**.
+4. (Optional) Note your workspace region (`us` or `eu`) to speed up API calls.
+5. Provide the API key, message ID, sender, and reply-to values either via `.env.local` or through **Integrations → Customer.io** in the app.
+6. Toggle "Set Customer.io as the active provider" once credentials are saved to start delivering via Customer.io.
 
 ### 3. Set Up Supabase
 
@@ -138,7 +161,7 @@ Send beautiful HTML emails to subscribers with:
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration
 - [Video Generation](./VIDEO_GENERATION.md) - Remotion video rendering
-- [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
+- [Email Integrations](./EMAIL_INTEGRATIONS.md) - Configure Resend or Customer.io
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
 
 ## Learn More

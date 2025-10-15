@@ -21,11 +21,13 @@ import {
   CheckIcon,
   PaperAirplaneIcon,
   XMarkIcon,
+  EnvelopeIcon,
 } from "@heroicons/react/16/solid";
 import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
+import { EmailProviderSummary } from "@/lib/email/types";
 
 import dynamic from "next/dynamic";
 
@@ -43,6 +45,10 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [emailProvider, setEmailProvider] = useState<EmailProviderSummary | null>(
+    null
+  );
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -87,8 +93,28 @@ export default function BlogViewPage() {
       }
     };
 
+    const fetchProvider = async () => {
+      try {
+        setProviderError(null);
+        const response = await fetch("/api/email/providers/active");
+        if (!response.ok) {
+          throw new Error("Failed to load email provider");
+        }
+        const data = await response.json();
+        setEmailProvider(data.provider || null);
+      } catch (error) {
+        console.error("Error loading email provider", error);
+        setProviderError(
+          error instanceof Error
+            ? error.message
+            : "Failed to load email provider"
+        );
+      }
+    };
+
     fetchPatchNote();
-    
+    fetchProvider();
+
     // Poll for video status every 5 seconds if no video exists yet
     const pollInterval = setInterval(async () => {
       if (!patchNote?.videoUrl) {
@@ -185,7 +211,12 @@ export default function BlogViewPage() {
       }
 
       const data = await response.json();
-      alert(`✅ Patch note successfully sent to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''}!`);
+      const providerLabel = emailProvider?.label ?? "your configured provider";
+      alert(
+        `✅ Patch note successfully sent via ${providerLabel} to ${data.sentTo} subscriber${
+          data.sentTo !== 1 ? "s" : ""
+        }!`
+      );
     } catch (error) {
       console.error('Error sending email:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
@@ -329,12 +360,13 @@ export default function BlogViewPage() {
               </a>
             </div>
 
-            <div className="flex gap-2 flex-wrap">
-              {isEditing ? (
-                <>
-                  <Button variant="outline" size="sm" onClick={handleCancel}>
-                    <XMarkIcon className="h-4 w-4 mr-2" />
-                    Cancel
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex gap-2 flex-wrap justify-end">
+                {isEditing ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={handleCancel}>
+                      <XMarkIcon className="h-4 w-4 mr-2" />
+                      Cancel
                   </Button>
                   <Button size="sm" onClick={handleSave} disabled={isSaving}>
                     <CheckIcon className="h-4 w-4 mr-2" />
@@ -369,12 +401,29 @@ export default function BlogViewPage() {
                   <Button
                     size="sm"
                     onClick={handleSendEmail}
-                    disabled={isSending}
+                    disabled={isSending || !emailProvider}
                   >
                     <PaperAirplaneIcon className="h-4 w-4 mr-2" />
                     {isSending ? "Sending..." : "Send Email"}
                   </Button>
                 </>
+              )}
+              </div>
+              {emailProvider && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <EnvelopeIcon className="h-3.5 w-3.5" />
+                  Delivering via {emailProvider.label}
+                </div>
+              )}
+              {providerError && (
+                <div className="text-xs text-destructive text-right">
+                  {providerError}
+                </div>
+              )}
+              {!emailProvider && !providerError && (
+                <div className="text-xs text-destructive text-right">
+                  Configure an email provider to enable sending.
+                </div>
               )}
             </div>
           </div>

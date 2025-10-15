@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +17,7 @@ import {
   ExclamationTriangleIcon,
   PlusIcon,
 } from "@heroicons/react/16/solid";
+import { EmailProviderSummary } from "@/lib/email/types";
 
 interface Subscriber {
   id: string;
@@ -30,9 +31,10 @@ export default function SubscribersPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Hardcoded audience ID from the docs
-  const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+  const [provider, setProvider] = useState<EmailProviderSummary | null>(null);
+  const [source, setSource] = useState<"database" | "provider" | "unknown">(
+    "database"
+  );
 
   useEffect(() => {
     const fetchSubscribers = async () => {
@@ -42,7 +44,9 @@ export default function SubscribersPage() {
           throw new Error("Failed to fetch subscribers");
         }
         const data = await response.json();
-        setSubscribers(data);
+        setSubscribers(data.subscribers || []);
+        setProvider(data.provider || null);
+        setSource(data.source || "database");
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to fetch subscribers"
@@ -57,6 +61,15 @@ export default function SubscribersPage() {
 
   const activeSubscribers = subscribers.filter((sub) => sub.active);
   const totalSubscribers = subscribers.length;
+  const providerDashboardUrl = useMemo(() => {
+    if (provider?.id === "resend") {
+      return "https://resend.com";
+    }
+    if (provider?.id === "customerio") {
+      return "https://customer.io";
+    }
+    return null;
+  }, [provider?.id]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -69,20 +82,27 @@ export default function SubscribersPage() {
             </h1>
             <p className="text-muted-foreground">
               Manage your patch notes newsletter subscribers
+              {provider?.label ? ` with ${provider.label}` : ""}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <Link
-              href="https://resend.com"
-              target="_blank"
-              className="flex items-center gap-1"
-            >
-              Manage in Resend{" "}
-              <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
+          {providerDashboardUrl ? (
+            <Button variant="outline" asChild>
+              <Link
+                href={providerDashboardUrl}
+                target="_blank"
+                className="flex items-center gap-1"
+              >
+                Manage in {provider?.label ?? "Provider"}{" "}
+                <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" asChild>
+              <Link href="/integrations">Configure Email</Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -94,19 +114,33 @@ export default function SubscribersPage() {
             Audience Configuration
           </CardTitle>
           <CardDescription>
-            Your Resend audience for patch notes subscribers
+            {provider?.label
+              ? `Your ${provider.label} configuration for patch notes subscribers.`
+              : "Connect an email provider to deliver newsletters."}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">
-                Audience ID
-              </label>
-              <div className="mt-1 p-3 bg-muted rounded-md font-mono text-sm">
-                {audienceId}
+            {provider?.additional?.audienceId && (
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Audience ID
+                </label>
+                <div className="mt-1 p-3 bg-muted rounded-md font-mono text-sm">
+                  {provider.additional.audienceId as string}
+                </div>
               </div>
-            </div>
+            )}
+            {provider?.fromEmail && (
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Sender Email
+                </label>
+                <div className="mt-1 p-3 bg-muted rounded-md text-sm">
+                  {provider.fromEmail}
+                </div>
+              </div>
+            )}
 
             {loading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -144,19 +178,30 @@ export default function SubscribersPage() {
                 </div>
               </div>
             )}
+            {source === "provider" && !loading && !error && (
+              <p className="text-xs text-muted-foreground">
+                Displaying subscribers pulled directly from {provider?.label}.
+              </p>
+            )}
           </div>
         </CardContent>
         <CardFooter className="justify-end">
-          <Button variant="outline" asChild>
-            <Link
-              href="https://resend.com"
-              target="_blank"
-              className="flex items-center gap-1"
-            >
-              Manage in Resend{" "}
-              <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
+          {providerDashboardUrl ? (
+            <Button variant="outline" asChild>
+              <Link
+                href={providerDashboardUrl}
+                target="_blank"
+                className="flex items-center gap-1"
+              >
+                Manage in {provider?.label ?? "Provider"}{" "}
+                <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" asChild>
+              <Link href="/integrations">Configure Email</Link>
+            </Button>
+          )}
         </CardFooter>
       </Card>
 
@@ -197,16 +242,22 @@ export default function SubscribersPage() {
             </div>
           </CardContent>
           <CardFooter className="justify-end">
-            <Button variant="outline" asChild>
-              <Link
-                href="https://resend.com"
-                target="_blank"
-                className="flex items-center gap-1"
-              >
-                View All in Resend{" "}
-                <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
+            {providerDashboardUrl ? (
+              <Button variant="outline" asChild>
+                <Link
+                  href={providerDashboardUrl}
+                  target="_blank"
+                  className="flex items-center gap-1"
+                >
+                  View All in {provider?.label ?? "Provider"}{" "}
+                  <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            ) : (
+              <Button variant="outline" asChild>
+                <Link href="/integrations">Configure Email</Link>
+              </Button>
+            )}
           </CardFooter>
         </Card>
       )}
@@ -218,19 +269,25 @@ export default function SubscribersPage() {
             <UsersIcon className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No subscribers yet</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Your audience is empty. Add subscribers through Resend or your
-              signup forms.
+              Your audience is empty. Add subscribers through
+              {provider?.label ? ` ${provider.label}` : " your signup forms"}.
             </p>
-            <Button variant="outline" asChild>
-              <Link
-                href="https://resend.com"
-                target="_blank"
-                className="flex items-center gap-1"
-              >
-                <PlusIcon className="h-4 w-4" />
-                Add Subscribers in Resend
-              </Link>
-            </Button>
+            {providerDashboardUrl ? (
+              <Button variant="outline" asChild>
+                <Link
+                  href={providerDashboardUrl}
+                  target="_blank"
+                  className="flex items-center gap-1"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  Add Subscribers in {provider?.label}
+                </Link>
+              </Button>
+            ) : (
+              <Button variant="outline" asChild>
+                <Link href="/integrations">Configure Email</Link>
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}

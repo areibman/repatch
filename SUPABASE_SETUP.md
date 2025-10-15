@@ -44,6 +44,22 @@ Stores email addresses for newsletter distribution.
 - `idx_email_subscribers_email` - On `email` for fast lookups
 - `idx_email_subscribers_active` - On `active` for filtering active subscribers
 
+#### `email_integrations`
+Stores provider credentials and determines which service sends newsletters.
+
+| Column      | Type                       | Description                                       |
+|-------------|----------------------------|---------------------------------------------------|
+| id          | UUID (PK)                  | Unique identifier                                 |
+| provider    | TEXT (UNIQUE)              | Email provider key (e.g., `resend`, `customerio`) |
+| config      | JSONB                      | Provider-specific configuration payload           |
+| is_active   | BOOLEAN                    | Marks the provider as the current sender          |
+| created_at  | TIMESTAMP WITH TIME ZONE   | Record creation timestamp                         |
+| updated_at  | TIMESTAMP WITH TIME ZONE   | Record last update timestamp                      |
+
+**Notes:**
+- The `email_integrations_active_unique` partial index enforces that only one provider is active at a time.
+- Server routes fall back to the `RESEND_*` environment variables when no active integration exists, preserving older setups.
+
 ### Row Level Security (RLS)
 Both tables have RLS enabled with permissive policies (all CRUD operations allowed for now). Adjust these policies based on your authentication requirements.
 
