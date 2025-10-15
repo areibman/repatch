@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,13 +21,20 @@ import {
 } from "@heroicons/react/16/solid";
 
 type IntegrationItem = {
-  id: "github" | "resend";
+  id: "github" | "resend" | "customerio";
   name: string;
   description: string;
   href: string;
   configureHref: string;
   badge?: { label: string; variant?: "default" | "secondary" | "outline" };
   icon: React.ReactNode;
+};
+
+type ProviderStatus = {
+  provider: "resend" | "customerio";
+  isActive: boolean;
+  fromEmail?: string;
+  isFallback?: boolean;
 };
 
 const INTEGRATIONS: IntegrationItem[] = [
@@ -51,10 +58,51 @@ const INTEGRATIONS: IntegrationItem[] = [
     badge: { label: "Email", variant: "outline" },
     icon: <EnvelopeIcon className="h-5 w-5" />,
   },
+  {
+    id: "customerio",
+    name: "Customer.io",
+    description:
+      "Send transactional newsletters with Customer.io using journeys or transactional messages.",
+    href: "/integrations/customerio",
+    configureHref: "/integrations/customerio/configure",
+    badge: { label: "Email", variant: "outline" },
+    icon: <EnvelopeIcon className="h-5 w-5" />,
+  },
 ];
 
 export default function IntegrationsPage() {
   const [query, setQuery] = useState("");
+  const [statuses, setStatuses] = useState<Record<string, ProviderStatus>>({});
+
+  useEffect(() => {
+    const loadStatuses = async () => {
+      try {
+        const response = await fetch("/api/email/providers");
+        if (!response.ok) {
+          throw new Error("Failed to load providers");
+        }
+        const data = await response.json();
+        const mapped: Record<string, ProviderStatus> = {};
+        if (Array.isArray(data?.integrations)) {
+          for (const integration of data.integrations) {
+            if (integration?.provider) {
+              mapped[integration.provider] = {
+                provider: integration.provider,
+                isActive: Boolean(integration.isActive),
+                fromEmail: integration.fromEmail,
+                isFallback: integration.isFallback,
+              };
+            }
+          }
+        }
+        setStatuses(mapped);
+      } catch (error) {
+        console.error("Failed to load email provider status", error);
+      }
+    };
+
+    loadStatuses();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -102,6 +150,27 @@ export default function IntegrationsPage() {
               <CardDescription className="mt-2">
                 {item.description}
               </CardDescription>
+              {item.id !== "github" && statuses[item.id] && (
+                <div className="mt-3 text-sm text-muted-foreground">
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                      statuses[item.id].isActive
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {statuses[item.id].isActive
+                      ? "Active email provider"
+                      : "Not active"}
+                    {statuses[item.id].isFallback && " • env"}
+                  </span>
+                  {statuses[item.id].fromEmail && (
+                    <div className="mt-2 font-mono text-xs text-muted-foreground/80">
+                      {statuses[item.id].fromEmail}
+                    </div>
+                  )}
+                </div>
+              )}
             </CardHeader>
             <CardContent />
             <CardFooter className="flex items-center justify-between">

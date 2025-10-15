@@ -43,6 +43,9 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [deliveryProvider, setDeliveryProvider] = useState<
+    { label: string; name: "resend" | "customerio"; isFallback?: boolean } | null
+  >(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -88,7 +91,7 @@ export default function BlogViewPage() {
     };
 
     fetchPatchNote();
-    
+
     // Poll for video status every 5 seconds if no video exists yet
     const pollInterval = setInterval(async () => {
       if (!patchNote?.videoUrl) {
@@ -106,6 +109,30 @@ export default function BlogViewPage() {
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    const loadProvider = async () => {
+      try {
+        const response = await fetch("/api/email/providers");
+        if (!response.ok) {
+          throw new Error("Failed to load provider");
+        }
+        const data = await response.json();
+        if (data?.active?.provider) {
+          setDeliveryProvider({
+            name: data.active.provider,
+            label:
+              data.active.provider === "customerio" ? "Customer.io" : "Resend",
+            isFallback: data.active.isFallback,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to load email provider", error);
+      }
+    };
+
+    loadProvider();
+  }, []);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -185,7 +212,10 @@ export default function BlogViewPage() {
       }
 
       const data = await response.json();
-      alert(`✅ Patch note successfully sent to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''}!`);
+      const providerLabel = deliveryProvider
+        ? `${deliveryProvider.label}${deliveryProvider.isFallback ? ' (env)' : ''}`
+        : 'configured provider';
+      alert(`✅ Patch note successfully sent via ${providerLabel} to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''}!`);
     } catch (error) {
       console.error('Error sending email:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
@@ -348,10 +378,10 @@ export default function BlogViewPage() {
                     Edit
                   </Button>
                   {!patchNote.videoUrl && (
-                    <Button 
+                    <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleGenerateVideo} 
+                      onClick={handleGenerateVideo}
                       disabled={isGeneratingVideo || !patchNote.videoData}
                     >
                       {isGeneratingVideo ? (
@@ -374,6 +404,12 @@ export default function BlogViewPage() {
                     <PaperAirplaneIcon className="h-4 w-4 mr-2" />
                     {isSending ? "Sending..." : "Send Email"}
                   </Button>
+                  {deliveryProvider && (
+                    <span className="text-xs text-muted-foreground">
+                      Sent via {deliveryProvider.label}
+                      {deliveryProvider.isFallback ? " (env)" : ""}
+                    </span>
+                  )}
                 </>
               )}
             </div>
