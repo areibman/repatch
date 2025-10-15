@@ -18,10 +18,11 @@ import {
   EnvelopeIcon,
   MagnifyingGlassIcon,
   ArrowTopRightOnSquareIcon,
+  KeyIcon,
 } from "@heroicons/react/16/solid";
 
 type IntegrationItem = {
-  id: "github" | "resend";
+  id: "github" | "resend" | "api";
   name: string;
   description: string;
   href: string;
@@ -50,6 +51,16 @@ const INTEGRATIONS: IntegrationItem[] = [
     configureHref: "/integrations/resend/configure",
     badge: { label: "Email", variant: "outline" },
     icon: <EnvelopeIcon className="h-5 w-5" />,
+  },
+  {
+    id: "api",
+    name: "External API",
+    description:
+      "Provision API keys and inspect usage for the external read endpoints.",
+    href: "/integrations/api-keys",
+    configureHref: "/integrations/api-keys",
+    badge: { label: "External", variant: "outline" },
+    icon: <KeyIcon className="h-5 w-5" />,
   },
 ];
 
