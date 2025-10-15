@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -28,6 +28,8 @@ import {
   parseGitHubUrl,
   generateBoilerplateContent,
 } from "@/lib/github";
+import { AiTemplate } from "@/types/ai-template";
+import { buildPatchNoteContent, describeTemplateForPreview, fromApiTemplate } from "@/lib/ai-template";
 
 export function CreatePostDialog() {
   const router = useRouter();
@@ -39,6 +41,41 @@ export function CreatePostDialog() {
   const [branches, setBranches] = useState<{ name: string; protected: boolean }[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [timePeriod, setTimePeriod] = useState<'1day' | '1week' | '1month'>('1week');
+  const [templates, setTemplates] = useState<AiTemplate[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) ?? null,
+    [templates, selectedTemplateId]
+  );
+
+  useEffect(() => {
+    if (!open || templates.length > 0 || isLoadingTemplates) {
+      return;
+    }
+
+    const loadTemplates = async () => {
+      setIsLoadingTemplates(true);
+      try {
+        const response = await fetch('/api/ai-templates');
+        if (!response.ok) {
+          throw new Error('Failed to load templates');
+        }
+
+        const data = await response.json();
+        const parsed: AiTemplate[] = (data || []).map((item: any) => fromApiTemplate(item));
+
+        setTemplates(parsed);
+      } catch (error) {
+        console.error('Error loading templates:', error);
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    };
+
+    void loadTemplates();
+  }, [open, templates.length, isLoadingTemplates]);
 
   const handleRepoUrlChange = async (url: string) => {
     setRepoUrl(url);
@@ -121,12 +158,13 @@ export function CreatePostDialog() {
           repo: repoInfo.repo,
           timePeriod,
           branch: selectedBranch,
+          templateId: selectedTemplate ? selectedTemplate.id : null,
         }),
       });
 
       let aiSummaries = [];
       let aiOverallSummary = null;
-      
+
       if (summariesResponse.ok) {
         const summaryData = await summariesResponse.json();
         aiSummaries = summaryData.summaries || [];
@@ -138,8 +176,12 @@ export function CreatePostDialog() {
 
       // Use AI summary as content, or fallback to boilerplate
       setLoadingStep('✍️ Generating patch note content...');
-      const content = aiOverallSummary 
-        ? `${aiOverallSummary}\n\n## Key Changes\n\n${aiSummaries.map((s: any) => `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`).join('\n\n')}`
+      const content = aiOverallSummary
+        ? buildPatchNoteContent(
+            aiOverallSummary,
+            aiSummaries,
+            selectedTemplate
+          )
         : generateBoilerplateContent(
             `${repoInfo.owner}/${repoInfo.repo}`,
             timePeriod,
@@ -174,6 +216,7 @@ export function CreatePostDialog() {
           repo_name: `${repoInfo.owner}/${repoInfo.repo}`,
           repo_url: repoUrl,
           time_period: timePeriod,
+          repo_branch: selectedBranch,
           title: `${periodLabel} Update - ${repoInfo.repo}`,
           content: content,
           changes: {
@@ -185,6 +228,7 @@ export function CreatePostDialog() {
           video_data: videoData,
           ai_summaries: aiSummaries,
           ai_overall_summary: aiOverallSummary,
+          ai_template_id: selectedTemplate ? selectedTemplate.id : null,
           generated_at: new Date().toISOString(),
         }),
       });
@@ -202,6 +246,7 @@ export function CreatePostDialog() {
       setBranches([]);
       setSelectedBranch('');
       setLoadingStep('');
+      setSelectedTemplateId('');
       router.push(`/blog/${data.id}`);
       router.refresh();
     } catch (error) {
@@ -298,6 +343,43 @@ export function CreatePostDialog() {
               <p className="text-xs text-muted-foreground">
                 Choose the time range for analyzing changes
               </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="template">Summary Template</Label>
+              <Select
+                value={selectedTemplateId}
+                onValueChange={setSelectedTemplateId}
+                disabled={isLoading || isLoadingTemplates || templates.length === 0}
+              >
+                <SelectTrigger id="template">
+                  <SelectValue placeholder={
+                    isLoadingTemplates
+                      ? 'Loading templates...'
+                      : templates.length === 0
+                      ? 'Standard concise summary'
+                      : 'Select a template'
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Default (concise technical)</SelectItem>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name} · {template.audience}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {templates.length === 0
+                  ? 'Create templates in Settings to target technical or non-technical readers.'
+                  : 'Pick the tone that best matches your audience.'}
+              </p>
+              <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground whitespace-pre-line">
+                {selectedTemplate
+                  ? describeTemplateForPreview(selectedTemplate)
+                  : 'Default summaries stay short, direct, and technical.'}
+              </div>
             </div>
           </div>
 

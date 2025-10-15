@@ -15,7 +15,9 @@ export async function GET(
 
     const { data, error } = await supabase
       .from("patch_notes")
-      .select("*")
+      .select(
+        "*, ai_template:ai_template_id (id, name, description, audience, commit_prompt, overall_prompt, examples, created_at, updated_at)"
+      )
       .eq("id", id)
       .single();
 
@@ -47,19 +49,27 @@ export async function PUT(
     if (body.content !== undefined) updateData.content = body.content;
     if (body.repo_name !== undefined) updateData.repo_name = body.repo_name;
     if (body.repo_url !== undefined) updateData.repo_url = body.repo_url;
+    if (body.repo_branch !== undefined) updateData.repo_branch = body.repo_branch;
     if (body.time_period !== undefined)
       updateData.time_period = body.time_period;
     if (body.changes !== undefined) updateData.changes = body.changes;
     if (body.contributors !== undefined)
       updateData.contributors = body.contributors;
     if (body.video_data !== undefined) updateData.video_data = body.video_data;
+    if (body.ai_summaries !== undefined) updateData.ai_summaries = body.ai_summaries;
+    if (body.ai_overall_summary !== undefined)
+      updateData.ai_overall_summary = body.ai_overall_summary;
+    if (body.ai_template_id !== undefined)
+      updateData.ai_template_id = body.ai_template_id;
 
     const { data, error } = await supabase
       .from("patch_notes")
       // @ts-expect-error - Supabase type inference issue with partial updates
       .update(updateData)
       .eq("id", id)
-      .select()
+      .select(
+        "*, ai_template:ai_template_id (id, name, description, audience, commit_prompt, overall_prompt, examples, created_at, updated_at)"
+      )
       .single();
 
     if (error) {

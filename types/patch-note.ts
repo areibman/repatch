@@ -11,6 +11,7 @@ export interface PatchNote {
   id: string;
   repoName: string;
   repoUrl: string;
+  repoBranch: string;
   timePeriod: "1day" | "1week" | "1month";
   generatedAt: Date;
   title: string;
@@ -23,4 +24,8 @@ export interface PatchNote {
   contributors: string[];
   videoData?: VideoData;
   videoUrl?: string | null;
+  aiSummaries?: import("@/lib/ai-summarizer").CommitSummary[];
+  aiOverallSummary?: string | null;
+  aiTemplateId?: string | null;
+  aiTemplate?: import("@/types/ai-template").AiTemplate | null;
 }

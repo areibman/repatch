@@ -26,6 +26,19 @@ import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { AiTemplate } from "@/types/ai-template";
+import {
+  buildPatchNoteContent,
+  describeTemplateForPreview,
+  fromApiTemplate,
+} from "@/lib/ai-template";
 
 import dynamic from "next/dynamic";
 
@@ -43,6 +56,11 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [templates, setTemplates] = useState<AiTemplate[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [hasFetchedTemplates, setHasFetchedTemplates] = useState(false);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -70,6 +88,7 @@ export default function BlogViewPage() {
           id: data.id,
           repoName: data.repo_name,
           repoUrl: data.repo_url,
+          repoBranch: data.repo_branch,
           timePeriod: data.time_period,
           generatedAt: new Date(data.generated_at),
           title: data.title,
@@ -77,11 +96,21 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          videoData: data.video_data,
+          aiSummaries: Array.isArray(data.ai_summaries)
+            ? (data.ai_summaries as PatchNote["aiSummaries"])
+            : [],
+          aiOverallSummary: data.ai_overall_summary,
+          aiTemplateId: data.ai_template_id,
+          aiTemplate: data.ai_template
+            ? fromApiTemplate(data.ai_template)
+            : null,
         };
 
         setPatchNote(transformedNote);
         setEditedContent(transformedNote.content);
         setEditedTitle(transformedNote.title);
+        setSelectedTemplateId(transformedNote.aiTemplateId || "");
       } catch (error) {
         console.error("Error fetching patch note:", error);
       }
@@ -106,6 +135,72 @@ export default function BlogViewPage() {
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    if (hasFetchedTemplates || isLoadingTemplates) {
+      return;
+    }
+
+    const loadTemplates = async () => {
+      setIsLoadingTemplates(true);
+      try {
+        const response = await fetch('/api/ai-templates');
+        if (!response.ok) {
+          throw new Error('Failed to load templates');
+        }
+
+        const data = await response.json();
+        const parsed: AiTemplate[] = (data || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          audience: item.audience,
+          commitPrompt: item.commitPrompt,
+          overallPrompt: item.overallPrompt,
+          examples: item.examples,
+          createdAt: new Date(item.createdAt),
+          updatedAt: new Date(item.updatedAt),
+        }));
+
+        setTemplates(parsed);
+      } catch (error) {
+        console.error('Error loading templates:', error);
+      } finally {
+        setIsLoadingTemplates(false);
+        setHasFetchedTemplates(true);
+      }
+    };
+
+    void loadTemplates();
+  }, [hasFetchedTemplates, isLoadingTemplates]);
+
+  useEffect(() => {
+    if (patchNote?.aiTemplateId) {
+      setSelectedTemplateId(patchNote.aiTemplateId);
+    }
+  }, [patchNote?.aiTemplateId]);
+
+  useEffect(() => {
+    if (!patchNote?.aiTemplate) {
+      return;
+    }
+
+    setTemplates((current) => {
+      if (current.some((template) => template.id === patchNote.aiTemplate?.id)) {
+        return current;
+      }
+
+      return [...current, patchNote.aiTemplate!];
+    });
+  }, [patchNote?.aiTemplate]);
+
+  const selectedTemplate = useMemo(() => {
+    if (!selectedTemplateId) {
+      return null;
+    }
+
+    return templates.find((template) => template.id === selectedTemplateId) ?? patchNote?.aiTemplate ?? null;
+  }, [selectedTemplateId, templates, patchNote?.aiTemplate]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -133,9 +228,13 @@ export default function BlogViewPage() {
           content: editedContent,
           repo_name: patchNote?.repoName,
           repo_url: patchNote?.repoUrl,
+          repo_branch: patchNote?.repoBranch,
           time_period: patchNote?.timePeriod,
           changes: patchNote?.changes,
           contributors: patchNote?.contributors,
+          ai_summaries: patchNote?.aiSummaries,
+          ai_overall_summary: patchNote?.aiOverallSummary,
+          ai_template_id: patchNote?.aiTemplateId ?? null,
         }),
       });
 
@@ -159,6 +258,98 @@ export default function BlogViewPage() {
       alert("Failed to save changes. Please try again.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleRegenerateSummaries = async () => {
+    if (!patchNote) {
+      return;
+    }
+
+    const [owner, repo] = patchNote.repoName.split('/');
+    if (!owner || !repo) {
+      alert('Unable to determine repository owner and name.');
+      return;
+    }
+
+    setIsRegenerating(true);
+
+    try {
+      const response = await fetch('/api/github/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          owner,
+          repo,
+          timePeriod: patchNote.timePeriod,
+          branch: patchNote.repoBranch,
+          templateId: selectedTemplate ? selectedTemplate.id : null,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to regenerate summaries');
+      }
+
+      const summaryData = await response.json();
+      const aiSummaries = (summaryData.summaries || []) as PatchNote["aiSummaries"];
+      const aiOverallSummary = (summaryData.overallSummary || null) as string | null;
+
+      if (!aiOverallSummary) {
+        throw new Error('Summaries did not return an overall overview');
+      }
+
+      const content = buildPatchNoteContent(
+        aiOverallSummary,
+        aiSummaries,
+        selectedTemplate
+      );
+
+      const updateResponse = await fetch(`/api/patch-notes/${patchNote.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content,
+          ai_summaries: aiSummaries,
+          ai_overall_summary: aiOverallSummary,
+          ai_template_id: selectedTemplate ? selectedTemplate.id : null,
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        const error = await updateResponse.json();
+        throw new Error(error.error || 'Failed to save regenerated summaries');
+      }
+
+      const updatedData = await updateResponse.json();
+
+      const updatedTemplate: AiTemplate | null = updatedData.ai_template
+        ? fromApiTemplate(updatedData.ai_template)
+        : null;
+
+      setPatchNote({
+        ...patchNote,
+        content,
+        aiSummaries,
+        aiOverallSummary,
+        aiTemplateId: updatedData.ai_template_id,
+        aiTemplate: updatedTemplate,
+      });
+      setEditedContent(content);
+      setSelectedTemplateId(updatedData.ai_template_id || '');
+
+      alert('✅ Summaries regenerated successfully!');
+    } catch (error) {
+      console.error('Error regenerating summaries:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to regenerate summaries';
+      alert(`❌ Error: ${errorMessage}`);
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -448,6 +639,68 @@ export default function BlogViewPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-medium uppercase text-muted-foreground">
+                  Summary template
+                </p>
+                <div className="mt-2 max-w-xs">
+                  <Select
+                    value={selectedTemplateId}
+                    onValueChange={setSelectedTemplateId}
+                    disabled={
+                      isLoadingTemplates ||
+                      isRegenerating ||
+                      (templates.length === 0 && !patchNote?.aiTemplate)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          templates.length === 0
+                            ? 'Default (concise technical)'
+                            : 'Select a template'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Default (concise technical)</SelectItem>
+                      {templates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name} · {template.audience}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="mt-2 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground whitespace-pre-line">
+                    {selectedTemplate
+                      ? describeTemplateForPreview(selectedTemplate)
+                      : 'Default summaries focus on concise, technical context.'}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={handleRegenerateSummaries}
+                  disabled={
+                    isRegenerating ||
+                    isLoadingTemplates ||
+                    !patchNote ||
+                    isEditing
+                  }
+                >
+                  {isRegenerating ? (
+                    <>
+                      <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    'Regenerate summary'
+                  )}
+                </Button>
+              </div>
+            </div>
             {isEditing ? (
               <Textarea
                 value={editedContent}
