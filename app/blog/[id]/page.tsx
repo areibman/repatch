@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,6 +21,7 @@ import {
   CheckIcon,
   PaperAirplaneIcon,
   XMarkIcon,
+  MegaphoneIcon,
 } from "@heroicons/react/16/solid";
 import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
@@ -33,6 +34,23 @@ const BaseComp = dynamic(() => import("@/remotion/BaseComp"), {
   ssr: false,
 });
 
+type TypefullyJob = {
+  id: string;
+  status: string;
+  thread_id: string | null;
+  queue_url: string | null;
+  video_url: string | null;
+  video_upload_id: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type TypefullyFeedback = {
+  type: "success" | "error";
+  message: string;
+};
+
 export default function BlogViewPage() {
   const params = useParams();
   const router = useRouter();
@@ -43,6 +61,24 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [isQueueingThread, setIsQueueingThread] = useState(false);
+  const [typefullyJob, setTypefullyJob] = useState<TypefullyJob | null>(null);
+  const [typefullyFeedback, setTypefullyFeedback] =
+    useState<TypefullyFeedback | null>(null);
+
+  const fetchTypefullyJob = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/patch-notes/${params.id}/typefully`);
+      if (!response.ok) {
+        setTypefullyJob(null);
+        return;
+      }
+      const data = await response.json();
+      setTypefullyJob(data ?? null);
+    } catch (error) {
+      console.error("Failed to load Typefully job:", error);
+    }
+  }, [params.id]);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -77,6 +113,7 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          videoData: data.video_data || undefined,
         };
 
         setPatchNote(transformedNote);
@@ -106,6 +143,10 @@ export default function BlogViewPage() {
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    fetchTypefullyJob();
+  }, [fetchTypefullyJob]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -197,7 +238,7 @@ export default function BlogViewPage() {
 
   const handleGenerateVideo = async () => {
     if (!patchNote) return;
-    
+
     setIsGeneratingVideo(true);
     try {
       const response = await fetch('/api/videos/render', {
@@ -235,6 +276,43 @@ export default function BlogViewPage() {
       setIsGeneratingVideo(false);
     }
   };
+
+  const handleQueueThread = useCallback(async () => {
+    if (isQueueingThread) {
+      return;
+    }
+
+    setIsQueueingThread(true);
+    setTypefullyFeedback(null);
+
+    try {
+      const response = await fetch(`/api/patch-notes/${params.id}/typefully`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to queue thread");
+      }
+
+      await fetchTypefullyJob();
+      setTypefullyFeedback({
+        type: "success",
+        message: "Thread queued in Typefully.",
+      });
+    } catch (error) {
+      console.error("Error queueing Typefully thread:", error);
+      const message =
+        error instanceof Error ? error.message : "Failed to queue thread";
+      setTypefullyFeedback({ type: "error", message });
+    } finally {
+      setIsQueueingThread(false);
+    }
+  }, [fetchTypefullyJob, isQueueingThread, params.id]);
 
   const getTimePeriodLabel = (period: string) => {
     switch (period) {
@@ -348,10 +426,10 @@ export default function BlogViewPage() {
                     Edit
                   </Button>
                   {!patchNote.videoUrl && (
-                    <Button 
+                    <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleGenerateVideo} 
+                      onClick={handleGenerateVideo}
                       disabled={isGeneratingVideo || !patchNote.videoData}
                     >
                       {isGeneratingVideo ? (
@@ -367,6 +445,24 @@ export default function BlogViewPage() {
                     </Button>
                   )}
                   <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleQueueThread}
+                    disabled={isQueueingThread}
+                  >
+                    {isQueueingThread ? (
+                      <>
+                        <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                        Queuing...
+                      </>
+                    ) : (
+                      <>
+                        <MegaphoneIcon className="h-4 w-4 mr-2" />
+                        Queue Twitter thread
+                      </>
+                    )}
+                  </Button>
+                  <Button
                     size="sm"
                     onClick={handleSendEmail}
                     disabled={isSending}
@@ -377,6 +473,53 @@ export default function BlogViewPage() {
                 </>
               )}
             </div>
+            {(typefullyFeedback || typefullyJob) && (
+              <div className="w-full mt-2 space-y-1">
+                {typefullyFeedback && (
+                  <p
+                    className={
+                      typefullyFeedback.type === "success"
+                        ? "text-xs text-emerald-600"
+                        : "text-xs text-destructive"
+                    }
+                  >
+                    {typefullyFeedback.message}
+                  </p>
+                )}
+                {typefullyJob && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>Typefully:</span>
+                    <Badge
+                      variant={
+                        typefullyJob.status === "failed"
+                          ? "destructive"
+                          : "secondary"
+                      }
+                    >
+                      {typefullyJob.status}
+                    </Badge>
+                    <span>
+                      Updated {new Date(typefullyJob.updated_at).toLocaleString()}
+                    </span>
+                    {typefullyJob.queue_url && (
+                      <a
+                        href={typefullyJob.queue_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline"
+                      >
+                        View in Typefully
+                      </a>
+                    )}
+                    {typefullyJob.error && (
+                      <span className="text-destructive">
+                        {typefullyJob.error}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

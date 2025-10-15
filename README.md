@@ -45,6 +45,9 @@ GOOGLE_API_KEY=your_google_api_key
 
 # Optional: App URL for video rendering callbacks
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Typefully (optional override for API base)
+TYPEFULLY_API_BASE_URL=https://api.typefully.com/v1
 ```
 
 **⚠️ Important**: Without a GitHub token, you'll hit rate limits (60 requests/hour). With a token, you get 5,000 requests/hour.
@@ -66,6 +69,17 @@ To set up Resend for email sending:
    - Create a new audience (e.g., "Repatch Subscribers")
    - Copy the audience ID
 4. Add both the API key and audience ID to your `.env.local` file
+
+### Typefully Setup
+
+To schedule an X (Twitter) thread for each patch note:
+
+1. Request API access inside your Typefully workspace: https://support.typefully.com/en/articles/8718287-typefully-api
+2. Generate a workspace API key and note the **profile ID** (the X account that will publish threads).
+3. Visit **Integrations → Typefully → Connect** inside Repatch and paste the credentials. They are stored securely in Supabase.
+4. Optional: set `TYPEFULLY_API_BASE_URL` if you are targeting a mock server; the default `https://api.typefully.com/v1` works for production.
+
+When you press **Queue Twitter thread** on a patch note, Repatch re-renders the Remotion composition before uploading the MP4 to Typefully. Ensure the host environment can run Remotion (Node 18+, headless Chromium, and FFmpeg available on `$PATH`). Typefully currently limits uploads to 200 MB and threads to 30 posts, and only exposes queued status via the API—publishing confirmation must still happen inside their dashboard.
 
 ### 3. Set Up Supabase
 
@@ -133,6 +147,13 @@ Send beautiful HTML emails to subscribers with:
 - Repository statistics
 - Contributor list
 - Custom video links (when available)
+
+### 📣 Social Threads via Typefully
+
+Mirror each release on X without leaving Repatch:
+- Queue multi-post threads with optional Remotion video attachments
+- Track the latest Typefully job status directly from the patch note detail page
+- Respect Typefully's API limits (30 posts per thread, 200 MB media uploads) as documented in their API guide
 
 ## Documentation
 
