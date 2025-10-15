@@ -20,9 +20,34 @@ export type GitHubConfig = {
   updated_at: string;
 };
 
+const isMock = process.env.REPATCH_TEST_MODE === "mock";
+
 export async function saveGitHubConfig(
   input: SaveGitHubConfigInput
 ): Promise<SaveGitHubConfigResult> {
+  if (isMock) {
+    const { upsertGithubConfig } = await import("@/lib/testing/mockStore");
+    const url = input.repoUrl.trim();
+    const match = url.match(/github\.com\/(.+?)\/(.+?)(?:\.git)?$/i);
+    const repo_owner = match?.[1] ?? null;
+    const repo_name = match?.[2] ?? null;
+
+    if (!url) {
+      return { ok: false, error: "Repository URL is required" };
+    }
+    if (!input.accessToken) {
+      return { ok: false, error: "Access token is required" };
+    }
+
+    const result = upsertGithubConfig({
+      repo_url: url,
+      repo_owner,
+      repo_name,
+      access_token: input.accessToken,
+    });
+    return { ok: true, id: result.id };
+  }
+
   const supabase = await createClient();
 
   const url = input.repoUrl.trim();
@@ -62,6 +87,21 @@ export async function saveGitHubConfig(
 export async function getGitHubConfigByRepoUrl(
   repoUrl: string
 ): Promise<GitHubConfig | null> {
+  if (isMock) {
+    const { getGithubConfigByRepoUrl } = await import("@/lib/testing/mockStore");
+    const config = getGithubConfigByRepoUrl(repoUrl);
+    if (!config) {
+      return null;
+    }
+    return {
+      id: config.id,
+      repo_url: config.repo_url,
+      repo_owner: config.repo_owner,
+      repo_name: config.repo_name,
+      created_at: config.created_at,
+      updated_at: config.updated_at,
+    };
+  }
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("github_configs")

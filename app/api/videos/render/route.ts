@@ -6,6 +6,8 @@ import path from 'path';
 import fs from 'fs/promises';
 import { createClient } from '@/lib/supabase/server';
 
+const isMock = process.env.REPATCH_TEST_MODE === 'mock';
+
 export async function POST(request: NextRequest) {
   try {
     const { patchNoteId, videoData, repoName } = await request.json();
@@ -24,6 +26,18 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('✅ Starting video render for patch note:', patchNoteId);
+
+    if (isMock) {
+      const { recordVideoUrl } = await import('@/lib/testing/mockStore');
+      const fakeUrl = `/videos/mock-${patchNoteId}.mp4`;
+      recordVideoUrl(patchNoteId, fakeUrl);
+      return NextResponse.json({
+        success: true,
+        videoUrl: fakeUrl,
+        mode: 'mock',
+        message: 'Video render skipped in mock mode',
+      });
+    }
     
     // Fetch the patch note from database to get AI summaries
     const supabase = await createClient();
