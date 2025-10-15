@@ -126,6 +126,50 @@ export interface Database {
           updated_at?: string;
         };
       };
+      api_keys: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          prefix: string;
+          token_hash: string;
+          rate_limit_per_minute: number;
+          last_used_at: string | null;
+          revoked_at: string | null;
+          rotated_from: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          description?: string | null;
+          prefix: string;
+          token_hash: string;
+          rate_limit_per_minute?: number;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+          rotated_from?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          description?: string | null;
+          prefix?: string;
+          token_hash?: string;
+          rate_limit_per_minute?: number;
+          last_used_at?: string | null;
+          revoked_at?: string | null;
+          rotated_from?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;
