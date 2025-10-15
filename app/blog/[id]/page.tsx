@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { PatchNote } from "@/types/patch-note";
+import { formatFilterDetailLabel, formatFilterSummary } from "@/lib/filter-utils";
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -66,7 +67,7 @@ export default function BlogViewPage() {
         const data = await response.json();
 
         // Transform database format to UI format
-        const transformedNote = {
+        const transformedNote: PatchNote = {
           id: data.id,
           repoName: data.repo_name,
           repoUrl: data.repo_url,
@@ -77,6 +78,7 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          filterMetadata: data.filter_metadata ?? null,
         };
 
         setPatchNote(transformedNote);
@@ -236,18 +238,8 @@ export default function BlogViewPage() {
     }
   };
 
-  const getTimePeriodLabel = (period: string) => {
-    switch (period) {
-      case "1day":
-        return "Daily";
-      case "1week":
-        return "Weekly";
-      case "1month":
-        return "Monthly";
-      default:
-        return period;
-    }
-  };
+  const getFilterLabel = (note: PatchNote) =>
+    formatFilterSummary(note.filterMetadata, note.timePeriod);
 
   if (!patchNote) {
     return (
@@ -301,12 +293,17 @@ export default function BlogViewPage() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant="secondary">
-                  {getTimePeriodLabel(patchNote.timePeriod)}
+                  {getFilterLabel(patchNote)}
                 </Badge>
                 <Badge variant="outline">
                   {new Date(patchNote.generatedAt).toLocaleDateString()}
                 </Badge>
               </div>
+              {patchNote.filterMetadata && (
+                <p className="text-xs text-muted-foreground mb-4">
+                  {formatFilterDetailLabel(patchNote.filterMetadata)}
+                </p>
+              )}
 
               {isEditing ? (
                 <Textarea
