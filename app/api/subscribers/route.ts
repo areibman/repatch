@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { getResendClient } from "@/lib/integrations/resend";
 
 // GET /api/subscribers - Fetch all email subscribers from Resend audience
 export async function GET() {
   try {
+    const resend = getResendClient();
     // Use hardcoded audience ID from the docs
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
@@ -39,6 +38,7 @@ export async function GET() {
 // POST /api/subscribers - Add a new email subscriber to Resend audience
 export async function POST(request: NextRequest) {
   try {
+    const resend = getResendClient();
     // Use hardcoded audience ID from the docs
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
@@ -62,7 +62,21 @@ export async function POST(request: NextRequest) {
       audienceId: audienceId,
     });
 
-    if (!contact.data) {
+    const createError = (contact as any).error as Error | undefined;
+    if (createError) {
+      if (createError.message.toLowerCase().includes("already")) {
+        return NextResponse.json(
+          { error: "Email already subscribed" },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: createError.message || "Failed to add subscriber" },
+        { status: 500 }
+      );
+    }
+
+    if (!(contact as any).data) {
       return NextResponse.json(
         { error: "Failed to add contact to Resend audience" },
         { status: 500 }
@@ -71,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     // Transform the response to match expected format
     const subscriber = {
-      id: contact.data.id,
+      id: (contact as any).data.id,
       email: body.email, // Use the email from the request body
       active: true, // New contacts are active by default
       created_at: new Date().toISOString(),
@@ -101,6 +115,7 @@ export async function POST(request: NextRequest) {
 // DELETE /api/subscribers - Remove a subscriber from Resend audience
 export async function DELETE(request: NextRequest) {
   try {
+    const resend = getResendClient();
     // Use hardcoded audience ID from the docs
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
@@ -121,7 +136,7 @@ export async function DELETE(request: NextRequest) {
       audienceId: audienceId,
     });
 
-    if (!result.data) {
+    if (!(result as any).data) {
       return NextResponse.json(
         { error: "Failed to remove contact from Resend audience" },
         { status: 500 }
@@ -140,6 +155,7 @@ export async function DELETE(request: NextRequest) {
 // PUT /api/subscribers - Update a subscriber (e.g., unsubscribe)
 export async function PUT(request: NextRequest) {
   try {
+    const resend = getResendClient();
     // Use hardcoded audience ID from the docs
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
@@ -160,7 +176,7 @@ export async function PUT(request: NextRequest) {
       unsubscribed: unsubscribed ?? false,
     });
 
-    if (!result.data) {
+    if (!(result as any).data) {
       return NextResponse.json(
         { error: "Failed to update contact in Resend audience" },
         { status: 500 }
@@ -169,7 +185,7 @@ export async function PUT(request: NextRequest) {
 
     // Transform the response to match expected format
     const subscriber = {
-      id: result.data.id,
+      id: (result as any).data.id,
       email: email || id || "", // Use the email or id from the request
       active: !(unsubscribed ?? false),
       created_at: new Date().toISOString(),

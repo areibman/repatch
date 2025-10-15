@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
+import { getResendClient } from "@/lib/integrations/resend";
+import { useIntegrationMocks } from "@/lib/integration-mode";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Configure marked for GitHub-flavored markdown
 marked.setOptions({
@@ -27,6 +26,8 @@ export async function POST(
   try {
     const { id } = await params;
     const supabase = await createClient();
+    const resend = getResendClient();
+    const shouldMockIntegrations = useIntegrationMocks();
 
     // Fetch the patch note
     const { data: patchNote, error: patchNoteError } = await supabase
@@ -68,7 +69,9 @@ export async function POST(
     }
 
     // Add a small delay to avoid hitting rate limits (2 req/sec = 500ms between calls)
-    await new Promise(resolve => setTimeout(resolve, 600));
+    if (!shouldMockIntegrations) {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    }
 
     // Convert markdown content to HTML
     const htmlContent = markdownToHtml((patchNote as PatchNote).content);
@@ -394,7 +397,7 @@ export async function POST(
     `;
 
     // Send email using Resend to all active subscribers
-    const { data, error } = await resend.emails.send({
+    const emailResponse = await resend.emails.send({
       from: "Repatch <onboarding@resend.dev>",
       to: activeEmails, // Array of email addresses
       subject: `${(patchNote as PatchNote).title} - ${
@@ -403,10 +406,12 @@ export async function POST(
       html: emailHtml,
     });
 
-    if (error) {
-      console.error("Resend error:", error);
+    const sendError = (emailResponse as any)?.error;
+
+    if (sendError) {
+      console.error("Resend error:", sendError);
       return NextResponse.json(
-        { error: error.message || "Failed to send email" },
+        { error: sendError.message || "Failed to send email" },
         { status: 500 }
       );
     }
@@ -414,7 +419,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       sentTo: activeEmails.length,
-      emailId: data?.id,
+      emailId: (emailResponse as any)?.data?.id,
     });
   } catch (error) {
     console.error("API error:", error);
