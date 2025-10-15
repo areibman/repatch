@@ -14,6 +14,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PatchNote } from "@/types/patch-note";
 import {
   ArrowLeftIcon,
@@ -26,6 +34,8 @@ import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
+import { buildPatchNoteContent } from "@/lib/ai-template-utils";
+import type { AiTemplate } from "@/types/ai-template";
 
 import dynamic from "next/dynamic";
 
@@ -43,6 +53,12 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [templates, setTemplates] = useState<AiTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('default');
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateMessage, setRegenerateMessage] = useState<string | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -77,11 +93,16 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          videoData: data.video_data,
+          aiSummaries: Array.isArray(data.ai_summaries) ? data.ai_summaries : [],
+          aiOverallSummary: data.ai_overall_summary,
+          aiTemplateId: data.ai_template_id,
         };
 
         setPatchNote(transformedNote);
         setEditedContent(transformedNote.content);
         setEditedTitle(transformedNote.title);
+        setSelectedTemplateId(transformedNote.aiTemplateId ?? 'default');
       } catch (error) {
         console.error("Error fetching patch note:", error);
       }
@@ -106,6 +127,40 @@ export default function BlogViewPage() {
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        setIsLoadingTemplates(true);
+        setTemplateError(null);
+        const response = await fetch('/api/ai-templates');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to load templates');
+        }
+        const data = await response.json();
+        const mapped = data.map((template: any) => ({
+          id: template.id,
+          name: template.name,
+          description: template.description,
+          narrativeType: template.narrative_type,
+          commitPrompt: template.commit_prompt,
+          overallPrompt: template.overall_prompt,
+          examples: Array.isArray(template.examples) ? template.examples : [],
+          createdAt: template.created_at,
+          updatedAt: template.updated_at,
+        }));
+        setTemplates(mapped);
+      } catch (error) {
+        console.error('Failed to fetch templates', error);
+        setTemplateError(error instanceof Error ? error.message : 'Failed to load templates');
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    };
+
+    fetchTemplates();
+  }, []);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -136,6 +191,7 @@ export default function BlogViewPage() {
           time_period: patchNote?.timePeriod,
           changes: patchNote?.changes,
           contributors: patchNote?.contributors,
+          ai_template_id: selectedTemplateId === 'default' ? null : selectedTemplateId,
         }),
       });
 
@@ -197,7 +253,7 @@ export default function BlogViewPage() {
 
   const handleGenerateVideo = async () => {
     if (!patchNote) return;
-    
+
     setIsGeneratingVideo(true);
     try {
       const response = await fetch('/api/videos/render', {
@@ -233,6 +289,95 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsGeneratingVideo(false);
+    }
+  };
+
+  const handleRegenerateSummaries = async () => {
+    if (!patchNote) {
+      return;
+    }
+
+    const [owner, repo] = patchNote.repoName.split('/');
+    if (!owner || !repo) {
+      alert('Patch note is missing repository information.');
+      return;
+    }
+
+    setIsRegenerating(true);
+    setRegenerateMessage(null);
+
+    try {
+      const response = await fetch('/api/github/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          owner,
+          repo,
+          timePeriod: patchNote.timePeriod,
+          templateId: selectedTemplateId === 'default' ? undefined : selectedTemplateId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to regenerate summaries');
+      }
+
+      const summaryData = await response.json();
+      const aiSummaries = summaryData.summaries || [];
+      const aiOverallSummary = summaryData.overallSummary || null;
+
+      const updatedContent = buildPatchNoteContent({
+        repoName: patchNote.repoName,
+        timePeriod: patchNote.timePeriod,
+        summaries: aiSummaries,
+        overallSummary: aiOverallSummary,
+      });
+
+      const updateResponse = await fetch(`/api/patch-notes/${patchNote.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: updatedContent,
+          ai_summaries: aiSummaries,
+          ai_overall_summary: aiOverallSummary,
+          ai_template_id: selectedTemplateId === 'default' ? null : selectedTemplateId,
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json();
+        throw new Error(errorData.error || 'Failed to save regenerated summaries');
+      }
+
+      const updatedNote = await updateResponse.json();
+
+      const mergedNote: PatchNote = {
+        ...patchNote,
+        content: updatedNote.content,
+        title: updatedNote.title ?? patchNote.title,
+        aiSummaries: Array.isArray(updatedNote.ai_summaries)
+          ? updatedNote.ai_summaries
+          : aiSummaries,
+        aiOverallSummary: updatedNote.ai_overall_summary,
+        aiTemplateId: updatedNote.ai_template_id,
+      };
+
+      setPatchNote(mergedNote);
+      setEditedContent(mergedNote.content);
+      setEditedTitle(mergedNote.title);
+      setRegenerateMessage(
+        `Summary refreshed${selectedTemplateId !== 'default' ? ' using ' + (templates.find((t) => t.id === selectedTemplateId)?.name || 'selected template') : ''}.`
+      );
+    } catch (error) {
+      console.error('Failed to regenerate summaries', error);
+      alert(error instanceof Error ? error.message : 'Failed to regenerate summaries');
+    } finally {
+      setIsRegenerating(false);
     }
   };
 
@@ -439,6 +584,100 @@ export default function BlogViewPage() {
           </Card>
         </div>
 
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Summary template</CardTitle>
+            <CardDescription>
+              Choose a template to re-run the AI summary with different tone.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="detail-template">Template</Label>
+              <Select
+                value={selectedTemplateId}
+                onValueChange={setSelectedTemplateId}
+                disabled={isLoadingTemplates || isRegenerating}
+              >
+                <SelectTrigger id="detail-template" data-testid="detail-template-select">
+                  <SelectValue placeholder="Select template" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
+                  <SelectItem value="default">Default technical tone</SelectItem>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name} · {template.narrativeType}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {isLoadingTemplates
+                  ? 'Loading templates...'
+                  : templateError
+                  ? templateError
+                  : 'Templates let you tailor summaries for technical or executive audiences.'}
+              </p>
+            </div>
+
+            {selectedTemplateId !== 'default' && (
+              <div className="rounded-md border bg-muted/40 p-4 text-sm" data-testid="detail-template-preview">
+                {(() => {
+                  const template = templates.find((item) => item.id === selectedTemplateId);
+                  if (!template) return null;
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold">{template.name}</p>
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {template.narrativeType}
+                        </span>
+                      </div>
+                      {template.description && (
+                        <p className="text-muted-foreground text-sm">{template.description}</p>
+                      )}
+                      {template.examples.length > 0 && (
+                        <div className="space-y-2">
+                          {template.examples.map((example, index) => (
+                            <div key={`${template.id}-preview-${index}`} className="rounded border border-dashed p-2">
+                              <p className="text-xs font-semibold text-muted-foreground">
+                                Example {index + 1}: {example.title}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Input: {example.input}
+                              </p>
+                              <p className="mt-1 text-xs">Output: {example.output}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-xs text-muted-foreground">
+              {regenerateMessage || 'Regenerate the patch note to apply this template.'}
+            </span>
+            <Button
+              variant="outline"
+              onClick={handleRegenerateSummaries}
+              disabled={isRegenerating || isLoadingTemplates}
+            >
+              {isRegenerating ? (
+                <>
+                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                  Re-generating...
+                </>
+              ) : (
+                'Regenerate summary'
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
+
         {/* Main Content */}
         <Card className="mb-8">
           <CardHeader>
@@ -456,7 +695,10 @@ export default function BlogViewPage() {
                 placeholder="Enter patch notes content..."
               />
             ) : (
-              <div className="prose prose-neutral dark:prose-invert max-w-none">
+              <div
+                className="prose prose-neutral dark:prose-invert max-w-none"
+                data-testid="patch-note-content"
+              >
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {patchNote.content}
                 </ReactMarkdown>

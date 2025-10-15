@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchGitHubCommits, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
-import { summarizeCommits, generateOverallSummary } from '@/lib/ai-summarizer';
+import {
+  summarizeCommits,
+  generateOverallSummary,
+  resolveTemplateConfig,
+  type TemplateConfig,
+} from '@/lib/ai-summarizer';
+import { createClient } from '@/lib/supabase/server';
+import type { TemplateExample } from '@/types/ai-template';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { owner, repo, timePeriod, branch } = body;
+    const { owner, repo, timePeriod, branch, templateId } = body;
 
     if (!owner || !repo || !timePeriod) {
       return NextResponse.json(
@@ -74,8 +81,34 @@ export async function POST(request: NextRequest) {
       }))
     );
 
+    let templateConfig: TemplateConfig | undefined;
+
+    if (templateId) {
+      const supabase = await createClient();
+      const { data: templateData, error: templateError } = await supabase
+        .from('ai_templates')
+        .select('*')
+        .eq('id', templateId)
+        .single();
+
+      if (templateError) {
+        console.error('Error loading AI template:', templateError);
+      } else if (templateData) {
+        templateConfig = {
+          name: templateData.name,
+          commitPrompt: templateData.commit_prompt,
+          overallPrompt: templateData.overall_prompt,
+          examples: Array.isArray(templateData.examples)
+            ? (templateData.examples as TemplateExample[])
+            : [],
+        };
+      }
+    }
+
+    const resolvedTemplate = resolveTemplateConfig(templateConfig);
+
     // Generate AI summaries
-    const summaries = await summarizeCommits(commitsWithDiffs);
+    const summaries = await summarizeCommits(commitsWithDiffs, resolvedTemplate);
 
     // Calculate totals
     const totalAdditions = commitsWithStats.reduce((sum, c) => sum + c.additions, 0);
@@ -88,7 +121,8 @@ export async function POST(request: NextRequest) {
       summaries,
       commits.length,
       totalAdditions,
-      totalDeletions
+      totalDeletions,
+      resolvedTemplate
     );
 
     return NextResponse.json({
