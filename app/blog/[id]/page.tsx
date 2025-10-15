@@ -26,6 +26,10 @@ import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
+import { dbToUiPatchNote } from "@/lib/transformers";
+import type { Database } from "@/lib/supabase/database.types";
+import { PublishToGitHubDialog } from "@/components/publish-to-github-dialog";
+import { GitHubPublishStatus } from "@/components/github-publish-status";
 
 import dynamic from "next/dynamic";
 
@@ -64,20 +68,9 @@ export default function BlogViewPage() {
           throw new Error("Failed to fetch patch note");
         }
         const data = await response.json();
-
-        // Transform database format to UI format
-        const transformedNote = {
-          id: data.id,
-          repoName: data.repo_name,
-          repoUrl: data.repo_url,
-          timePeriod: data.time_period,
-          generatedAt: new Date(data.generated_at),
-          title: data.title,
-          content: data.content,
-          changes: data.changes,
-          contributors: data.contributors,
-          videoUrl: data.video_url,
-        };
+        const transformedNote = dbToUiPatchNote(
+          data as Database["public"]["Tables"]["patch_notes"]["Row"]
+        );
 
         setPatchNote(transformedNote);
         setEditedContent(transformedNote.content);
@@ -348,10 +341,10 @@ export default function BlogViewPage() {
                     Edit
                   </Button>
                   {!patchNote.videoUrl && (
-                    <Button 
+                    <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleGenerateVideo} 
+                      onClick={handleGenerateVideo}
                       disabled={isGeneratingVideo || !patchNote.videoData}
                     >
                       {isGeneratingVideo ? (
@@ -366,6 +359,12 @@ export default function BlogViewPage() {
                       )}
                     </Button>
                   )}
+                  <PublishToGitHubDialog
+                    patchNote={patchNote}
+                    onPatchNoteChange={(updated) => {
+                      setPatchNote(updated);
+                    }}
+                  />
                   <Button
                     size="sm"
                     onClick={handleSendEmail}
@@ -378,6 +377,7 @@ export default function BlogViewPage() {
               )}
             </div>
           </div>
+          <GitHubPublishStatus patchNote={patchNote} className="mt-4" />
         </div>
 
         {/* Remotion Player */}

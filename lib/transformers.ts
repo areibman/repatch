@@ -19,6 +19,27 @@ export function dbToUiPatchNote(dbNote: DbPatchNote): PatchNote {
     changes: dbNote.changes,
     contributors: dbNote.contributors,
     videoData: dbNote.video_data as unknown as VideoData | undefined,
+    videoUrl: dbNote.video_url,
+    githubPublishStatus: (dbNote.github_publish_status as PatchNote["githubPublishStatus"]) ?? "idle",
+    githubPublishTarget: (dbNote.github_publish_target as PatchNote["githubPublishTarget"]) ?? null,
+    githubPublishError: dbNote.github_publish_error,
+    githubPublishedAt: dbNote.github_published_at
+      ? new Date(dbNote.github_published_at)
+      : null,
+    githubRelease:
+      dbNote.github_release_id && dbNote.github_release_url
+        ? {
+            id: Number(dbNote.github_release_id),
+            url: dbNote.github_release_url,
+          }
+        : null,
+    githubDiscussion:
+      dbNote.github_discussion_id && dbNote.github_discussion_url
+        ? {
+            id: Number(dbNote.github_discussion_id),
+            url: dbNote.github_discussion_url,
+          }
+        : null,
   };
 }
 
@@ -42,6 +63,27 @@ export function uiToDbPatchNote(
     ...(uiNote.contributors && { contributors: uiNote.contributors }),
     ...(uiNote.videoData !== undefined && {
       video_data: uiNote.videoData as unknown as any,
+    }),
+    ...(uiNote.videoUrl !== undefined && { video_url: uiNote.videoUrl }),
+    ...(uiNote.githubPublishStatus && {
+      github_publish_status: uiNote.githubPublishStatus,
+    }),
+    ...(uiNote.githubPublishTarget !== undefined && {
+      github_publish_target: uiNote.githubPublishTarget ?? null,
+    }),
+    ...(uiNote.githubPublishError !== undefined && {
+      github_publish_error: uiNote.githubPublishError ?? null,
+    }),
+    ...(uiNote.githubPublishedAt && {
+      github_published_at: uiNote.githubPublishedAt.toISOString(),
+    }),
+    ...(uiNote.githubRelease !== undefined && {
+      github_release_id: uiNote.githubRelease?.id ?? null,
+      github_release_url: uiNote.githubRelease?.url ?? null,
+    }),
+    ...(uiNote.githubDiscussion !== undefined && {
+      github_discussion_id: uiNote.githubDiscussion?.id ?? null,
+      github_discussion_url: uiNote.githubDiscussion?.url ?? null,
     }),
   };
 }
