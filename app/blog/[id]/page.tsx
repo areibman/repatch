@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { PatchNote } from "@/types/patch-note";
+import { SanitizedIntegrationConfig } from "@/lib/email/types";
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -43,6 +44,11 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [providerInfo, setProviderInfo] = useState<
+    SanitizedIntegrationConfig | null
+  >(null);
+  const [providerLoading, setProviderLoading] = useState(true);
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -107,6 +113,47 @@ export default function BlogViewPage() {
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProvider() {
+      setProviderLoading(true);
+      setProviderError(null);
+      try {
+        const response = await fetch("/api/email-integrations");
+        const data: {
+          activeProvider: SanitizedIntegrationConfig | null;
+          error?: string;
+        } = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Failed to load email provider");
+        }
+
+        if (cancelled) return;
+        setProviderInfo(data.activeProvider);
+      } catch (error) {
+        if (cancelled) return;
+        setProviderInfo(null);
+        setProviderError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load email provider"
+        );
+      } finally {
+        if (!cancelled) {
+          setProviderLoading(false);
+        }
+      }
+    }
+
+    loadProvider();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleEdit = () => {
     setIsEditing(true);
   };
@@ -168,7 +215,11 @@ export default function BlogViewPage() {
       return;
     }
 
-    if (!confirm('Send this patch note to all email subscribers?')) {
+    const confirmationMessage = providerInfo
+      ? `Send this patch note to all subscribers via ${providerInfo.label}?`
+      : "Send this patch note to all email subscribers?";
+
+    if (!confirm(confirmationMessage)) {
       return;
     }
 
@@ -366,18 +417,32 @@ export default function BlogViewPage() {
                       )}
                     </Button>
                   )}
-                  <Button
-                    size="sm"
-                    onClick={handleSendEmail}
-                    disabled={isSending}
-                  >
-                    <PaperAirplaneIcon className="h-4 w-4 mr-2" />
-                    {isSending ? "Sending..." : "Send Email"}
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
+              <Button
+                size="sm"
+                onClick={handleSendEmail}
+                disabled={isSending}
+              >
+                <PaperAirplaneIcon className="h-4 w-4 mr-2" />
+                {isSending ? "Sending..." : "Send Email"}
+              </Button>
+            </>
+          )}
+        </div>
+        {providerLoading ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Checking email delivery provider...
+          </p>
+        ) : providerInfo ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Emails will be delivered with
+            <span className="ml-1 font-medium text-foreground">
+              {providerInfo.label}
+            </span>
+          </p>
+        ) : providerError ? (
+          <p className="mt-2 text-xs text-destructive">{providerError}</p>
+        ) : null}
+      </div>
         </div>
 
         {/* Remotion Player */}
