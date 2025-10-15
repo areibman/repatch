@@ -45,9 +45,22 @@ GOOGLE_API_KEY=your_google_api_key
 
 # Optional: App URL for video rendering callbacks
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Typefully (for Twitter threads)
+TYPEFULLY_API_BASE_URL=https://api.typefully.com/v1
+# Enable mocks for local testing only
+TYPEFULLY_API_MOCK=false
 ```
 
 **⚠️ Important**: Without a GitHub token, you'll hit rate limits (60 requests/hour). With a token, you get 5,000 requests/hour.
+
+For local testing (including Playwright), you can opt into an in-memory Supabase and mocked video rendering by setting:
+
+```
+SUPABASE_USE_MEMORY=true
+PATCH_NOTES_VIDEO_RENDER_MODE=mock
+TYPEFULLY_API_MOCK=true
+```
 
 To create a GitHub token:
 
@@ -134,12 +147,20 @@ Send beautiful HTML emails to subscribers with:
 - Contributor list
 - Custom video links (when available)
 
+### 🧵 Typefully Threads
+
+Schedule Twitter threads with Typefully:
+- Reuse patch note copy to populate a multi-post thread.
+- Attach freshly-rendered Remotion teasers to the first post.
+- Track queue status directly from each patch note page.
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration
 - [Video Generation](./VIDEO_GENERATION.md) - Remotion video rendering
 - [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
+- [Typefully Integration](./TYPEFULLY_INTEGRATION.md) - Queue Twitter threads
 
 ## Learn More
 
