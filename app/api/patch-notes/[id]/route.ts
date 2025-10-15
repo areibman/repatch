@@ -53,6 +53,20 @@ export async function PUT(
     if (body.contributors !== undefined)
       updateData.contributors = body.contributors;
     if (body.video_data !== undefined) updateData.video_data = body.video_data;
+    if (body.github_publish_status !== undefined)
+      updateData.github_publish_status = body.github_publish_status;
+    if (body.github_publish_error !== undefined)
+      updateData.github_publish_error = body.github_publish_error;
+    if (body.github_release_id !== undefined)
+      updateData.github_release_id = body.github_release_id;
+    if (body.github_release_url !== undefined)
+      updateData.github_release_url = body.github_release_url;
+    if (body.github_discussion_id !== undefined)
+      updateData.github_discussion_id = body.github_discussion_id;
+    if (body.github_discussion_url !== undefined)
+      updateData.github_discussion_url = body.github_discussion_url;
+    if (body.github_published_at !== undefined)
+      updateData.github_published_at = body.github_published_at;
 
     const { data, error } = await supabase
       .from("patch_notes")
