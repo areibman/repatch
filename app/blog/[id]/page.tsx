@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { PatchNote } from "@/types/patch-note";
+import { useEmailIntegrations } from "@/hooks/use-email-integrations";
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -43,6 +44,19 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const {
+    providers,
+    activeProvider,
+    loading: providerLoading,
+    error: providerError,
+  } = useEmailIntegrations();
+
+  const activeIntegration = useMemo(() => {
+    if (activeProvider) {
+      return providers.find((provider) => provider.id === activeProvider);
+    }
+    return providers[0];
+  }, [providers, activeProvider]);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -185,7 +199,10 @@ export default function BlogViewPage() {
       }
 
       const data = await response.json();
-      alert(`✅ Patch note successfully sent to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''}!`);
+      const providerName = data.provider
+        ? providers.find((item) => item.id === data.provider)?.name ?? data.provider
+        : activeIntegration?.name ?? "email provider";
+      alert(`✅ Patch note successfully sent to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''} via ${providerName}!`);
     } catch (error) {
       console.error('Error sending email:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
@@ -375,6 +392,24 @@ export default function BlogViewPage() {
                     {isSending ? "Sending..." : "Send Email"}
                   </Button>
                 </>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground mt-2">
+              {providerLoading ? (
+                "Checking email provider…"
+              ) : providerError ? (
+                <span className="text-destructive">{providerError}</span>
+              ) : activeIntegration ? (
+                <>Emails will be delivered via {activeIntegration.name}
+                  {activeIntegration.defaultSender
+                    ? ` (${activeIntegration.defaultSender})`
+                    : ""}
+                  .</>
+              ) : (
+                <span className="text-destructive">
+                  No email provider configured. Add one in integrations to send
+                  campaigns.
+                </span>
               )}
             </div>
           </div>

@@ -11,7 +11,7 @@ Repatch uses LLMs to analyze GitHub repository changes over time periods (daily,
 - **Framework**: Next.js 15 with App Router
 - **Database**: Supabase (PostgreSQL)
 - **UI**: ShadCN UI + Tailwind CSS
-- **Email**: Resend
+- **Email**: Resend or Customer.io
 - **AI**: Google Generative AI (Gemini 2.5 Flash) via Vercel AI SDK
 - **Video Generation**: Remotion 4.0
 
@@ -32,9 +32,14 @@ Create a `.env.local` file with the following:
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-# Resend (for sending emails)
+# Email Providers
 RESEND_API_KEY=your_resend_api_key
 RESEND_AUDIENCE_ID=your_resend_audience_id
+CUSTOMERIO_SITE_ID=your_customerio_site_id
+CUSTOMERIO_TRACK_API_KEY=your_customerio_track_key
+CUSTOMERIO_APP_API_KEY=your_customerio_app_key
+CUSTOMERIO_TRANSACTIONAL_MESSAGE_ID=optional_message_id
+CUSTOMERIO_DEFAULT_FROM="Patch Notes <patch@example.com>"
 
 # GitHub (REQUIRED to avoid rate limits)
 GITHUB_TOKEN=ghp_yourTokenHere
@@ -55,17 +60,27 @@ To create a GitHub token:
 2. Generate a new classic token with `public_repo` scope
 3. Add it to `.env.local` as shown above
 
-### Resend Setup
+### Email Provider Setup
 
-To set up Resend for email sending:
+Repatch supports both Resend and Customer.io. Configure at least one provider:
+
+#### Resend
 
 1. Go to https://resend.com and create an account
-2. Get your API key from the dashboard
+2. Generate an API key from the dashboard
 3. Create an audience for your subscribers:
-   - Go to the Audiences section in your Resend dashboard
+   - Go to the Audiences section
    - Create a new audience (e.g., "Repatch Subscribers")
    - Copy the audience ID
-4. Add both the API key and audience ID to your `.env.local` file
+4. Add the API key and audience ID to `.env.local` or save them through the integrations UI
+
+#### Customer.io
+
+1. Create a Customer.io account and enable the transactional API
+2. Collect the Track (site) ID and Track API key
+3. Generate an App/Transactional API key for sending emails
+4. (Optional) Choose a transactional message ID if you want to reuse a hosted template
+5. Add the credentials to `.env.local` or store them via the integrations UI
 
 ### 3. Set Up Supabase
 

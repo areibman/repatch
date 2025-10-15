@@ -1,34 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
+import {
+  createEmailProvider,
+  EmailProviderConfigurationError,
+  getActiveEmailIntegration,
+} from "@/lib/email";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
 
-// GET /api/subscribers - Fetch all email subscribers from Resend audience
+async function resolveProvider() {
+  const integration = await getActiveEmailIntegration();
+
+  if (!integration) {
+    throw new EmailProviderConfigurationError(
+      "No email provider is configured. Configure an email integration first."
+    );
+  }
+
+  return createEmailProvider(integration);
+}
+
 export async function GET() {
   try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+    const provider = await resolveProvider();
+    const subscribers = await provider.listSubscribers();
 
-    const contacts = await resend.contacts.list({ audienceId });
-
-    if (!contacts.data) {
-      return NextResponse.json(
-        { error: "Failed to fetch contacts from Resend" },
-        { status: 500 }
-      );
-    }
-
-    // Transform Resend contacts to match the expected format
-    const subscribers = contacts.data.data.map((contact: any) => ({
-      id: contact.id,
-      email: contact.email,
-      active: !contact.unsubscribed,
-      created_at: contact.created_at,
-      updated_at: contact.updated_at,
+    const payload = subscribers.map((subscriber) => ({
+      id: subscriber.id,
+      email: subscriber.email,
+      active: subscriber.active,
+      created_at: subscriber.createdAt ?? null,
+      updated_at: subscriber.updatedAt ?? null,
     }));
 
-    return NextResponse.json(subscribers);
+    return NextResponse.json(payload);
   } catch (error) {
+    if (error instanceof EmailProviderConfigurationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    console.error("Failed to fetch subscribers", error);
     return NextResponse.json(
       { error: "Failed to fetch subscribers" },
       { status: 500 }
@@ -36,61 +49,41 @@ export async function GET() {
   }
 }
 
-// POST /api/subscribers - Add a new email subscriber to Resend audience
 export async function POST(request: NextRequest) {
   try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
-
     const body = await request.json();
+    const email = String(body.email ?? "").trim();
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(body.email)) {
-      return NextResponse.json(
-        { error: "Invalid email format" },
-        { status: 400 }
-      );
+    if (!validateEmail(email)) {
+      return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
     }
 
-    // Add contact to Resend audience
-    const contact = await resend.contacts.create({
-      email: body.email,
-      firstName: body.firstName || "",
-      lastName: body.lastName || "",
-      unsubscribed: false,
-      audienceId: audienceId,
+    const provider = await resolveProvider();
+    const subscriber = await provider.addSubscriber(email, {
+      firstName: body.firstName ?? undefined,
+      lastName: body.lastName ?? undefined,
     });
 
-    if (!contact.data) {
-      return NextResponse.json(
-        { error: "Failed to add contact to Resend audience" },
-        { status: 500 }
-      );
-    }
-
-    // Transform the response to match expected format
-    const subscriber = {
-      id: contact.data.id,
-      email: body.email, // Use the email from the request body
-      active: true, // New contacts are active by default
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    return NextResponse.json(subscriber, { status: 201 });
+    return NextResponse.json(
+      {
+        id: subscriber.id,
+        email: subscriber.email,
+        active: subscriber.active,
+        created_at: subscriber.createdAt ?? new Date().toISOString(),
+        updated_at: subscriber.updatedAt ?? new Date().toISOString(),
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
-    // Handle duplicate email error from Resend
-    if (
-      error.message?.includes("already exists") ||
-      error.message?.includes("duplicate")
-    ) {
-      return NextResponse.json(
-        { error: "Email already subscribed" },
-        { status: 409 }
-      );
+    if (error instanceof EmailProviderConfigurationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    if (typeof error?.message === "string" && error.message.includes("exists")) {
+      return NextResponse.json({ error: "Email already subscribed" }, { status: 409 });
+    }
+
+    console.error("Failed to add subscriber", error);
     return NextResponse.json(
       { error: "Failed to add subscriber" },
       { status: 500 }
@@ -98,15 +91,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE /api/subscribers - Remove a subscriber from Resend audience
 export async function DELETE(request: NextRequest) {
   try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
-
     const { searchParams } = new URL(request.url);
-    const email = searchParams.get("email");
-    const id = searchParams.get("id");
+    const email = searchParams.get("email") ?? undefined;
+    const id = searchParams.get("id") ?? undefined;
 
     if (!email && !id) {
       return NextResponse.json(
@@ -115,21 +104,16 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Remove contact from Resend audience
-    const result = await resend.contacts.remove({
-      ...(id ? { id } : { email: email! }),
-      audienceId: audienceId,
-    });
-
-    if (!result.data) {
-      return NextResponse.json(
-        { error: "Failed to remove contact from Resend audience" },
-        { status: 500 }
-      );
-    }
+    const provider = await resolveProvider();
+    await provider.removeSubscriber({ email: email ?? undefined, id: id ?? undefined });
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof EmailProviderConfigurationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    console.error("Failed to remove subscriber", error);
     return NextResponse.json(
       { error: "Failed to remove subscriber" },
       { status: 500 }
@@ -137,14 +121,11 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
-// PUT /api/subscribers - Update a subscriber (e.g., unsubscribe)
 export async function PUT(request: NextRequest) {
   try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
-
     const body = await request.json();
-    const { email, id, unsubscribed } = body;
+    const email = body.email ? String(body.email) : undefined;
+    const id = body.id ? String(body.id) : undefined;
 
     if (!email && !id) {
       return NextResponse.json(
@@ -153,31 +134,25 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Update contact in Resend audience
-    const result = await resend.contacts.update({
-      ...(id ? { id } : { email }),
-      audienceId: audienceId,
-      unsubscribed: unsubscribed ?? false,
-    });
+    const provider = await resolveProvider();
+    const updated = await provider.updateSubscriber(
+      { email, id },
+      { active: body.unsubscribed === undefined ? undefined : !body.unsubscribed }
+    );
 
-    if (!result.data) {
-      return NextResponse.json(
-        { error: "Failed to update contact in Resend audience" },
-        { status: 500 }
-      );
+    return NextResponse.json({
+      id: updated.id,
+      email: updated.email,
+      active: updated.active,
+      created_at: updated.createdAt ?? new Date().toISOString(),
+      updated_at: updated.updatedAt ?? new Date().toISOString(),
+    });
+  } catch (error) {
+    if (error instanceof EmailProviderConfigurationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    // Transform the response to match expected format
-    const subscriber = {
-      id: result.data.id,
-      email: email || id || "", // Use the email or id from the request
-      active: !(unsubscribed ?? false),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    return NextResponse.json(subscriber);
-  } catch (error) {
+    console.error("Failed to update subscriber", error);
     return NextResponse.json(
       { error: "Failed to update subscriber" },
       { status: 500 }
