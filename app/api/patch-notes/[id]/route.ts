@@ -53,6 +53,32 @@ export async function PUT(
     if (body.contributors !== undefined)
       updateData.contributors = body.contributors;
     if (body.video_data !== undefined) updateData.video_data = body.video_data;
+    if (body.video_url !== undefined) updateData.video_url = body.video_url;
+    if (body.github_publish_status !== undefined)
+      updateData.github_publish_status = body.github_publish_status;
+    if (body.github_publish_target !== undefined)
+      updateData.github_publish_target = body.github_publish_target;
+    if (body.github_publish_error !== undefined)
+      updateData.github_publish_error = body.github_publish_error;
+    if (body.github_release_id !== undefined)
+      updateData.github_release_id = body.github_release_id;
+    if (body.github_release_url !== undefined)
+      updateData.github_release_url = body.github_release_url;
+    if (body.github_release_tag !== undefined)
+      updateData.github_release_tag = body.github_release_tag;
+    if (body.github_discussion_id !== undefined)
+      updateData.github_discussion_id = body.github_discussion_id;
+    if (body.github_discussion_url !== undefined)
+      updateData.github_discussion_url = body.github_discussion_url;
+    if (body.github_discussion_category_slug !== undefined)
+      updateData.github_discussion_category_slug =
+        body.github_discussion_category_slug;
+    if (body.github_publish_attempts !== undefined)
+      updateData.github_publish_attempts = body.github_publish_attempts;
+    if (body.github_last_published_at !== undefined)
+      updateData.github_last_published_at = body.github_last_published_at;
+    if (body.github_publish_next_retry_at !== undefined)
+      updateData.github_publish_next_retry_at = body.github_publish_next_retry_at;
 
     const { data, error } = await supabase
       .from("patch_notes")

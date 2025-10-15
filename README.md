@@ -134,6 +134,40 @@ Send beautiful HTML emails to subscribers with:
 - Contributor list
 - Custom video links (when available)
 
+### 🚀 GitHub Publishing
+
+Push any patch note directly to GitHub for public visibility:
+
+- Publish as a **GitHub Release** (with custom tags) or a **GitHub Discussion**
+- Store returned release/discussion IDs in Supabase for traceability
+- Retry metadata (`github_publish_attempts`, `github_publish_next_retry_at`) is
+  recorded so background jobs can reschedule failed attempts
+- UI surfaces publish status, next retry window, and quick links back to
+  GitHub
+
+**Required GitHub scopes**
+
+- Public repositories: `public_repo` for releases, `discussions:write` for
+  discussions
+- Private repositories: `repo` (covers releases + discussions)
+
+The REST integration uses:
+
+- [`POST /repos/{owner}/{repo}/releases`](https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28#create-a-release)
+- [`POST /repos/{owner}/{repo}/discussions`](https://docs.github.com/en/rest/discussions/discussions?apiVersion=2022-11-28#create-a-discussion)
+
+Trigger publishing via the dashboard button or call the API directly:
+
+```bash
+curl -X POST \
+  http://localhost:3000/api/patch-notes/<id>/publish \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target": "release",
+    "tagName": "v1.0.0"
+  }'
+```
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration

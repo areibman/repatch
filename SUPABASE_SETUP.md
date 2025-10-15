@@ -111,7 +111,13 @@ Fetch all patch notes, ordered by `generated_at` descending.
     "contributors": ["@user1", "@user2"],
     "generated_at": "2025-01-04T00:00:00Z",
     "created_at": "2025-01-04T00:00:00Z",
-    "updated_at": "2025-01-04T00:00:00Z"
+    "updated_at": "2025-01-04T00:00:00Z",
+    "github_publish_status": "published",
+    "github_publish_target": "release",
+    "github_release_tag": "v1.0.0",
+    "github_release_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
+    "github_publish_attempts": 1,
+    "github_last_published_at": "2025-01-05T12:00:00Z"
   }
 ]
 ```
@@ -148,6 +154,56 @@ Update a patch note.
 #### DELETE `/api/patch-notes/[id]`
 Delete a patch note.
 
+#### POST `/api/patch-notes/[id]/publish`
+Publish a patch note to GitHub as either a release or a discussion. The route
+looks up the saved GitHub access token for the repository, calls the GitHub
+REST API, and persists the returned identifiers.
+
+**Request Body:**
+```json
+{
+  "target": "release",                // "release" (default) or "discussion"
+  "tagName": "v1.0.0",               // optional, release only
+  "discussionCategorySlug": "general" // optional, discussion only
+}
+```
+
+**Success Response:**
+```json
+{
+  "id": "uuid",
+  "github_publish_status": "published",
+  "github_publish_target": "release",
+  "github_release_id": "123456",
+  "github_release_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
+  "github_release_tag": "v1.0.0",
+  "github_publish_attempts": 1,
+  "github_last_published_at": "2025-01-05T12:00:00Z"
+}
+```
+
+**Failure Response (HTTP 4xx/5xx):**
+```json
+{
+  "error": "No GitHub access token is stored for this repository.",
+  "patchNote": {
+    "github_publish_status": "failed",
+    "github_publish_error": "No GitHub access token is stored for this repository.",
+    "github_publish_attempts": 2,
+    "github_publish_next_retry_at": "2025-01-05T12:45:00Z"
+  }
+}
+```
+
+The `github_publish_status` column behaves like a small state machine:
+
+| Status      | Meaning                                                     |
+| ----------- | ----------------------------------------------------------- |
+| `idle`      | Never published to GitHub                                   |
+| `publishing`| Currently attempting to publish                             |
+| `published` | Last publish succeeded; release/discussion IDs are stored   |
+| `failed`    | GitHub returned an error. Retry metadata is stored for jobs |
+
 ### Email Subscribers
 
 #### GET `/api/subscribers`
@@ -171,18 +227,25 @@ The UI uses a transformed format defined in `/types/patch-note.ts`:
 ```typescript
 interface PatchNote {
   id: string;
-  repoName: string;        // maps to repo_name
-  repoUrl: string;         // maps to repo_url
-  timePeriod: '1day' | '1week' | '1month';  // maps to time_period
-  generatedAt: Date;       // maps to generated_at
+  repoName: string;        // repo_name
+  repoUrl: string;         // repo_url
+  timePeriod: '1day' | '1week' | '1month';
+  generatedAt: Date;       // generated_at
   title: string;
-  content: string;
-  changes: {
-    added: number;
-    modified: number;
-    removed: number;
-  };
+  content: string;         // markdown content
+  changes: { added: number; modified: number; removed: number };
   contributors: string[];
+  videoUrl?: string | null;
+  githubPublishStatus?: 'idle' | 'publishing' | 'published' | 'failed';
+  githubPublishTarget?: 'release' | 'discussion' | null;
+  githubPublishError?: string | null;
+  githubReleaseUrl?: string | null;
+  githubReleaseTag?: string | null;
+  githubDiscussionUrl?: string | null;
+  githubDiscussionCategorySlug?: string | null;
+  githubPublishAttempts?: number;
+  githubLastPublishedAt?: Date | null;
+  githubPublishNextRetryAt?: Date | null;
 }
 ```
 
