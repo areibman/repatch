@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:e2e": "playwright test",
+    "test:e2e:coverage": "playwright test --coverage",
+    "test:e2e:report": "playwright show-report",
     "preview": "remotion preview remotion/index.ts",
     "db:seed": "dotenv -e .env.local -- tsx scripts/add-sample-data.ts",
     "fix-videos": "dotenv -e .env.local -- tsx scripts/fix-video-urls.ts",
@@ -54,6 +57,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.49.1",
     "@remotion/bundler": "4.0.355",
     "@remotion/cli": "4.0.355",
     "@remotion/tailwind-v4": "4.0.355",
