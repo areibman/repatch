@@ -1,4 +1,4 @@
-import { PatchNote, VideoData } from "@/types/patch-note";
+import { PatchNote, PatchNoteFilterMetadata, VideoData } from "@/types/patch-note";
 import { Database } from "@/lib/supabase/database.types";
 
 type DbPatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
@@ -19,6 +19,7 @@ export function dbToUiPatchNote(dbNote: DbPatchNote): PatchNote {
     changes: dbNote.changes,
     contributors: dbNote.contributors,
     videoData: dbNote.video_data as unknown as VideoData | undefined,
+    filterMetadata: dbNote.filter_metadata as unknown as PatchNoteFilterMetadata | null,
   };
 }
 
@@ -42,6 +43,9 @@ export function uiToDbPatchNote(
     ...(uiNote.contributors && { contributors: uiNote.contributors }),
     ...(uiNote.videoData !== undefined && {
       video_data: uiNote.videoData as unknown as any,
+    }),
+    ...(uiNote.filterMetadata !== undefined && {
+      filter_metadata: uiNote.filterMetadata as unknown as any,
     }),
   };
 }

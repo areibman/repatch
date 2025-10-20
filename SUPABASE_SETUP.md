@@ -15,11 +15,16 @@ Stores AI-generated patch notes from GitHub repositories.
 | id            | UUID (PK)                  | Unique identifier                              |
 | repo_name     | TEXT                       | Repository name (e.g., "owner/repo")           |
 | repo_url      | TEXT                       | Full GitHub repository URL                     |
-| time_period   | ENUM                       | '1day', '1week', or '1month'                   |
+| time_period   | ENUM                       | '1day', '1week', '1month', or 'custom'         |
 | title         | TEXT                       | Patch note title                               |
 | content       | TEXT                       | Full patch note content (markdown)             |
 | changes       | JSONB                      | {added, modified, removed} line counts         |
 | contributors  | TEXT[]                     | Array of contributor usernames                 |
+| video_data    | JSONB                      | Remotion data describing top/all changes       |
+| video_url     | TEXT                       | Rendered video URL                             |
+| ai_summaries  | JSONB                      | AI-generated commit summaries                  |
+| ai_overall_summary | TEXT                  | AI-generated intro summary                     |
+| filter_metadata | JSONB                    | Applied filters (dates, releases, labels)      |
 | generated_at  | TIMESTAMP WITH TIME ZONE   | When the patch note was generated              |
 | created_at    | TIMESTAMP WITH TIME ZONE   | Record creation timestamp                      |
 | updated_at    | TIMESTAMP WITH TIME ZONE   | Record last update timestamp                   |

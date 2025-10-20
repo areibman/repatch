@@ -105,7 +105,7 @@ export async function summarizeCommits(
  */
 export async function generateOverallSummary(
   repoName: string,
-  timePeriod: '1day' | '1week' | '1month',
+  filterLabel: string,
   commitSummaries: CommitSummary[],
   totalCommits: number,
   totalAdditions: number,
@@ -113,13 +113,12 @@ export async function generateOverallSummary(
 ): Promise<string> {
   try {
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-    
+
     if (!apiKey) {
-      return `This ${timePeriod} saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
+      return `This ${filterLabel} window saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
     }
 
     const google = createGoogleGenerativeAI({ apiKey });
-    const periodLabel = timePeriod === '1day' ? 'day' : timePeriod === '1week' ? 'week' : 'month';
 
     const summariesText = commitSummaries
       .map((s, i) => `${i + 1}. ${s.aiSummary}`)
@@ -129,7 +128,7 @@ export async function generateOverallSummary(
       model: google('gemini-2.5-flash'),
       prompt: `You are writing a brief newsletter intro for repository "${repoName}".
 
-Time Period: Past ${periodLabel}
+Scope: ${filterLabel}
 Total Commits: ${totalCommits}
 
 Key Changes:
@@ -149,7 +148,7 @@ Introduction:`,
     return text.trim();
   } catch (error) {
     console.error('Error generating overall summary:', error);
-    return `This ${timePeriod} saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
+    return `This ${filterLabel} window saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
   }
 }
 

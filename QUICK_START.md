@@ -81,11 +81,18 @@ curl -X POST http://localhost:3000/api/patch-notes \
   -d '{
     "repo_name": "owner/repo",
     "repo_url": "https://github.com/owner/repo",
-    "time_period": "1week",
-    "title": "Weekly Update",
+    "time_period": "custom",
+    "title": "Release v1.1.0 Update",
     "content": "# Changes\n\n- Feature A\n- Bug fix B",
     "changes": {"added": 100, "modified": 50, "removed": 20},
-    "contributors": ["@user1", "@user2"]
+    "contributors": ["@user1", "@user2"],
+    "filter_metadata": {
+      "mode": "release",
+      "releaseRange": {"baseTag": "v1.0.0", "headTag": "v1.1.0"},
+      "includeLabels": ["feature"],
+      "excludeLabels": ["infra"],
+      "branch": "main"
+    }
   }'
 ```
 

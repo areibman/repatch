@@ -2,9 +2,8 @@
  * GitHub API utilities for fetching repository data
  */
 
-import { z } from "zod";
-import { systemPrompt } from "../constants";
-import { VideoData } from "../types/patch-note";
+import { PatchNoteFilterMetadata, PatchNoteTimePreset, VideoData } from "@/types/patch-note";
+import { getFilterSummaryLabel } from "./filter-metadata";
 
 export interface GitHubCommit {
   sha: string;
@@ -52,7 +51,7 @@ export function parseGitHubUrl(
 /**
  * Calculate date range based on time period
  */
-export function getDateRange(timePeriod: "1day" | "1week" | "1month"): {
+export function getDateRange(timePeriod: Exclude<PatchNoteTimePreset, "custom">): {
   since: string;
   until: string;
 } {
@@ -78,7 +77,7 @@ export function getDateRange(timePeriod: "1day" | "1week" | "1month"): {
 /**
  * Get headers for GitHub API requests with authentication if available
  */
-function getGitHubHeaders(): HeadersInit {
+export function getGitHubHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Accept': 'application/vnd.github.v3+json',
     'User-Agent': 'Repatch-App',
@@ -240,17 +239,169 @@ export async function fetchCommitDiff(
   return response.text();
 }
 
+async function fetchCommitsFromReleaseRange(
+  owner: string,
+  repo: string,
+  releaseRange: NonNullable<PatchNoteFilterMetadata["releaseRange"]>
+): Promise<GitHubCommit[]> {
+  if (releaseRange.baseTag) {
+    const url = `https://api.github.com/repos/${owner}/${repo}/compare/${encodeURIComponent(
+      releaseRange.baseTag
+    )}...${encodeURIComponent(releaseRange.headTag)}`;
+    const response = await fetch(url, {
+      headers: getGitHubHeaders(),
+    });
+
+    if (!response.ok) {
+      let errorMessage = "Failed to compare selected releases";
+      try {
+        const error = await response.json();
+        errorMessage = error.message || errorMessage;
+      } catch {
+        errorMessage = `GitHub API error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    return (data.commits || []) as GitHubCommit[];
+  }
+
+  const url = `https://api.github.com/repos/${owner}/${repo}/commits?sha=${encodeURIComponent(
+    releaseRange.headTag
+  )}&per_page=100`;
+  const response = await fetch(url, {
+    headers: getGitHubHeaders(),
+  });
+
+  if (!response.ok) {
+    let errorMessage = "Failed to fetch commits for release";
+    try {
+      const error = await response.json();
+      errorMessage = error.message || errorMessage;
+    } catch {
+      errorMessage = `GitHub API error: ${response.status} ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+async function fetchCommitLabels(
+  owner: string,
+  repo: string,
+  sha: string
+): Promise<string[]> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/commits/${sha}/pulls`;
+  const response = await fetch(url, {
+    headers: {
+      ...getGitHubHeaders(),
+      Accept: "application/vnd.github.groot-preview+json",
+    },
+  });
+
+  if (!response.ok) {
+    return [];
+  }
+
+  try {
+    const pulls = await response.json();
+    const labels = new Set<string>();
+
+    pulls?.forEach((pull: any) => {
+      pull?.labels?.forEach((label: any) => {
+        if (label?.name) {
+          labels.add(label.name);
+        }
+      });
+    });
+
+    return Array.from(labels);
+  } catch {
+    return [];
+  }
+}
+
+async function filterCommitsByLabels(
+  commits: GitHubCommit[],
+  owner: string,
+  repo: string,
+  include: string[] = [],
+  exclude: string[] = []
+): Promise<GitHubCommit[]> {
+  if (include.length === 0 && exclude.length === 0) {
+    return commits;
+  }
+
+  const labelLookups = await Promise.all(
+    commits.map(async (commit) => ({
+      commit,
+      labels: await fetchCommitLabels(owner, repo, commit.sha),
+    }))
+  );
+
+  return labelLookups
+    .filter(({ labels }) => {
+      if (include.length > 0 && !labels.some((label) => include.includes(label))) {
+        return false;
+      }
+
+      if (exclude.length > 0 && labels.some((label) => exclude.includes(label))) {
+        return false;
+      }
+
+      return true;
+    })
+    .map(({ commit }) => commit);
+}
+
+export async function collectCommits(
+  owner: string,
+  repo: string,
+  filters: PatchNoteFilterMetadata,
+  branch?: string | null
+): Promise<GitHubCommit[]> {
+  let commits: GitHubCommit[] = [];
+
+  if (filters.mode === "release" && filters.releaseRange) {
+    commits = await fetchCommitsFromReleaseRange(owner, repo, filters.releaseRange);
+  } else if (filters.mode === "custom" && filters.customRange) {
+    commits = await fetchGitHubCommits(
+      owner,
+      repo,
+      filters.customRange.since,
+      filters.customRange.until,
+      branch || undefined
+    );
+  } else if (filters.mode === "preset" && filters.preset) {
+    const { since, until } = getDateRange(filters.preset);
+    commits = await fetchGitHubCommits(owner, repo, since, until, branch || undefined);
+  } else {
+    // Fallback to a one week window if filters are incomplete
+    const { since, until } = getDateRange("1week");
+    commits = await fetchGitHubCommits(owner, repo, since, until, branch || undefined);
+  }
+
+  return filterCommitsByLabels(
+    commits,
+    owner,
+    repo,
+    filters.includeLabels || [],
+    filters.excludeLabels || []
+  );
+}
+
 /**
  * Aggregate repository statistics from commits
  */
 export async function getRepoStats(
   owner: string,
   repo: string,
-  timePeriod: '1day' | '1week' | '1month',
-  branch?: string
+  filters: PatchNoteFilterMetadata,
+  branch?: string | null
 ): Promise<RepoStats> {
-  const { since, until } = getDateRange(timePeriod);
-  const commits = await fetchGitHubCommits(owner, repo, since, until, branch);
+  const commits = await collectCommits(owner, repo, filters, branch);
 
   if (commits.length === 0) {
     return {
@@ -307,21 +458,14 @@ export async function getRepoStats(
  */
 export function generateBoilerplateContent(
   repoName: string,
-  timePeriod: "1day" | "1week" | "1month",
+  filterLabel: string,
   stats: RepoStats
 ): string {
-  const periodLabel =
-    timePeriod === "1day"
-      ? "Daily"
-      : timePeriod === "1week"
-      ? "Weekly"
-      : "Monthly";
-
-  const content = `# ${periodLabel} Update for ${repoName}
+  const content = `# ${filterLabel} Update for ${repoName}
 
 ## 📊 Overview
 
-This ${periodLabel.toLowerCase()} summary covers changes made to the repository.
+This summary covers the selected changes for ${filterLabel}.
 
 **Period Statistics:**
 - **${stats.commits}** commits
@@ -413,20 +557,13 @@ export function generateVideoDataFromAI(
 // Generate video data from raw GitHub stats (fallback if no AI summaries)
 export async function generateVideoData(
   repoName: string,
-  timePeriod: "1day" | "1week" | "1month",
+  filterLabel: string,
   stats: RepoStats
 ): Promise<VideoData> {
-  const periodLabel =
-    timePeriod === "1day"
-      ? "Daily"
-      : timePeriod === "1week"
-      ? "Weekly"
-      : "Monthly";
-
   // Create a summary of the changes for AI processing
   const changesSummary = `
 Repository: ${repoName}
-Period: ${periodLabel}
+Range: ${filterLabel}
 Commits: ${stats.commits}
 Contributors: ${stats.contributors.length}
 Lines added: ${stats.additions}
@@ -469,9 +606,7 @@ ${stats.commitMessages
       topChanges: [
         {
           title: "Repository Updates",
-          description: `Active development with ${
-            stats.commits
-          } commits during this ${periodLabel.toLowerCase()} period`,
+          description: `Active development with ${stats.commits} commits across ${filterLabel}.`,
         },
       ],
       allChanges: stats.commitMessages

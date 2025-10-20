@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { PatchNote } from "@/types/patch-note";
+import { getFilterSummaryLabel } from "@/lib/filter-metadata";
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -66,7 +67,7 @@ export default function BlogViewPage() {
         const data = await response.json();
 
         // Transform database format to UI format
-        const transformedNote = {
+        const transformedNote: PatchNote = {
           id: data.id,
           repoName: data.repo_name,
           repoUrl: data.repo_url,
@@ -77,6 +78,8 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          videoData: data.video_data,
+          filterMetadata: data.filter_metadata ?? null,
         };
 
         setPatchNote(transformedNote);
@@ -249,6 +252,14 @@ export default function BlogViewPage() {
     }
   };
 
+  const getBadgeLabel = () => {
+    if (!patchNote) return "";
+    if (patchNote.filterMetadata) {
+      return getFilterSummaryLabel(patchNote.filterMetadata, patchNote.timePeriod);
+    }
+    return getTimePeriodLabel(patchNote.timePeriod);
+  };
+
   if (!patchNote) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -301,7 +312,7 @@ export default function BlogViewPage() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant="secondary">
-                  {getTimePeriodLabel(patchNote.timePeriod)}
+                  {getBadgeLabel()}
                 </Badge>
                 <Badge variant="outline">
                   {new Date(patchNote.generatedAt).toLocaleDateString()}

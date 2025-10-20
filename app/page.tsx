@@ -20,6 +20,7 @@ import {
   CalendarIcon,
   UsersIcon,
 } from "@heroicons/react/16/solid";
+import { getFilterSummaryLabel } from "@/lib/filter-metadata";
 
 export default function Home() {
   const [patchNotes, setPatchNotes] = useState<PatchNote[]>([]);
@@ -41,13 +42,14 @@ export default function Home() {
             id: string;
             repo_name: string;
             repo_url: string;
-            time_period: "1day" | "1week" | "1month";
+            time_period: string;
             generated_at: string;
             title: string;
             content: string;
             changes: { added: number; modified: number; removed: number };
             contributors: string[];
             video_url?: string | null;
+            filter_metadata?: any;
           }) => ({
             id: note.id,
             repoName: note.repo_name,
@@ -59,6 +61,7 @@ export default function Home() {
             changes: note.changes,
             contributors: note.contributors,
             videoUrl: note.video_url,
+            filterMetadata: note.filter_metadata ?? null,
           })
         );
 
@@ -86,7 +89,23 @@ export default function Home() {
     }
   };
 
-  const getTimePeriodColor = (period: string) => {
+  const getBadgeText = (note: PatchNote) => {
+    if (note.filterMetadata) {
+      return getFilterSummaryLabel(note.filterMetadata, note.timePeriod);
+    }
+    return getTimePeriodLabel(note.timePeriod);
+  };
+
+  const getBadgeColor = (note: PatchNote) => {
+    const metadata = note.filterMetadata;
+    if (metadata?.mode === "release") {
+      return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20";
+    }
+    if (metadata?.mode === "custom") {
+      return "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20";
+    }
+
+    const period = metadata?.preset || (note.timePeriod !== "custom" ? note.timePeriod : undefined);
     switch (period) {
       case "1day":
         return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";
@@ -195,9 +214,9 @@ export default function Home() {
                   <div className="flex items-center justify-between mb-2">
                     <Badge
                       variant="outline"
-                      className={getTimePeriodColor(note.timePeriod)}
+                      className={getBadgeColor(note)}
                     >
-                      {getTimePeriodLabel(note.timePeriod)}
+                      {getBadgeText(note)}
                     </Badge>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <CalendarIcon className="h-3 w-3" />

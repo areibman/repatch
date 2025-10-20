@@ -4,7 +4,7 @@ AI-generated patch notes from your GitHub repositories, delivered as beautiful n
 
 ## Overview
 
-Repatch uses LLMs to analyze GitHub repository changes over time periods (daily, weekly, monthly) and generates professional patch notes. The generated content can be edited and sent via email to subscribers.
+Repatch uses LLMs to analyze GitHub repository changes across quick presets, fully custom date ranges, release comparisons, and label-aware filters to generate professional patch notes. The generated content can be edited and sent via email to subscribers.
 
 ## Tech Stack
 
@@ -106,6 +106,15 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Features
+
+### 🎯 Flexible Filtering Options
+
+Tailor each patch note to the context you care about:
+
+- **Quick presets** – choose daily, weekly, or monthly summaries for rapid scheduling. *Example: Generate a "Past 7 Days" note for `main` every Monday morning.*
+- **Custom date ranges** – supply any start and end date to focus on specific sprints or incidents. *Example: Capture changes made between `2024-01-01` and `2024-01-07` after a holiday freeze.*
+- **Release comparisons** – compare two Git tags or releases to describe what shipped. *Example: Highlight everything that changed from `v1.0.0` to `v1.1.0`.*
+- **Label filters** – include or exclude commits associated with labeled PRs. *Example: Generate a patch note that only includes PRs labeled `feature` while excluding `infra` work.*
 
 ### 🎬 Dynamic Video Generation
 

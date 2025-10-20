@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
+import { getFilterSummaryLabel, validateFilterMetadata } from "@/lib/filter-metadata";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
 
@@ -41,6 +42,12 @@ export async function POST(
         { status: 404 }
       );
     }
+
+    const filterMetadata = validateFilterMetadata(patchNote.filter_metadata);
+    const filterLabel = getFilterSummaryLabel(
+      filterMetadata.normalized,
+      patchNote.time_period
+    );
 
     // Use hardcoded audience ID from the docs
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
@@ -317,13 +324,7 @@ export async function POST(
       <h1 class="title">${(patchNote as PatchNote).title}</h1>
       <div class="metadata">
         <span class="badge">${(patchNote as PatchNote).repo_name}</span>
-        <span class="badge">${
-          (patchNote as PatchNote).time_period === "1day"
-            ? "Daily"
-            : (patchNote as PatchNote).time_period === "1week"
-            ? "Weekly"
-            : "Monthly"
-        }</span>
+        <span class="badge">${filterLabel}</span>
         <span>${new Date(
           (patchNote as PatchNote).generated_at
         ).toLocaleDateString("en-US", {

@@ -1,50 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchGitHubCommits, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
+import { collectCommits, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
 import { summarizeCommits, generateOverallSummary } from '@/lib/ai-summarizer';
+import { getFilterSummaryLabel, validateFilterMetadata } from '@/lib/filter-metadata';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { owner, repo, timePeriod, branch } = body;
+    const { owner, repo, branch, filters } = body;
 
-    if (!owner || !repo || !timePeriod) {
+    if (!owner || !repo) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
       );
     }
 
-    // Calculate date range
-    const now = new Date();
-    const since = new Date(now);
-    switch (timePeriod) {
-      case '1day':
-        since.setDate(since.getDate() - 1);
-        break;
-      case '1week':
-        since.setDate(since.getDate() - 7);
-        break;
-      case '1month':
-        since.setMonth(since.getMonth() - 1);
-        break;
+    const validation = validateFilterMetadata(filters);
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.reason }, { status: 400 });
     }
 
-    // Fetch commits
-    const commits = await fetchGitHubCommits(
-      owner,
-      repo,
-      since.toISOString(),
-      now.toISOString(),
-      branch
-    );
+    const commits = await collectCommits(owner, repo, validation.normalized, branch ?? null);
+    const filterLabel = getFilterSummaryLabel(validation.normalized);
 
     if (commits.length === 0) {
       return NextResponse.json({
         summaries: [],
-        overallSummary: 'No commits found in this time period.',
+        overallSummary: 'No commits found for the selected filters.',
         totalCommits: 0,
         totalAdditions: 0,
         totalDeletions: 0,
+        filterLabel,
+        appliedFilters: validation.normalized,
       });
     }
 
@@ -84,7 +71,7 @@ export async function POST(request: NextRequest) {
     // Generate overall summary
     const overallSummary = await generateOverallSummary(
       `${owner}/${repo}`,
-      timePeriod,
+      filterLabel,
       summaries,
       commits.length,
       totalAdditions,
@@ -97,6 +84,8 @@ export async function POST(request: NextRequest) {
       totalCommits: commits.length,
       totalAdditions,
       totalDeletions,
+      filterLabel,
+      appliedFilters: validation.normalized,
     });
   } catch (error) {
     console.error('Error generating summaries:', error);
