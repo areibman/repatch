@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     };
     const { owner, repo, timePeriod, branch, templateId, templateOverride } = body;
 
-    if (!owner || !repo || !timePeriod) {
+    if (!owner || !repo) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
@@ -82,15 +82,14 @@ export async function POST(request: NextRequest) {
     const commits = await fetchGitHubCommits(
       owner,
       repo,
-      since.toISOString(),
-      now.toISOString(),
+      filters,
       branch
     );
 
     if (commits.length === 0) {
       return NextResponse.json({
         summaries: [],
-        overallSummary: 'No commits found in this time period.',
+        overallSummary: 'No commits found for the selected filters.',
         totalCommits: 0,
         totalAdditions: 0,
         totalDeletions: 0,
@@ -133,7 +132,7 @@ export async function POST(request: NextRequest) {
     // Generate overall summary
     const overallSummary = await generateOverallSummary(
       `${owner}/${repo}`,
-      timePeriod,
+      filters,
       summaries,
       commits.length,
       totalAdditions,
@@ -150,6 +149,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error generating summaries:', error);
+    if (error instanceof FilterValidationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to generate summaries' },
       { status: 500 }

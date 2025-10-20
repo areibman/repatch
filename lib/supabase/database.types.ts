@@ -37,8 +37,7 @@ export interface Database {
           id: string;
           repo_name: string;
           repo_url: string;
-          repo_branch: string | null;
-          time_period: "1day" | "1week" | "1month";
+          time_period: "1day" | "1week" | "1month" | "custom" | "release";
           title: string;
           content: string;
           changes: {
@@ -51,7 +50,7 @@ export interface Database {
           video_url: string | null;
           ai_summaries: Json | null;
           ai_overall_summary: string | null;
-          ai_template_id: string | null;
+          filter_metadata: Json | null;
           generated_at: string;
           created_at: string;
           updated_at: string;
@@ -60,8 +59,7 @@ export interface Database {
           id?: string;
           repo_name: string;
           repo_url: string;
-          repo_branch?: string | null;
-          time_period: "1day" | "1week" | "1month";
+          time_period: "1day" | "1week" | "1month" | "custom" | "release";
           title: string;
           content: string;
           changes?: {
@@ -74,7 +72,7 @@ export interface Database {
           video_url?: string | null;
           ai_summaries?: Json | null;
           ai_overall_summary?: string | null;
-          ai_template_id?: string | null;
+          filter_metadata?: Json | null;
           generated_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -83,8 +81,7 @@ export interface Database {
           id?: string;
           repo_name?: string;
           repo_url?: string;
-          repo_branch?: string | null;
-          time_period?: "1day" | "1week" | "1month";
+          time_period?: "1day" | "1week" | "1month" | "custom" | "release";
           title?: string;
           content?: string;
           changes?: {
@@ -97,7 +94,7 @@ export interface Database {
           video_url?: string | null;
           ai_summaries?: Json | null;
           ai_overall_summary?: string | null;
-          ai_template_id?: string | null;
+          filter_metadata?: Json | null;
           generated_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -163,7 +160,7 @@ export interface Database {
       [_ in never]: never;
     };
     Enums: {
-      time_period_type: "1day" | "1week" | "1month";
+      time_period_type: "1day" | "1week" | "1month" | "custom" | "release";
     };
   };
 }

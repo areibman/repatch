@@ -1,5 +1,7 @@
 import { generateText } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { PatchNoteFilters } from '@/types/patch-note';
+import { formatFilterSummary, formatFilterDetailLabel } from './filter-utils';
 
 export interface CommitSummary {
   sha: string;
@@ -204,7 +206,7 @@ export async function summarizeCommits(
  */
 export async function generateOverallSummary(
   repoName: string,
-  timePeriod: '1day' | '1week' | '1month',
+  filters: PatchNoteFilters | undefined,
   commitSummaries: CommitSummary[],
   totalCommits: number,
   totalAdditions: number,
@@ -215,7 +217,15 @@ export async function generateOverallSummary(
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      return `This ${timePeriod} saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
+      const label = formatFilterSummary(
+        filters,
+        filters?.mode === 'release'
+          ? 'release'
+          : filters?.mode === 'custom'
+          ? 'custom'
+          : filters?.preset ?? '1week'
+      );
+      return `This ${label.toLowerCase()} window saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
     }
 
     const google = createGoogleGenerativeAI({ apiKey });
@@ -235,6 +245,14 @@ export async function generateOverallSummary(
     return text.trim();
   } catch (error) {
     console.error('Error generating overall summary:', error);
-    return `This ${timePeriod} saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
+    const fallbackLabel = formatFilterSummary(
+      filters,
+      filters?.mode === 'release'
+        ? 'release'
+        : filters?.mode === 'custom'
+        ? 'custom'
+        : filters?.preset ?? '1week'
+    );
+    return `This ${fallbackLabel.toLowerCase()} window saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
   }
 }

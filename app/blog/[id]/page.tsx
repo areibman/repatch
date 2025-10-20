@@ -25,6 +25,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { CommitSummary, PatchNote } from "@/types/patch-note";
 import type { AiTemplate } from "@/types/ai-template";
+import { formatFilterDetailLabel, formatFilterSummary } from "@/lib/filter-utils";
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -89,7 +90,7 @@ export default function BlogViewPage() {
         const data = await response.json();
 
         // Transform database format to UI format
-        const transformedNote = {
+        const transformedNote: PatchNote = {
           id: data.id,
           repoName: data.repo_name,
           repoUrl: data.repo_url,
@@ -104,6 +105,7 @@ export default function BlogViewPage() {
           aiSummaries: data.ai_summaries as CommitSummary[] | null,
           aiOverallSummary: data.ai_overall_summary,
           aiTemplateId: data.ai_template_id,
+          filterMetadata: data.filter_metadata ?? null,
         };
 
         setPatchNote(transformedNote);
@@ -415,6 +417,8 @@ export default function BlogViewPage() {
         return period;
     }
   };
+  const getFilterLabel = (note: PatchNote) =>
+    formatFilterSummary(note.filterMetadata, note.timePeriod);
 
   if (!patchNote) {
     return (
@@ -468,12 +472,17 @@ export default function BlogViewPage() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant="secondary">
-                  {getTimePeriodLabel(patchNote.timePeriod)}
+                  {getFilterLabel(patchNote)}
                 </Badge>
                 <Badge variant="outline">
                   {new Date(patchNote.generatedAt).toLocaleDateString()}
                 </Badge>
               </div>
+              {patchNote.filterMetadata && (
+                <p className="text-xs text-muted-foreground mb-4">
+                  {formatFilterDetailLabel(patchNote.filterMetadata)}
+                </p>
+              )}
 
               {isEditing ? (
                 <Textarea

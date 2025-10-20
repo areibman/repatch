@@ -15,13 +15,35 @@ export interface CommitSummary {
   aiSummary: string;
   additions: number;
   deletions: number;
+export type TimePreset = "1day" | "1week" | "1month";
+
+export type FilterMode = "preset" | "custom" | "release";
+
+export interface PatchNoteFilters {
+  mode: FilterMode;
+  preset?: TimePreset;
+  customRange?: {
+    since: string;
+    until: string;
+  };
+  includeLabels?: string[];
+  excludeLabels?: string[];
+  includeTags?: string[];
+  excludeTags?: string[];
+  releases?: Array<{
+    tag: string;
+    name?: string | null;
+    previousTag?: string | null;
+    publishedAt?: string | null;
+    targetCommitish?: string | null;
+  }>;
 }
 
 export interface PatchNote {
   id: string;
   repoName: string;
   repoUrl: string;
-  timePeriod: "1day" | "1week" | "1month";
+  timePeriod: TimePreset | "custom" | "release";
   generatedAt: Date;
   title: string;
   content: string;
@@ -38,4 +60,5 @@ export interface PatchNote {
   aiOverallSummary?: string | null;
   aiTemplateId?: string | null;
   aiTemplate?: AiTemplate;
+  filterMetadata?: PatchNoteFilters | null;
 }
