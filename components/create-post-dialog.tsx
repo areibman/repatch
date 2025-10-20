@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { Dispatch, KeyboardEvent, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -14,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -21,13 +23,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusIcon, Loader2Icon } from "lucide-react";
+import { PlusIcon, Loader2Icon, HelpCircle } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   generateVideoData,
   generateVideoDataFromAI,
   parseGitHubUrl,
   generateBoilerplateContent,
 } from "@/lib/github";
+import {
+  deriveTimePeriodValue,
+  formatFilterDetailLabel,
+  formatFilterSummary,
+  getPresetLabel,
+} from "@/lib/filter-utils";
+import {
+  FilterMode,
+  PatchNoteFilters,
+  TimePreset,
+} from "@/types/patch-note";
 
 export function CreatePostDialog() {
   const router = useRouter();
@@ -38,12 +57,90 @@ export function CreatePostDialog() {
   const [repoUrl, setRepoUrl] = useState('');
   const [branches, setBranches] = useState<{ name: string; protected: boolean }[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
-  const [timePeriod, setTimePeriod] = useState<'1day' | '1week' | '1month'>('1week');
+  const [filterMode, setFilterMode] = useState<FilterMode>('preset');
+  const [timePreset, setTimePreset] = useState<TimePreset>('1week');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [availableReleases, setAvailableReleases] = useState<
+    Array<{
+      id: number;
+      tagName: string;
+      name: string | null;
+      publishedAt: string | null;
+      targetCommitish: string;
+    }>
+  >([]);
+  const [selectedReleases, setSelectedReleases] = useState<string[]>([]);
+  const [availableLabels, setAvailableLabels] = useState<string[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [includeLabels, setIncludeLabels] = useState<string[]>([]);
+  const [excludeLabels, setExcludeLabels] = useState<string[]>([]);
+  const [includeTags, setIncludeTags] = useState<string[]>([]);
+  const [excludeTags, setExcludeTags] = useState<string[]>([]);
+  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
+
+  const fetchRepositoryMetadata = async (owner: string, repo: string) => {
+    setIsFetchingMetadata(true);
+    try {
+      const [labelsRes, tagsRes, releasesRes] = await Promise.all([
+        fetch(
+          `/api/github/labels?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`
+        ),
+        fetch(
+          `/api/github/tags?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`
+        ),
+        fetch(
+          `/api/github/releases?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`
+        ),
+      ]);
+
+      if (labelsRes.ok) {
+        const labels = await labelsRes.json();
+        setAvailableLabels(Array.isArray(labels) ? labels : []);
+      }
+
+      if (tagsRes.ok) {
+        const tags = await tagsRes.json();
+        if (Array.isArray(tags)) {
+          setAvailableTags(
+            tags.map((tag: { name: string }) => tag.name).filter(Boolean)
+          );
+        }
+      }
+
+      if (releasesRes.ok) {
+        const releases = await releasesRes.json();
+        if (Array.isArray(releases)) {
+          setAvailableReleases(
+            releases.map((release: any) => ({
+              id: release.id,
+              tagName: release.tagName || release.tag_name,
+              name: release.name ?? null,
+              publishedAt: release.publishedAt || release.published_at || null,
+              targetCommitish: release.targetCommitish || release.target_commitish || 'main',
+            }))
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching repository metadata:', error);
+    } finally {
+      setIsFetchingMetadata(false);
+    }
+  };
 
   const handleRepoUrlChange = async (url: string) => {
     setRepoUrl(url);
     setBranches([]);
     setSelectedBranch('');
+    setAvailableLabels([]);
+    setAvailableTags([]);
+    setAvailableReleases([]);
+    setSelectedReleases([]);
+    setIncludeLabels([]);
+    setExcludeLabels([]);
+    setIncludeTags([]);
+    setExcludeTags([]);
 
     const repoInfo = parseGitHubUrl(url);
     if (repoInfo) {
@@ -69,6 +166,10 @@ export function CreatePostDialog() {
         if (defaultBranch) {
           setSelectedBranch(defaultBranch.name);
         }
+
+        fetchRepositoryMetadata(repoInfo.owner, repoInfo.repo).catch((error) =>
+          console.error('Error fetching metadata:', error)
+        );
       } catch (error) {
         console.error('Error fetching branches:', error);
         // Continue without branches - will be validated on submit
@@ -77,6 +178,139 @@ export function CreatePostDialog() {
       }
     }
   };
+
+  const sanitizeTokens = (values: string[]) =>
+    Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+
+  const addToken = (
+    value: string,
+    setter: Dispatch<SetStateAction<string[]>>
+  ) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setter((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+  };
+
+  const removeToken = (
+    value: string,
+    setter: Dispatch<SetStateAction<string[]>>
+  ) => {
+    setter((prev) => prev.filter((item) => item !== value));
+  };
+
+  const handleTokenInput = (
+    event: KeyboardEvent<HTMLInputElement>,
+    setter: Dispatch<SetStateAction<string[]>>
+  ) => {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      const target = event.target as HTMLInputElement;
+      const value = target.value.trim();
+      if (value) {
+        addToken(value, setter);
+        target.value = '';
+      }
+    }
+  };
+
+  const toggleReleaseSelection = (tag: string) => {
+    setSelectedReleases((prev) =>
+      prev.includes(tag)
+        ? prev.filter((value) => value !== tag)
+        : [...prev, tag]
+    );
+  };
+
+  const releasePreviousTagMap = useMemo(() => {
+    const sorted = [...availableReleases].sort((a, b) => {
+      const aTime = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+      const bTime = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+      return aTime - bTime;
+    });
+    const map = new Map<string, string | null>();
+    sorted.forEach((release, index) => {
+      const previous = index > 0 ? sorted[index - 1] : undefined;
+      map.set(release.tagName, previous ? previous.tagName : null);
+    });
+    return map;
+  }, [availableReleases]);
+
+  const renderTokenSelector = (
+    label: string,
+    tokens: string[],
+    setter: Dispatch<SetStateAction<string[]>>,
+    suggestions: string[],
+    placeholder: string,
+    tooltip?: string
+  ) => (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5">
+        <span className="text-sm font-medium">{label}</span>
+        {tooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[250px]">
+              <p className="text-xs">{tooltip}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {tokens.map((token) => (
+          <Badge
+            key={token}
+            variant="secondary"
+            className="flex items-center gap-2"
+          >
+            {token}
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => removeToken(token, setter)}
+              aria-label={`Remove ${token}`}
+            >
+              ×
+            </button>
+          </Badge>
+        ))}
+        {tokens.length === 0 && (
+          <span className="text-xs text-muted-foreground">None selected</span>
+        )}
+      </div>
+      <Input
+        placeholder={placeholder}
+        onKeyDown={(event) => handleTokenInput(event, setter)}
+        disabled={isLoading}
+      />
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <span>Suggestions:</span>
+          {suggestions.slice(0, 8).map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              className="rounded-md border px-2 py-0.5 hover:bg-muted"
+              onClick={() => addToken(suggestion, setter)}
+              disabled={isLoading}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const presetOptions = useMemo(
+    () =>
+      (['1day', '1week', '1month'] as TimePreset[]).map((value) => ({
+        value,
+        label: getPresetLabel(value),
+      })),
+    []
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +321,7 @@ export function CreatePostDialog() {
       return;
     }
 
-    if (!selectedBranch) {
+    if (filterMode !== 'release' && !selectedBranch) {
       alert('Please select a branch');
       return;
     }
@@ -95,22 +329,121 @@ export function CreatePostDialog() {
     setIsLoading(true);
 
     try {
+      let filterPayload: PatchNoteFilters;
+      if (filterMode === 'custom') {
+        if (!customStart || !customEnd) {
+          alert('Please provide both a start and end date for the custom range');
+          setIsLoading(false);
+          return;
+        }
+        const start = new Date(customStart);
+        const end = new Date(customEnd);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+          alert('Please enter valid dates for the custom range');
+          setIsLoading(false);
+          return;
+        }
+        if (start >= end) {
+          alert('The end date must be after the start date');
+          setIsLoading(false);
+          return;
+        }
+        filterPayload = {
+          mode: 'custom',
+          customRange: {
+            since: start.toISOString(),
+            until: end.toISOString(),
+          },
+        };
+      } else if (filterMode === 'release') {
+        if (selectedReleases.length === 0) {
+          alert('Select at least one release to generate patch notes from');
+          setIsLoading(false);
+          return;
+        }
+        const releases = selectedReleases
+          .map((tag) => {
+            const release = availableReleases.find((item) => item.tagName === tag);
+            if (!release) return null;
+            return {
+              tag: release.tagName,
+              name: release.name,
+              previousTag: releasePreviousTagMap.get(release.tagName) ?? null,
+              publishedAt: release.publishedAt,
+              targetCommitish: release.targetCommitish,
+            };
+          })
+          .filter(Boolean) as NonNullable<PatchNoteFilters['releases']>;
+
+        if (releases.length === 0) {
+          alert('Selected releases could not be loaded. Please refresh and try again.');
+          setIsLoading(false);
+          return;
+        }
+
+        filterPayload = {
+          mode: 'release',
+          releases,
+        };
+      } else {
+        filterPayload = {
+          mode: 'preset',
+          preset: timePreset,
+        };
+      }
+
+      const sanitizedIncludeLabels = sanitizeTokens(includeLabels);
+      const sanitizedExcludeLabels = sanitizeTokens(excludeLabels);
+      const sanitizedIncludeTags = sanitizeTokens(includeTags);
+      const sanitizedExcludeTags = sanitizeTokens(excludeTags);
+
+      if (sanitizedIncludeLabels.length > 0) {
+        filterPayload.includeLabels = sanitizedIncludeLabels;
+      }
+      if (sanitizedExcludeLabels.length > 0) {
+        filterPayload.excludeLabels = sanitizedExcludeLabels;
+      }
+      if (sanitizedIncludeTags.length > 0) {
+        filterPayload.includeTags = sanitizedIncludeTags;
+      }
+      if (sanitizedExcludeTags.length > 0) {
+        filterPayload.excludeTags = sanitizedExcludeTags;
+      }
+
+      const filterSummary = formatFilterSummary(
+        filterPayload,
+        filterPayload.mode === 'release'
+          ? 'release'
+          : filterPayload.mode === 'custom'
+          ? 'custom'
+          : filterPayload.preset ?? '1week'
+      );
+
       // Fetch real GitHub statistics via API route (server-side with token)
       setLoadingStep('📊 Fetching repository statistics...');
-      const statsResponse = await fetch(
-        `/api/github/stats?owner=${encodeURIComponent(repoInfo.owner)}&repo=${encodeURIComponent(repoInfo.repo)}&timePeriod=${timePeriod}&branch=${encodeURIComponent(selectedBranch)}`
-      );
-      
+      const statsResponse = await fetch('/api/github/stats', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          owner: repoInfo.owner,
+          repo: repoInfo.repo,
+          branch: selectedBranch,
+          filters: filterPayload,
+        }),
+      });
+
       if (!statsResponse.ok) {
         const error = await statsResponse.json();
         throw new Error(error.error || 'Failed to fetch repository stats');
       }
-      
+
       const stats = await statsResponse.json();
 
       // Generate AI summaries for commits
       setLoadingStep('Analyzing commits (30-60s)...');
-      console.log('Fetching AI summaries...');
+      console.log('Fetching AI summaries for filters:', filterSummary);
       const summariesResponse = await fetch('/api/github/summarize', {
         method: 'POST',
         headers: {
@@ -119,14 +452,14 @@ export function CreatePostDialog() {
         body: JSON.stringify({
           owner: repoInfo.owner,
           repo: repoInfo.repo,
-          timePeriod,
+          filters: filterPayload,
           branch: selectedBranch,
         }),
       });
 
-      let aiSummaries = [];
-      let aiOverallSummary = null;
-      
+      let aiSummaries: any[] = [];
+      let aiOverallSummary: string | null = null;
+
       if (summariesResponse.ok) {
         const summaryData = await summariesResponse.json();
         aiSummaries = summaryData.summaries || [];
@@ -138,44 +471,54 @@ export function CreatePostDialog() {
 
       // Use AI summary as content, or fallback to boilerplate
       setLoadingStep('✍️ Generating patch note content...');
-      const content = aiOverallSummary 
-        ? `${aiOverallSummary}\n\n## Key Changes\n\n${aiSummaries.map((s: any) => `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`).join('\n\n')}`
+      const content = aiOverallSummary
+        ? `${aiOverallSummary}\n\n## Key Changes\n\n${aiSummaries
+            .map(
+              (s: any) =>
+                `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`
+            )
+            .join('\n\n')}`
         : generateBoilerplateContent(
             `${repoInfo.owner}/${repoInfo.repo}`,
-            timePeriod,
+            filterPayload,
             stats
           );
 
       // Generate video data - use AI summaries if available, otherwise fallback to raw stats
-      console.log(`🎬 Generating video data using ${aiSummaries.length > 0 ? 'AI summaries' : 'raw GitHub stats'}`);
-      const videoData = aiSummaries.length > 0
-        ? generateVideoDataFromAI(aiSummaries, aiOverallSummary || undefined)
-        : await generateVideoData(
-            `${repoInfo.owner}/${repoInfo.repo}`,
-            timePeriod,
-            stats
-          );
+      console.log(
+        `🎬 Generating video data using ${
+          aiSummaries.length > 0 ? 'AI summaries' : 'raw GitHub stats'
+        }`
+      );
+      const videoData =
+        aiSummaries.length > 0
+          ? generateVideoDataFromAI(aiSummaries, aiOverallSummary || undefined)
+          : await generateVideoData(
+              `${repoInfo.owner}/${repoInfo.repo}`,
+              filterPayload,
+              stats
+            );
 
-      const periodLabel =
-        timePeriod === "1day"
-          ? "Daily"
-          : timePeriod === "1week"
-          ? "Weekly"
-          : "Monthly";
+      const descriptor =
+        filterPayload.mode === 'preset' && filterPayload.preset
+          ? getPresetLabel(filterPayload.preset)
+          : filterPayload.mode === 'release'
+          ? 'Release Selection'
+          : 'Custom Range';
 
       // Create the patch note with real data and AI summaries
       setLoadingStep('💾 Saving patch note...');
-      const response = await fetch("/api/patch-notes", {
-        method: "POST",
+      const response = await fetch('/api/patch-notes', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           repo_name: `${repoInfo.owner}/${repoInfo.repo}`,
           repo_url: repoUrl,
-          time_period: timePeriod,
-          title: `${periodLabel} Update - ${repoInfo.repo}`,
-          content: content,
+          time_period: deriveTimePeriodValue(filterPayload),
+          title: `${descriptor} Update - ${repoInfo.repo}`,
+          content,
           changes: {
             added: stats.additions,
             modified: 0, // GitHub API doesn't distinguish modified from additions
@@ -185,13 +528,14 @@ export function CreatePostDialog() {
           video_data: videoData,
           ai_summaries: aiSummaries,
           ai_overall_summary: aiOverallSummary,
+          filter_metadata: filterPayload,
           generated_at: new Date().toISOString(),
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create patch note");
+        throw new Error(errorData.error || 'Failed to create patch note');
       }
 
       const data = await response.json();
@@ -201,6 +545,18 @@ export function CreatePostDialog() {
       setRepoUrl('');
       setBranches([]);
       setSelectedBranch('');
+      setFilterMode('preset');
+      setTimePreset('1week');
+      setCustomStart('');
+      setCustomEnd('');
+      setAvailableLabels([]);
+      setAvailableTags([]);
+      setAvailableReleases([]);
+      setSelectedReleases([]);
+      setIncludeLabels([]);
+      setExcludeLabels([]);
+      setIncludeTags([]);
+      setExcludeTags([]);
       setLoadingStep('');
       router.push(`/blog/${data.id}`);
       router.refresh();
@@ -216,23 +572,24 @@ export function CreatePostDialog() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="lg">
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Create New Post
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[525px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
+    <TooltipProvider>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button size="lg">
+            <PlusIcon className="h-5 w-5 mr-2" />
+            Create New Post
+          </Button>
+        </DialogTrigger>
+      <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-hidden flex flex-col">
+        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden min-h-0 flex-1">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Create Patch Note</DialogTitle>
             <DialogDescription>
               Generate AI-powered patch notes from a GitHub repository.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 overflow-y-auto flex-1 min-h-0">
             <div className="grid gap-2">
               <Label htmlFor="repo-url">Repository URL</Label>
               <Input
@@ -244,11 +601,15 @@ export function CreatePostDialog() {
                 disabled={isLoading}
               />
               <p className="text-xs text-muted-foreground">
-                {isFetchingBranches ? 'Fetching branches...' : 'Enter the full GitHub repository URL'}
+                {isFetchingBranches
+                  ? 'Fetching branches...'
+                  : isFetchingMetadata
+                  ? 'Loading releases, labels, and tags from GitHub...'
+                  : 'Enter the full GitHub repository URL'}
               </p>
             </div>
 
-            {branches.length > 0 && (
+            {branches.length > 0 && filterMode !== 'release' && (
               <div className="grid gap-2">
                 <Label htmlFor="branch">
                   Branch
@@ -278,30 +639,170 @@ export function CreatePostDialog() {
             )}
             
             <div className="grid gap-2">
-              <Label htmlFor="time-period">Time Period</Label>
+              <Label htmlFor="filter-mode">Commit Source</Label>
               <Select
-                value={timePeriod}
+                value={filterMode}
                 onValueChange={(value: string) =>
-                  setTimePeriod(value as "1day" | "1week" | "1month")
+                  setFilterMode(value as FilterMode)
                 }
                 disabled={isLoading}
               >
-                <SelectTrigger id="time-period">
-                  <SelectValue placeholder="Select time period" />
+                <SelectTrigger id="filter-mode">
+                  <SelectValue placeholder="Select commit source" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1day">Last 24 Hours</SelectItem>
-                  <SelectItem value="1week">Last Week</SelectItem>
-                  <SelectItem value="1month">Last Month</SelectItem>
+                  <SelectItem value="preset">Quick Preset</SelectItem>
+                  <SelectItem value="custom">Custom Range</SelectItem>
+                  <SelectItem value="release">Release Selection</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Choose the time range for analyzing changes
+                Choose how to scope the commits that feed this patch note.
               </p>
+
+              {filterMode === 'preset' && (
+                <div className="space-y-2">
+                  <Select
+                    value={timePreset}
+                    onValueChange={(value: string) =>
+                      setTimePreset(value as TimePreset)
+                    }
+                    disabled={isLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select preset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {presetOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Apply a one-click interval for recent activity.
+                  </p>
+                </div>
+              )}
+
+              {filterMode === 'custom' && (
+                <div className="space-y-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-1">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Start
+                      </span>
+                      <Input
+                        type="datetime-local"
+                        value={customStart}
+                        onChange={(event) => setCustomStart(event.target.value)}
+                        disabled={isLoading}
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        End
+                      </span>
+                      <Input
+                        type="datetime-local"
+                        value={customEnd}
+                        onChange={(event) => setCustomEnd(event.target.value)}
+                        disabled={isLoading}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Specify the exact time span to analyze commits.
+                  </p>
+                </div>
+              )}
+
+              {filterMode === 'release' && (
+                <div className="space-y-2">
+                  {availableReleases.length > 0 ? (
+                    <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3">
+                      {availableReleases.map((release) => (
+                        <label
+                          key={release.id}
+                          className="flex items-start gap-3 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4"
+                            checked={selectedReleases.includes(release.tagName)}
+                            onChange={() => toggleReleaseSelection(release.tagName)}
+                            disabled={isLoading}
+                          />
+                          <span className="flex flex-col">
+                            <span className="font-medium">
+                              {release.name || release.tagName}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {release.publishedAt
+                                ? new Date(release.publishedAt).toLocaleDateString()
+                                : 'Publish date unavailable'}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                      {isFetchingMetadata
+                        ? 'Loading releases from GitHub...'
+                        : 'No releases detected yet for this repository.'}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Select one or more releases to use their commit ranges.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {renderTokenSelector(
+                'Include Labels',
+                includeLabels,
+                setIncludeLabels,
+                availableLabels,
+                'Add label and press Enter',
+                'Only analyze commits/PRs that have at least one of these GitHub labels (e.g., "feature", "bug")'
+              )}
+              {renderTokenSelector(
+                'Exclude Labels',
+                excludeLabels,
+                setExcludeLabels,
+                availableLabels,
+                'Exclude label and press Enter',
+                'Skip commits/PRs that have any of these GitHub labels (e.g., "internal", "chore")'
+              )}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {renderTokenSelector(
+                'Include Tags',
+                includeTags,
+                setIncludeTags,
+                availableTags,
+                'Add tag and press Enter',
+                'Only analyze commits associated with these Git tags'
+              )}
+              {renderTokenSelector(
+                'Exclude Tags',
+                excludeTags,
+                setExcludeTags,
+                availableTags,
+                'Exclude tag and press Enter',
+                'Skip commits associated with these Git tags'
+              )}
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button
               type="button"
               variant="outline"
@@ -312,7 +813,7 @@ export function CreatePostDialog() {
             </Button>
             <Button 
               type="submit" 
-              disabled={isLoading || isFetchingBranches || !selectedBranch}
+              disabled={isLoading || isFetchingBranches || (filterMode !== 'release' && !selectedBranch)}
               className="min-w-[200px]"
             >
               {isLoading ? (
@@ -332,6 +833,7 @@ export function CreatePostDialog() {
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </TooltipProvider>
   );
 }
