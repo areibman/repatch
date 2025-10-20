@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMemo, useState } from "react";
 import type { Dispatch, KeyboardEvent, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -561,9 +560,6 @@ export function CreatePostDialog() {
           repo_name: `${repoInfo.owner}/${repoInfo.repo}`,
           repo_url: repoUrl,
           repo_branch: selectedBranch,
-          time_period: timePeriod,
-          title: `${periodLabel} Update - ${repoInfo.repo}`,
-          content: content,
           time_period: deriveTimePeriodValue(filterPayload),
           title: `${descriptor} Update - ${repoInfo.repo}`,
           content,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchGitHubCommits, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
+import { getCommitsForFilters, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
 import {
   summarizeCommits,
   generateOverallSummary,
@@ -7,6 +7,8 @@ import {
 } from '@/lib/ai-summarizer';
 import { createClient } from '@/lib/supabase/server';
 import { mapTemplateRow } from '@/lib/templates';
+import { FilterValidationError } from '@/lib/filter-utils';
+import type { PatchNoteFilters } from '@/types/patch-note';
 
 type TemplateOverridePayload = {
   content: string;
@@ -17,16 +19,23 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       owner?: string;
       repo?: string;
-      timePeriod?: '1day' | '1week' | '1month';
+      filters?: PatchNoteFilters;
       branch?: string;
       templateId?: string;
       templateOverride?: TemplateOverridePayload;
     };
-    const { owner, repo, timePeriod, branch, templateId, templateOverride } = body;
+    const { owner, repo, filters, branch, templateId, templateOverride } = body;
 
     if (!owner || !repo) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
+        { status: 400 }
+      );
+    }
+
+    if (!filters) {
+      return NextResponse.json(
+        { error: 'Missing filters parameter' },
         { status: 400 }
       );
     }
@@ -63,23 +72,8 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Calculate date range
-    const now = new Date();
-    const since = new Date(now);
-    switch (timePeriod) {
-      case '1day':
-        since.setDate(since.getDate() - 1);
-        break;
-      case '1week':
-        since.setDate(since.getDate() - 7);
-        break;
-      case '1month':
-        since.setMonth(since.getMonth() - 1);
-        break;
-    }
-
     // Fetch commits
-    const commits = await fetchGitHubCommits(
+    const commits = await getCommitsForFilters(
       owner,
       repo,
       filters,

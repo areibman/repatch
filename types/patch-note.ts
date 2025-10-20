@@ -15,6 +15,8 @@ export interface CommitSummary {
   aiSummary: string;
   additions: number;
   deletions: number;
+}
+
 export type TimePreset = "1day" | "1week" | "1month";
 
 export type FilterMode = "preset" | "custom" | "release";
