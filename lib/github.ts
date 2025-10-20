@@ -488,11 +488,15 @@ async function collectCommitsForReleases(
         const until = new Date(release.publishedAt).toISOString();
         const sinceDate = new Date(release.publishedAt);
         sinceDate.setDate(sinceDate.getDate() - 30);
+        // Respect the release's target branch (e.g., 'develop', 'main')
+        // If targetCommitish is null or empty, GitHub API will use the default branch
+        const targetBranch = release.targetCommitish?.trim() || undefined;
         releaseCommits = await fetchGitHubCommits(
           owner,
           repo,
           sinceDate.toISOString(),
-          until
+          until,
+          targetBranch
         );
       } else {
         releaseCommits = await fetchCommitsByTag(owner, repo, release.tag);
