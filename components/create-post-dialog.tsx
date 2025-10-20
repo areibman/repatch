@@ -23,7 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusIcon, Loader2Icon } from "lucide-react";
+import { PlusIcon, Loader2Icon, HelpCircle } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   generateVideoData,
   generateVideoDataFromAI,
@@ -234,10 +240,23 @@ export function CreatePostDialog() {
     tokens: string[],
     setter: Dispatch<SetStateAction<string[]>>,
     suggestions: string[],
-    placeholder: string
+    placeholder: string,
+    tooltip?: string
   ) => (
     <div className="space-y-2">
-      <span className="text-sm font-medium">{label}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-sm font-medium">{label}</span>
+        {tooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[250px]">
+              <p className="text-xs">{tooltip}</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
       <div className="flex flex-wrap gap-2">
         {tokens.map((token) => (
           <Badge
@@ -302,7 +321,7 @@ export function CreatePostDialog() {
       return;
     }
 
-    if (!selectedBranch) {
+    if (filterMode !== 'release' && !selectedBranch) {
       alert('Please select a branch');
       return;
     }
@@ -553,23 +572,24 @@ export function CreatePostDialog() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="lg">
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Create New Post
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[525px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
+    <TooltipProvider>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button size="lg">
+            <PlusIcon className="h-5 w-5 mr-2" />
+            Create New Post
+          </Button>
+        </DialogTrigger>
+      <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-hidden flex flex-col">
+        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden min-h-0 flex-1">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Create Patch Note</DialogTitle>
             <DialogDescription>
               Generate AI-powered patch notes from a GitHub repository.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 overflow-y-auto flex-1 min-h-0">
             <div className="grid gap-2">
               <Label htmlFor="repo-url">Repository URL</Label>
               <Input
@@ -589,7 +609,7 @@ export function CreatePostDialog() {
               </p>
             </div>
 
-            {branches.length > 0 && (
+            {branches.length > 0 && filterMode !== 'release' && (
               <div className="grid gap-2">
                 <Label htmlFor="branch">
                   Branch
@@ -749,14 +769,16 @@ export function CreatePostDialog() {
                 includeLabels,
                 setIncludeLabels,
                 availableLabels,
-                'Add label and press Enter'
+                'Add label and press Enter',
+                'Only analyze commits/PRs that have at least one of these GitHub labels (e.g., "feature", "bug")'
               )}
               {renderTokenSelector(
                 'Exclude Labels',
                 excludeLabels,
                 setExcludeLabels,
                 availableLabels,
-                'Exclude label and press Enter'
+                'Exclude label and press Enter',
+                'Skip commits/PRs that have any of these GitHub labels (e.g., "internal", "chore")'
               )}
             </div>
 
@@ -766,19 +788,21 @@ export function CreatePostDialog() {
                 includeTags,
                 setIncludeTags,
                 availableTags,
-                'Add tag and press Enter'
+                'Add tag and press Enter',
+                'Only analyze commits associated with these Git tags'
               )}
               {renderTokenSelector(
                 'Exclude Tags',
                 excludeTags,
                 setExcludeTags,
                 availableTags,
-                'Exclude tag and press Enter'
+                'Exclude tag and press Enter',
+                'Skip commits associated with these Git tags'
               )}
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button
               type="button"
               variant="outline"
@@ -789,7 +813,7 @@ export function CreatePostDialog() {
             </Button>
             <Button 
               type="submit" 
-              disabled={isLoading || isFetchingBranches || !selectedBranch}
+              disabled={isLoading || isFetchingBranches || (filterMode !== 'release' && !selectedBranch)}
               className="min-w-[200px]"
             >
               {isLoading ? (
@@ -809,6 +833,7 @@ export function CreatePostDialog() {
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </TooltipProvider>
   );
 }
