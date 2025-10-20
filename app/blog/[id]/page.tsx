@@ -312,6 +312,11 @@ export default function BlogViewPage() {
       return;
     }
 
+    if (!patchNote.filterMetadata) {
+      alert('Unable to regenerate: filter metadata is missing.');
+      return;
+    }
+
     try {
       setIsRegenerating(true);
       setRegenerateMessage('Analyzing commits...');
@@ -324,7 +329,7 @@ export default function BlogViewPage() {
         body: JSON.stringify({
           owner,
           repo,
-          timePeriod: patchNote.timePeriod,
+          filters: patchNote.filterMetadata,
           branch: patchNote.repoBranch || 'main',
           templateId: selectedTemplateId || undefined,
         }),
@@ -557,12 +562,6 @@ export default function BlogViewPage() {
         </div>
 
         <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Summary Template</CardTitle>
-            <CardDescription>
-              Choose how AI phrases this update and regenerate the patch note.
-            </CardDescription>
-          </CardHeader>
           <CardContent>
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="grid gap-2">
@@ -606,10 +605,12 @@ export default function BlogViewPage() {
                   <span className="font-medium">
                     {selectedTemplate?.name || 'System Default'}
                   </span>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedTemplate?.content.length || 0} chars
+                  </span>
                 </div>
-                <div className="prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
-                  {selectedTemplate?.content.substring(0, 200) || 'Balanced tone with concise technical highlights.'}
-                  {selectedTemplate && selectedTemplate.content.length > 200 ? '...' : ''}
+                <div className="max-h-48 overflow-y-auto prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
+                  {selectedTemplate?.content || 'Balanced tone with concise technical highlights.'}
                 </div>
               </div>
             </div>
@@ -622,6 +623,7 @@ export default function BlogViewPage() {
             </div>
             <Button
               variant="outline"
+              size="sm"
               onClick={handleRegenerateSummary}
               disabled={isRegenerating || isLoadingTemplates}
               data-testid="regenerate-template-button"
@@ -632,7 +634,7 @@ export default function BlogViewPage() {
                   {regenerateMessage || 'Regenerating...'}
                 </>
               ) : (
-                'Regenerate summary'
+                'Regenerate'
               )}
             </Button>
           </CardFooter>
