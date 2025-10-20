@@ -28,7 +28,6 @@ import {
   parseGitHubUrl,
   generateBoilerplateContent,
 } from "@/lib/github";
-import { DEFAULT_TEMPLATE_EXAMPLES, formatTemplateAudience } from "@/lib/templates";
 import type { AiTemplate } from "@/types/ai-template";
 
 const DEFAULT_TEMPLATE_OPTION = "__default__";
@@ -80,11 +79,6 @@ export function CreatePostDialog() {
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) || null,
     [templates, selectedTemplateId]
-  );
-
-  const previewExamples = useMemo(
-    () => selectedTemplate?.examples || DEFAULT_TEMPLATE_EXAMPLES,
-    [selectedTemplate]
   );
 
   const handleRepoUrlChange = async (url: string) => {
@@ -186,9 +180,8 @@ export function CreatePostDialog() {
 
       // Use AI summary as content, or fallback to boilerplate
       setLoadingStep('✍️ Generating patch note content...');
-      const sectionHeading = previewExamples.sectionHeading || 'Key Changes';
       const content = aiOverallSummary
-        ? `${aiOverallSummary}\n\n## ${sectionHeading}\n\n${aiSummaries.map((s: any) => `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`).join('\n\n')}`
+        ? `${aiOverallSummary}\n\n## Key Changes\n\n${aiSummaries.map((s: any) => `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`).join('\n\n')}`
         : generateBoilerplateContent(
             `${repoInfo.owner}/${repoInfo.repo}`,
             timePeriod,
@@ -370,14 +363,11 @@ export function CreatePostDialog() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={DEFAULT_TEMPLATE_OPTION}>
-                    System Default · technical
+                    System Default
                   </SelectItem>
                   {templates.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
                       {template.name}
-                      {template.audience
-                        ? ` · ${formatTemplateAudience(template.audience)}`
-                        : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -397,36 +387,11 @@ export function CreatePostDialog() {
                   <span className="font-medium">
                     {selectedTemplate?.name || 'System Default'}
                   </span>
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                    {formatTemplateAudience(selectedTemplate?.audience)}
-                  </span>
                 </div>
-                <p className="text-muted-foreground leading-snug">
-                  {selectedTemplate?.description ||
-                    'Balanced tone with concise technical highlights.'}
-                </p>
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">
-                    {previewExamples.sectionHeading}
-                  </p>
-                  {previewExamples.overview ? (
-                    <p className="mt-1 leading-snug">
-                      {previewExamples.overview}
-                    </p>
-                  ) : null}
+                <div className="prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
+                  {selectedTemplate?.content.substring(0, 200) || 'Balanced tone with concise technical highlights.'}
+                  {selectedTemplate && selectedTemplate.content.length > 200 ? '...' : ''}
                 </div>
-                {previewExamples.commits?.length ? (
-                  <ul className="mt-2 space-y-1 list-disc pl-5">
-                    {previewExamples.commits.slice(0, 2).map((example, index) => (
-                      <li key={`${example.summary}-${index}`}>
-                        {example.title ? (
-                          <span className="font-medium">{example.title}: </span>
-                        ) : null}
-                        {example.summary}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
               </div>
             </div>
           </div>

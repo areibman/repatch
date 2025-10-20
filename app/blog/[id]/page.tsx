@@ -36,10 +36,6 @@ import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
-import {
-  DEFAULT_TEMPLATE_EXAMPLES,
-  formatTemplateAudience,
-} from "@/lib/templates";
 
 import dynamic from "next/dynamic";
 
@@ -81,11 +77,6 @@ export default function BlogViewPage() {
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) || null,
     [templates, selectedTemplateId]
-  );
-
-  const previewExamples = useMemo(
-    () => selectedTemplate?.examples || DEFAULT_TEMPLATE_EXAMPLES,
-    [selectedTemplate]
   );
 
   useEffect(() => {
@@ -346,9 +337,8 @@ export default function BlogViewPage() {
       const summaries: CommitSummary[] = summaryData.summaries || [];
       const overallSummary: string | null = summaryData.overallSummary || null;
 
-      const sectionHeading = previewExamples.sectionHeading || 'Key Changes';
       const commitSection = summaries.length
-        ? `\n\n## ${sectionHeading}\n\n${summaries
+        ? `\n\n## Key Changes\n\n${summaries
             .map(
               (s: CommitSummary) =>
                 `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`
@@ -585,14 +575,11 @@ export default function BlogViewPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={DEFAULT_TEMPLATE_OPTION}>
-                      System Default · technical
+                      System Default
                     </SelectItem>
                     {templates.map((template) => (
                       <SelectItem key={template.id} value={template.id}>
                         {template.name}
-                        {template.audience
-                          ? ` · ${formatTemplateAudience(template.audience)}`
-                          : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -610,36 +597,11 @@ export default function BlogViewPage() {
                   <span className="font-medium">
                     {selectedTemplate?.name || 'System Default'}
                   </span>
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                    {formatTemplateAudience(selectedTemplate?.audience)}
-                  </span>
                 </div>
-                <p className="text-muted-foreground leading-snug">
-                  {selectedTemplate?.description ||
-                    'Balanced tone with concise technical highlights.'}
-                </p>
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">
-                    {previewExamples.sectionHeading}
-                  </p>
-                  {previewExamples.overview ? (
-                    <p className="mt-1 leading-snug">
-                      {previewExamples.overview}
-                    </p>
-                  ) : null}
+                <div className="prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
+                  {selectedTemplate?.content.substring(0, 200) || 'Balanced tone with concise technical highlights.'}
+                  {selectedTemplate && selectedTemplate.content.length > 200 ? '...' : ''}
                 </div>
-                {previewExamples.commits?.length ? (
-                  <ul className="mt-2 space-y-1 list-disc pl-5">
-                    {previewExamples.commits.slice(0, 2).map((example, index) => (
-                      <li key={`${example.summary}-${index}`}>
-                        {example.title ? (
-                          <span className="font-medium">{example.title}: </span>
-                        ) : null}
-                        {example.summary}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
               </div>
             </div>
           </CardContent>

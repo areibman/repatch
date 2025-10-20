@@ -9,9 +9,7 @@ import { createClient } from '@/lib/supabase/server';
 import { mapTemplateRow } from '@/lib/templates';
 
 type TemplateOverridePayload = {
-  commitPrompt: string;
-  overallPrompt: string;
-  examples?: SummaryTemplate['examples'];
+  content: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -54,19 +52,14 @@ export async function POST(request: NextRequest) {
       template = {
         id: mapped.id,
         name: mapped.name,
-        commitPrompt: mapped.commitPrompt,
-        overallPrompt: mapped.overallPrompt,
-        examples: mapped.examples,
+        content: mapped.content,
       };
     } else if (
       templateOverride &&
-      typeof templateOverride.commitPrompt === 'string' &&
-      typeof templateOverride.overallPrompt === 'string'
+      typeof templateOverride.content === 'string'
     ) {
       template = {
-        commitPrompt: templateOverride.commitPrompt,
-        overallPrompt: templateOverride.overallPrompt,
-        examples: templateOverride.examples,
+        content: templateOverride.content,
       };
     }
 

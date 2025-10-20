@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { mapTemplateRow, normalizeTemplateExamples } from "@/lib/templates";
+import { mapTemplateRow } from "@/lib/templates";
 import type { AiTemplatePayload } from "@/types/ai-template";
 
 export async function GET() {
@@ -36,9 +36,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!payload.commitPrompt?.trim() || !payload.overallPrompt?.trim()) {
+    if (!payload.content?.trim()) {
       return NextResponse.json(
-        { error: "Both commitPrompt and overallPrompt are required" },
+        { error: "Template content is required" },
         { status: 400 }
       );
     }
@@ -48,11 +48,7 @@ export async function POST(request: NextRequest) {
       .from("ai_templates")
       .insert({
         name: payload.name.trim(),
-        description: payload.description?.trim() || null,
-        audience: payload.audience || "technical",
-        commit_prompt: payload.commitPrompt,
-        overall_prompt: payload.overallPrompt,
-        examples: normalizeTemplateExamples(payload.examples),
+        content: payload.content.trim(),
       })
       .select("*")
       .single();

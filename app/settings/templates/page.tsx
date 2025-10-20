@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,44 +23,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Loader2Icon, PlusIcon } from "lucide-react";
-import type { AiTemplate, AiTemplateExampleCommit } from "@/types/ai-template";
-import {
-  DEFAULT_TEMPLATE_EXAMPLES,
-  formatTemplateAudience,
-} from "@/lib/templates";
+import type { AiTemplate } from "@/types/ai-template";
 
 interface TemplateFormState {
   id?: string;
   name: string;
-  description: string;
-  audience: string;
-  commitPrompt: string;
-  overallPrompt: string;
-  sectionHeading: string;
-  overview: string;
-  commitExamples: AiTemplateExampleCommit[];
+  content: string;
 }
 
 const EMPTY_FORM: TemplateFormState = {
   name: "",
-  description: "",
-  audience: "technical",
-  commitPrompt: "",
-  overallPrompt: "",
-  sectionHeading: DEFAULT_TEMPLATE_EXAMPLES.sectionHeading || "Key Changes",
-  overview: "",
-  commitExamples: [
-    { title: "", summary: "" },
-    { title: "", summary: "" },
-  ],
+  content: "",
 };
 
 export default function TemplatesSettingsPage() {
@@ -95,11 +69,6 @@ export default function TemplatesSettingsPage() {
     loadTemplates();
   }, []);
 
-  const previewExamples = useMemo(
-    () => formState.commitExamples.filter((example) => example.summary.trim()),
-    [formState.commitExamples]
-  );
-
   const openCreateDialog = () => {
     setFormState(EMPTY_FORM);
     setIsDialogOpen(true);
@@ -109,20 +78,7 @@ export default function TemplatesSettingsPage() {
     setFormState({
       id: template.id,
       name: template.name,
-      description: template.description || "",
-      audience: template.audience || "technical",
-      commitPrompt: template.commitPrompt,
-      overallPrompt: template.overallPrompt,
-      sectionHeading:
-        template.examples.sectionHeading || DEFAULT_TEMPLATE_EXAMPLES.sectionHeading || "Key Changes",
-      overview: template.examples.overview || "",
-      commitExamples:
-        template.examples.commits && template.examples.commits.length > 0
-          ? template.examples.commits.map((example) => ({
-              title: example.title || "",
-              summary: example.summary,
-            }))
-          : [{ title: "", summary: "" }],
+      content: template.content,
     });
     setIsDialogOpen(true);
   };
@@ -133,34 +89,6 @@ export default function TemplatesSettingsPage() {
     setIsSubmitting(false);
   };
 
-  const handleExampleChange = (index: number, field: "title" | "summary", value: string) => {
-    setFormState((prev) => {
-      const updated = [...prev.commitExamples];
-      updated[index] = {
-        ...updated[index],
-        [field]: value,
-      };
-      return {
-        ...prev,
-        commitExamples: updated,
-      };
-    });
-  };
-
-  const addExample = () => {
-    setFormState((prev) => ({
-      ...prev,
-      commitExamples: [...prev.commitExamples, { title: "", summary: "" }],
-    }));
-  };
-
-  const removeExample = (index: number) => {
-    setFormState((prev) => ({
-      ...prev,
-      commitExamples: prev.commitExamples.filter((_, i) => i !== index),
-    }));
-  };
-
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -169,8 +97,8 @@ export default function TemplatesSettingsPage() {
       return;
     }
 
-    if (!formState.commitPrompt.trim() || !formState.overallPrompt.trim()) {
-      alert("Both prompts are required");
+    if (!formState.content.trim()) {
+      alert("Template content is required");
       return;
     }
 
@@ -178,20 +106,7 @@ export default function TemplatesSettingsPage() {
 
     const payload = {
       name: formState.name.trim(),
-      description: formState.description.trim() || undefined,
-      audience: formState.audience,
-      commitPrompt: formState.commitPrompt.trim(),
-      overallPrompt: formState.overallPrompt.trim(),
-      examples: {
-        sectionHeading: formState.sectionHeading.trim() || DEFAULT_TEMPLATE_EXAMPLES.sectionHeading,
-        overview: formState.overview.trim(),
-        commits: formState.commitExamples
-          .filter((example) => example.summary.trim())
-          .map((example) => ({
-            title: example.title.trim() || undefined,
-            summary: example.summary.trim(),
-          })),
-      },
+      content: formState.content.trim(),
     };
 
     try {
@@ -267,7 +182,7 @@ export default function TemplatesSettingsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">AI Templates</h1>
           <p className="text-muted-foreground">
-            Craft reusable prompts that tailor AI-generated patch notes.
+            Create markdown-based templates that guide AI-generated patch notes.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -281,18 +196,18 @@ export default function TemplatesSettingsPage() {
                 New template
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[680px]">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <DialogHeader>
+            <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-[680px]">
+              <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
+                <DialogHeader className="flex-shrink-0">
                   <DialogTitle>
                     {formState.id ? "Edit template" : "Create template"}
                   </DialogTitle>
                   <DialogDescription>
-                    Provide guidance and examples so the AI mirrors your preferred tone.
+                    Use markdown to structure your template with headings, lists, and examples.
                   </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid gap-4">
+                <div className="grid gap-4 overflow-y-auto px-1 py-6">
                   <div className="grid gap-2">
                     <Label htmlFor="template-name">Name</Label>
                     <Input
@@ -304,199 +219,34 @@ export default function TemplatesSettingsPage() {
                           name: event.target.value,
                         }))
                       }
+                      placeholder="e.g., Technical Deep Dive"
                       required
                     />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="template-description">Description</Label>
+                    <Label htmlFor="template-content">Template Content</Label>
                     <Textarea
-                      id="template-description"
-                      value={formState.description}
+                      id="template-content"
+                      value={formState.content}
                       onChange={(event) =>
                         setFormState((prev) => ({
                           ...prev,
-                          description: event.target.value,
+                          content: event.target.value,
                         }))
                       }
-                      placeholder="Short note about the intended audience or tone"
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="template-audience">Audience</Label>
-                    <Select
-                      value={formState.audience}
-                      onValueChange={(value) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          audience: value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger id="template-audience">
-                        <SelectValue placeholder="Select audience" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="technical">Technical</SelectItem>
-                        <SelectItem value="non-technical">Non-technical</SelectItem>
-                        <SelectItem value="mixed">Mixed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="commit-prompt">Commit prompt</Label>
-                    <Textarea
-                      id="commit-prompt"
-                      value={formState.commitPrompt}
-                      onChange={(event) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          commitPrompt: event.target.value,
-                        }))
-                      }
-                      placeholder="Explain how individual commits should be summarized."
-                      rows={4}
+                      placeholder="# My Template&#10;&#10;Write instructions for how commits and summaries should be written...&#10;&#10;## Example Summaries:&#10;- **Feature X**: Description of what it does"
+                      rows={20}
+                      className="font-mono text-sm"
                       required
                     />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="overall-prompt">Overall prompt</Label>
-                    <Textarea
-                      id="overall-prompt"
-                      value={formState.overallPrompt}
-                      onChange={(event) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          overallPrompt: event.target.value,
-                        }))
-                      }
-                      placeholder="Describe the tone and focus for the opening summary."
-                      rows={4}
-                      required
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="section-heading">Section heading</Label>
-                    <Input
-                      id="section-heading"
-                      value={formState.sectionHeading}
-                      onChange={(event) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          sectionHeading: event.target.value,
-                        }))
-                      }
-                      placeholder="Key Changes"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="overview-example">Overview example</Label>
-                    <Textarea
-                      id="overview-example"
-                      value={formState.overview}
-                      onChange={(event) =>
-                        setFormState((prev) => ({
-                          ...prev,
-                          overview: event.target.value,
-                        }))
-                      }
-                      placeholder="Example intro paragraph that mirrors the desired voice"
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label>Commit examples</Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addExample}
-                      >
-                        Add example
-                      </Button>
-                    </div>
-                    <div className="grid gap-3">
-                      {formState.commitExamples.map((example, index) => (
-                        <Card key={index} className="border-muted/60">
-                          <CardContent className="space-y-3 pt-4">
-                            <div className="grid gap-2">
-                              <Label htmlFor={`example-title-${index}`}>Title</Label>
-                              <Input
-                                id={`example-title-${index}`}
-                                value={example.title || ""}
-                                onChange={(event) =>
-                                  handleExampleChange(index, "title", event.target.value)
-                                }
-                                placeholder="Caching upgrade"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor={`example-summary-${index}`}>Summary</Label>
-                              <Textarea
-                                id={`example-summary-${index}`}
-                                value={example.summary}
-                                onChange={(event) =>
-                                  handleExampleChange(index, "summary", event.target.value)
-                                }
-                                placeholder="Cut API latency by optimizing cache hydration."
-                                rows={2}
-                              />
-                            </div>
-                            {formState.commitExamples.length > 1 && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="self-start"
-                                onClick={() => removeExample(index)}
-                              >
-                                Remove example
-                              </Button>
-                            )}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-md border bg-muted/30 p-4 text-sm">
-                    <h3 className="mb-1 text-sm font-semibold">Preview</h3>
                     <p className="text-xs text-muted-foreground">
-                      The first two examples are shown below. Additional examples are still saved.
+                      Use markdown syntax to structure your template. Include instructions, examples, and tone guidance.
                     </p>
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs font-medium uppercase text-muted-foreground">
-                        {formState.sectionHeading || DEFAULT_TEMPLATE_EXAMPLES.sectionHeading}
-                      </p>
-                      {formState.overview && <p>{formState.overview}</p>}
-                      {previewExamples.length ? (
-                        <ul className="list-disc space-y-1 pl-5">
-                          {previewExamples.slice(0, 2).map((example, index) => (
-                            <li key={`${example.summary}-${index}`}>
-                              {example.title ? (
-                                <span className="font-medium">{example.title}: </span>
-                              ) : null}
-                              {example.summary}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          Provide at least one example summary to help the AI mimic the tone.
-                        </p>
-                      )}
-                    </div>
                   </div>
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="flex-shrink-0">
                   <Button type="button" variant="outline" onClick={resetDialog}>
                     Cancel
                   </Button>
@@ -532,7 +282,7 @@ export default function TemplatesSettingsPage() {
           <CardHeader>
             <CardTitle>No templates yet</CardTitle>
             <CardDescription>
-              Start by creating a template that matches the tone you need for patch notes.
+              Start by creating a template that guides how your patch notes should be written.
             </CardDescription>
           </CardHeader>
           <CardFooter>
@@ -547,58 +297,11 @@ export default function TemplatesSettingsPage() {
           {templates.map((template) => (
             <Card key={template.id} className="flex flex-col">
               <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>{template.name}</CardTitle>
-                    <CardDescription>
-                      {template.description || "No description provided"}
-                    </CardDescription>
-                  </div>
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                    {formatTemplateAudience(template.audience)}
-                  </span>
-                </div>
+                <CardTitle>{template.name}</CardTitle>
               </CardHeader>
-              <CardContent className="flex-1 space-y-3 text-sm">
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">
-                    Commit prompt
-                  </p>
-                  <p className="mt-1 whitespace-pre-wrap leading-snug">
-                    {template.commitPrompt}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">
-                    Overall prompt
-                  </p>
-                  <p className="mt-1 whitespace-pre-wrap leading-snug">
-                    {template.overallPrompt}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">
-                    {template.examples.sectionHeading || DEFAULT_TEMPLATE_EXAMPLES.sectionHeading}
-                  </p>
-                  {template.examples.overview && (
-                    <p className="mt-1 leading-snug">{template.examples.overview}</p>
-                  )}
-                  {template.examples.commits?.length ? (
-                    <ul className="mt-2 list-disc space-y-1 pl-5">
-                      {template.examples.commits.slice(0, 2).map((example, index) => (
-                        <li key={`${template.id}-${index}`}>
-                          {example.title ? (
-                            <span className="font-medium">{example.title}: </span>
-                          ) : null}
-                          {example.summary}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      No example summaries provided.
-                    </p>
-                  )}
+              <CardContent className="flex-1">
+                <div className="prose prose-sm max-w-none whitespace-pre-wrap rounded-md bg-muted/30 p-4 font-mono text-xs">
+                  {template.content}
                 </div>
               </CardContent>
               <CardFooter className="flex items-center gap-3">

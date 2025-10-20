@@ -9,66 +9,39 @@ export interface CommitSummary {
   deletions: number;
 }
 
-export interface SummaryTemplateExamples {
-  sectionHeading?: string | null;
-  overview?: string | null;
-  commits?: Array<{
-    title?: string | null;
-    summary: string;
-  }>;
-}
-
 export interface SummaryTemplate {
   id?: string;
   name?: string;
-  commitPrompt: string;
-  overallPrompt: string;
-  examples?: SummaryTemplateExamples;
+  content: string;
 }
 
 export const DEFAULT_TEMPLATE: SummaryTemplate = {
   name: 'Default Technical',
-  commitPrompt:
-    'You are analyzing a Git commit to create a concise summary for an engineering changelog. In one short sentence, describe the core change, the subsystem it touches, and any measurable impact.',
-  overallPrompt:
-    'You are writing the lead paragraph for a weekly engineering update. Summarize the dominant technical themes and quantify improvements when possible in 1-2 tight sentences.',
-  examples: {
-    sectionHeading: 'Key Changes',
-    overview:
-      'We focused the sprint on performance, reliability, and smoothing rough edges in the developer workflow.',
-    commits: [
-      {
-        title: 'Improve cache stability',
-        summary:
-          'Hardened Redis eviction logic to prevent stale reads during deploys.',
-      },
-      {
-        title: 'Accelerate CI feedback',
-        summary:
-          'Parallelized lint/test stages to drop pipeline duration by 40%.',
-      },
-    ],
-  },
+  content: `# Default Technical Template
+
+This template is designed for engineering-focused audiences who care about implementation details and measurable performance improvements.
+
+## Commit Summary Instructions
+
+For each commit, write one short sentence that describes:
+- The core change
+- The subsystem it touches
+- Any measurable impact
+
+### Example Commit Summaries:
+- **Improve cache stability**: Hardened Redis eviction logic to prevent stale reads during deploys.
+- **Accelerate CI feedback**: Parallelized lint/test stages to drop pipeline duration by 40%.
+
+## Overall Summary Instructions
+
+For the opening paragraph, write 1-2 tight sentences that:
+- Summarize the dominant technical themes
+- Quantify improvements when possible
+
+### Example Opening:
+We focused the sprint on performance, reliability, and smoothing rough edges in the developer workflow.
+`,
 };
-
-function resolveTemplate(template?: SummaryTemplate): SummaryTemplate {
-  if (!template) {
-    return DEFAULT_TEMPLATE;
-  }
-
-  return {
-    ...DEFAULT_TEMPLATE,
-    ...template,
-    examples: {
-      ...DEFAULT_TEMPLATE.examples,
-      ...template.examples,
-      commits:
-        template.examples?.commits && template.examples.commits.length > 0
-          ? template.examples.commits
-          : DEFAULT_TEMPLATE.examples?.commits,
-    },
-  };
-}
 
 function buildCommitPrompt(
   commitMessage: string,
@@ -77,10 +50,15 @@ function buildCommitPrompt(
   deletions: number,
   template?: SummaryTemplate
 ): string {
-  const resolved = resolveTemplate(template);
+  const resolved = template || DEFAULT_TEMPLATE;
   const sections: string[] = [];
 
-  sections.push(resolved.commitPrompt.trim());
+  sections.push('You are analyzing a Git commit to create a summary for a changelog.');
+  sections.push('');
+  sections.push('Follow these template guidelines:');
+  sections.push('---');
+  sections.push(resolved.content);
+  sections.push('---');
   sections.push('');
   sections.push('Commit Message:');
   sections.push(commitMessage);
@@ -88,24 +66,11 @@ function buildCommitPrompt(
   sections.push('Change Metrics:');
   sections.push(`- Lines added: ${additions}`);
   sections.push(`- Lines deleted: ${deletions}`);
-
-  const examples = resolved.examples?.commits ?? [];
-  if (examples.length > 0) {
-    sections.push('');
-    sections.push('Follow the tone demonstrated in these examples:');
-    sections.push(
-      ...examples.map((example, index) => {
-        const label = example.title ? `${example.title}: ` : '';
-        return `${index + 1}. ${label}${example.summary}`;
-      })
-    );
-  }
-
   sections.push('');
   sections.push('Diff Preview (first 2000 characters):');
   sections.push(diff.substring(0, 2000));
   sections.push('');
-  sections.push('Summary:');
+  sections.push('Generate a concise summary following the template guidelines:');
 
   return sections.join('\n');
 }
@@ -119,12 +84,17 @@ function buildOverallPrompt(
   totalDeletions: number,
   template?: SummaryTemplate
 ): string {
-  const resolved = resolveTemplate(template);
+  const resolved = template || DEFAULT_TEMPLATE;
   const periodLabel =
     timePeriod === '1day' ? 'day' : timePeriod === '1week' ? 'week' : 'month';
 
   const sections: string[] = [];
-  sections.push(resolved.overallPrompt.trim());
+  sections.push('You are writing the opening paragraph for a changelog newsletter.');
+  sections.push('');
+  sections.push('Follow these template guidelines:');
+  sections.push('---');
+  sections.push(resolved.content);
+  sections.push('---');
   sections.push('');
   sections.push(`Repository: ${repoName}`);
   sections.push(`Time Period: Past ${periodLabel}`);
@@ -143,14 +113,8 @@ function buildOverallPrompt(
     );
   }
 
-  if (resolved.examples?.overview) {
-    sections.push('');
-    sections.push('Use a voice similar to this example overview:');
-    sections.push(resolved.examples.overview);
-  }
-
   sections.push('');
-  sections.push('Introduction:');
+  sections.push('Generate an introduction following the template guidelines:');
 
   return sections.join('\n');
 }
@@ -274,4 +238,3 @@ export async function generateOverallSummary(
     return `This ${timePeriod} saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
   }
 }
-

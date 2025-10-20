@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { DEFAULT_TEMPLATE_EXAMPLES } from '@/lib/templates';
 
 test.describe('AI templates', () => {
   test('creates a patch note with the selected template', async ({ page }) => {
@@ -7,36 +6,14 @@ test.describe('AI templates', () => {
       {
         id: 'technical-template',
         name: 'Technical Deep Dive',
-        description: 'Engineering tone',
-        audience: 'technical',
-        commitPrompt: 'Keep it technical.',
-        overallPrompt: 'Summarize the sprint.',
-        examples: {
-          sectionHeading: 'Engineering Highlights',
-          overview: 'We focused on performance.',
-          commits: [
-            { title: 'Cache tuning', summary: 'Improved cache TTL.' },
-            { title: 'CI updates', summary: 'Faster builds.' },
-          ],
-        },
+        content: '# Technical Deep Dive\n\nEngineering focused...',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
       {
         id: 'product-template',
         name: 'Product Pulse',
-        description: 'Stakeholder friendly',
-        audience: 'non-technical',
-        commitPrompt: 'Explain the customer benefit.',
-        overallPrompt: 'Share what customers can expect.',
-        examples: {
-          sectionHeading: 'What Shipped',
-          overview: 'Here is what changed for customers.',
-          commits: [
-            { title: 'Guided onboarding', summary: 'Simplified setup experience.' },
-            { title: 'Faster exports', summary: 'Reports download quicker.' },
-          ],
-        },
+        content: '# Product Pulse\n\nStakeholder friendly...',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -54,7 +31,6 @@ test.describe('AI templates', () => {
 
       const body = JSON.parse(request.postData() ?? '{}');
       expect(body.ai_template_id).toBe('product-template');
-      expect(body.content).toContain('## What Shipped');
       await route.fulfill({
         status: 201,
         body: JSON.stringify({ id: 'new-note' }),
@@ -137,28 +113,14 @@ test.describe('AI templates', () => {
       {
         id: 'technical-template',
         name: 'Technical Deep Dive',
-        description: 'Engineering tone',
-        audience: 'technical',
-        commitPrompt: 'Keep it technical.',
-        overallPrompt: 'Summarize the sprint.',
-        examples: DEFAULT_TEMPLATE_EXAMPLES,
+        content: '# Technical Deep Dive\n\nEngineering focused...',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
       {
         id: 'product-template',
         name: 'Product Pulse',
-        description: 'Stakeholder friendly',
-        audience: 'non-technical',
-        commitPrompt: 'Explain the customer benefit.',
-        overallPrompt: 'Share what customers can expect.',
-        examples: {
-          sectionHeading: 'What Shipped',
-          overview: 'Here is what changed for customers.',
-          commits: [
-            { title: 'Guided onboarding', summary: 'Simplified setup experience.' },
-          ],
-        },
+        content: '# Product Pulse\n\nStakeholder friendly...',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -199,7 +161,6 @@ test.describe('AI templates', () => {
 
       const body = JSON.parse(request.postData() ?? '{}');
       expect(body.ai_template_id).toBe('product-template');
-      expect(body.content).toContain('## What Shipped');
       await route.fulfill({
         status: 200,
         body: JSON.stringify({ repo_branch: body.repo_branch }),

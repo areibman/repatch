@@ -13,54 +13,21 @@ export interface Database {
         Row: {
           id: string;
           name: string;
-          description: string | null;
-          audience: string;
-          commit_prompt: string;
-          overall_prompt: string;
-          examples: {
-            sectionHeading?: string | null;
-            overview?: string | null;
-            commits?: Array<{
-              title?: string | null;
-              summary: string;
-            }>;
-          };
+          content: string;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           name: string;
-          description?: string | null;
-          audience?: string;
-          commit_prompt: string;
-          overall_prompt: string;
-          examples?: {
-            sectionHeading?: string | null;
-            overview?: string | null;
-            commits?: Array<{
-              title?: string | null;
-              summary: string;
-            }>;
-          };
+          content: string;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           name?: string;
-          description?: string | null;
-          audience?: string;
-          commit_prompt?: string;
-          overall_prompt?: string;
-          examples?: {
-            sectionHeading?: string | null;
-            overview?: string | null;
-            commits?: Array<{
-              title?: string | null;
-              summary: string;
-            }>;
-          };
+          content?: string;
           created_at?: string;
           updated_at?: string;
         };
