@@ -1,54 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchGitHubCommits, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
+import {
+  fetchCommitDiff,
+  fetchCommitStats,
+  getCommitHistory,
+} from '@/lib/github';
 import { summarizeCommits, generateOverallSummary } from '@/lib/ai-summarizer';
+import type { PatchNoteFilters } from '@/types/patch-note';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { owner, repo, timePeriod, branch } = body;
+    const { owner, repo, branch, filters } = body as {
+      owner?: string;
+      repo?: string;
+      branch?: string;
+      filters?: PatchNoteFilters;
+    };
 
-    if (!owner || !repo || !timePeriod) {
+    if (!owner || !repo) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
       );
     }
 
-    // Calculate date range
-    const now = new Date();
-    const since = new Date(now);
-    switch (timePeriod) {
-      case '1day':
-        since.setDate(since.getDate() - 1);
-        break;
-      case '1week':
-        since.setDate(since.getDate() - 7);
-        break;
-      case '1month':
-        since.setMonth(since.getMonth() - 1);
-        break;
-    }
+    const history = await getCommitHistory(owner, repo, {
+      branch,
+      filters,
+    });
 
-    // Fetch commits
-    const commits = await fetchGitHubCommits(
-      owner,
-      repo,
-      since.toISOString(),
-      now.toISOString(),
-      branch
-    );
+    const commits = history.commits;
 
     if (commits.length === 0) {
       return NextResponse.json({
         summaries: [],
-        overallSummary: 'No commits found in this time period.',
+        overallSummary: 'No commits found for the selected filters.',
         totalCommits: 0,
         totalAdditions: 0,
         totalDeletions: 0,
+        contextLabel: history.contextLabel,
+        timePeriod: history.timePeriod,
+        releaseBaseTag: history.releaseBaseTag ?? null,
       });
     }
 
-    // Fetch stats and diffs for significant commits (top 10 by size)
     const commitsWithStats = await Promise.all(
       commits.slice(0, 20).map(async (commit) => {
         const stats = await fetchCommitStats(owner, repo, commit.sha);
@@ -61,12 +56,10 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Get the top 10 most significant commits
     const significantCommits = commitsWithStats
-      .sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions))
+      .sort((a, b) => b.additions + b.deletions - (a.additions + a.deletions))
       .slice(0, 10);
 
-    // Fetch diffs for these commits
     const commitsWithDiffs = await Promise.all(
       significantCommits.map(async (commit) => ({
         ...commit,
@@ -74,17 +67,14 @@ export async function POST(request: NextRequest) {
       }))
     );
 
-    // Generate AI summaries
     const summaries = await summarizeCommits(commitsWithDiffs);
 
-    // Calculate totals
-    const totalAdditions = commitsWithStats.reduce((sum, c) => sum + c.additions, 0);
-    const totalDeletions = commitsWithStats.reduce((sum, c) => sum + c.deletions, 0);
+    const totalAdditions = commitsWithStats.reduce((sum, commit) => sum + commit.additions, 0);
+    const totalDeletions = commitsWithStats.reduce((sum, commit) => sum + commit.deletions, 0);
 
-    // Generate overall summary
     const overallSummary = await generateOverallSummary(
       `${owner}/${repo}`,
-      timePeriod,
+      history.contextLabel,
       summaries,
       commits.length,
       totalAdditions,
@@ -97,6 +87,9 @@ export async function POST(request: NextRequest) {
       totalCommits: commits.length,
       totalAdditions,
       totalDeletions,
+      contextLabel: history.contextLabel,
+      timePeriod: history.timePeriod,
+      releaseBaseTag: history.releaseBaseTag ?? null,
     });
   } catch (error) {
     console.error('Error generating summaries:', error);
@@ -106,4 +99,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

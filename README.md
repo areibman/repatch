@@ -125,6 +125,17 @@ Using Google's Gemini 2.5 Flash, Repatch:
 - Creates an overall summary of all changes
 - Processes the top 10 most significant commits
 
+### 🔍 Flexible Patch Note Filters
+
+Patch notes can now be generated from any slice of your repository history:
+
+- **Quick presets** – Keep using the daily/weekly/monthly shortcuts for recurring updates.
+- **Custom date ranges** – Enable the custom range toggle to pick exact start/end timestamps when you need a one-off report.
+- **Tag filtering** – Provide comma-separated GitHub labels to include or exclude commits based on their associated pull request labels (e.g. `bug, regression`).
+- **Release cuts** – Choose a published GitHub release to automatically compare it to the previous release and summarize everything that shipped.
+
+Each generated patch note stores the applied filters (preset, custom range, tags, releases, and branch) so you can audit or regenerate the same slice later.
+
 ### 📧 Email Newsletters
 
 Send beautiful HTML emails to subscribers with:

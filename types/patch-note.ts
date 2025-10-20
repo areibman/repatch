@@ -7,11 +7,27 @@ export interface VideoData {
   allChanges: string[];
 }
 
+export type TimePreset = "1day" | "1week" | "1month";
+export type TimePeriod = TimePreset | "custom" | "release";
+
+export interface PatchNoteFilters {
+  preset?: TimePreset;
+  customRange?: {
+    since: string;
+    until: string;
+  };
+  includeTags?: string[];
+  excludeTags?: string[];
+  releaseTag?: string;
+  releaseBaseTag?: string | null;
+  branch?: string;
+}
+
 export interface PatchNote {
   id: string;
   repoName: string;
   repoUrl: string;
-  timePeriod: "1day" | "1week" | "1month";
+  timePeriod: TimePeriod;
   generatedAt: Date;
   title: string;
   content: string;
@@ -23,4 +39,5 @@ export interface PatchNote {
   contributors: string[];
   videoData?: VideoData;
   videoUrl?: string | null;
+  filters?: PatchNoteFilters | null;
 }

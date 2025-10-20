@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
           ai_summaries: body.ai_summaries || null,
           ai_overall_summary: body.ai_overall_summary || null,
           generated_at: body.generated_at || new Date().toISOString(),
+          filters: body.filters || null,
         },
       ])
       .select()

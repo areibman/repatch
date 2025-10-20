@@ -41,13 +41,14 @@ export default function Home() {
             id: string;
             repo_name: string;
             repo_url: string;
-            time_period: "1day" | "1week" | "1month";
+            time_period: "1day" | "1week" | "1month" | "custom" | "release";
             generated_at: string;
             title: string;
             content: string;
             changes: { added: number; modified: number; removed: number };
             contributors: string[];
             video_url?: string | null;
+            filters?: PatchNote["filters"];
           }) => ({
             id: note.id,
             repoName: note.repo_name,
@@ -59,6 +60,7 @@ export default function Home() {
             changes: note.changes,
             contributors: note.contributors,
             videoUrl: note.video_url,
+            filters: note.filters ?? null,
           })
         );
 
@@ -73,8 +75,20 @@ export default function Home() {
     fetchPatchNotes();
   }, []);
 
-  const getTimePeriodLabel = (period: string) => {
-    switch (period) {
+  const getTimePeriodLabel = (note: PatchNote) => {
+    if (note.timePeriod === "custom" && note.filters?.customRange) {
+      const since = new Date(note.filters.customRange.since);
+      const until = new Date(note.filters.customRange.until);
+      return `Custom: ${since.toLocaleDateString()} – ${until.toLocaleDateString()}`;
+    }
+
+    if (note.timePeriod === "release" && note.filters?.releaseTag) {
+      return note.filters.releaseBaseTag
+        ? `Release ${note.filters.releaseTag} (since ${note.filters.releaseBaseTag})`
+        : `Release ${note.filters.releaseTag}`;
+    }
+
+    switch (note.timePeriod) {
       case "1day":
         return "Daily";
       case "1week":
@@ -82,7 +96,7 @@ export default function Home() {
       case "1month":
         return "Monthly";
       default:
-        return period;
+        return note.timePeriod;
     }
   };
 
@@ -94,6 +108,10 @@ export default function Home() {
         return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
       case "1month":
         return "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20";
+      case "custom":
+        return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20";
+      case "release":
+        return "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20";
       default:
         return "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20";
     }
@@ -197,7 +215,7 @@ export default function Home() {
                       variant="outline"
                       className={getTimePeriodColor(note.timePeriod)}
                     >
-                      {getTimePeriodLabel(note.timePeriod)}
+                      {getTimePeriodLabel(note)}
                     </Badge>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <CalendarIcon className="h-3 w-3" />
