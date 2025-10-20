@@ -65,6 +65,21 @@ Visit http://localhost:3000 to see your app!
 3. **Try editing** - Click Edit, modify content, click Save
 4. **Check API** - Visit http://localhost:3000/api/patch-notes
 
+### 5. Generate Patch Notes with Advanced Filters
+
+- **Custom interval**
+  1. Click **Create New Post** and paste a GitHub repository URL.
+  2. Choose a branch, set **Change Window** to **Custom Range**, and pick start/end dates.
+  3. Submit the form to generate a patch note scoped to that exact interval.
+- **Release comparison**
+  1. Select **Compare Releases** from the **Change Window** menu.
+  2. Pick the base release (older) and the comparison release (newer).
+  3. Repatch will summarize only the commits between those two tags.
+- **Tag filters**
+  1. After selecting a repo, open the **Git tag filters** section.
+  2. Add tags to the include list to require them, or to the exclude list to omit them.
+  3. The generated content will call out which tags were applied and store the filter metadata for future regenerations.
+
 ## 📚 Documentation
 
 - **[SUPABASE_SETUP.md](./SUPABASE_SETUP.md)** - Detailed setup and API documentation

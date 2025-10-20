@@ -4,7 +4,7 @@ AI-generated patch notes from your GitHub repositories, delivered as beautiful n
 
 ## Overview
 
-Repatch uses LLMs to analyze GitHub repository changes over time periods (daily, weekly, monthly) and generates professional patch notes. The generated content can be edited and sent via email to subscribers.
+Repatch uses LLMs to analyze GitHub repository changes over flexible time windows—daily, weekly, monthly, custom ranges, release comparisons, or even tag-filtered commits—and generates professional patch notes. The generated content can be edited and sent via email to subscribers.
 
 ## Tech Stack
 
@@ -124,6 +124,16 @@ Using Google's Gemini 2.5 Flash, Repatch:
 - Generates concise 1-2 sentence summaries per commit
 - Creates an overall summary of all changes
 - Processes the top 10 most significant commits
+
+### 🧮 Flexible Commit Filtering
+
+Tailor every patch note to the story you want to tell:
+
+- **Custom date ranges** – select any start and end date to cover bespoke release windows.
+- **Release comparisons** – pick two GitHub releases and summarize only the commits between them.
+- **Tag filters** – include or exclude commits that carry specific git tags when shaping your narrative.
+
+Each generated note stores the filter metadata so you can audit or regenerate the exact same slice of history later.
 
 ### 📧 Email Newsletters
 

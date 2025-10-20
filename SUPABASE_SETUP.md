@@ -15,7 +15,8 @@ Stores AI-generated patch notes from GitHub repositories.
 | id            | UUID (PK)                  | Unique identifier                              |
 | repo_name     | TEXT                       | Repository name (e.g., "owner/repo")           |
 | repo_url      | TEXT                       | Full GitHub repository URL                     |
-| time_period   | ENUM                       | '1day', '1week', or '1month'                   |
+| time_period   | ENUM                       | '1day', '1week', '1month', 'custom', 'release' |
+| filter_metadata | JSONB                    | Stored filters (custom ranges, releases, tags) |
 | title         | TEXT                       | Patch note title                               |
 | content       | TEXT                       | Full patch note content (markdown)             |
 | changes       | JSONB                      | {added, modified, removed} line counts         |

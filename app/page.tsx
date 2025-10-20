@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PatchNote } from "@/types/patch-note";
+import { PatchNote, PatchNoteFilters } from "@/types/patch-note";
 import { CreatePostDialog } from "@/components/create-post-dialog";
 import {
   PlusIcon,
@@ -20,6 +20,7 @@ import {
   CalendarIcon,
   UsersIcon,
 } from "@heroicons/react/16/solid";
+import { describeFilterSelection } from "@/lib/github";
 
 export default function Home() {
   const [patchNotes, setPatchNotes] = useState<PatchNote[]>([]);
@@ -41,13 +42,14 @@ export default function Home() {
             id: string;
             repo_name: string;
             repo_url: string;
-            time_period: "1day" | "1week" | "1month";
+            time_period: "1day" | "1week" | "1month" | "custom" | "release";
             generated_at: string;
             title: string;
             content: string;
             changes: { added: number; modified: number; removed: number };
             contributors: string[];
             video_url?: string | null;
+            filter_metadata?: PatchNoteFilters | null;
           }) => ({
             id: note.id,
             repoName: note.repo_name,
@@ -59,6 +61,7 @@ export default function Home() {
             changes: note.changes,
             contributors: note.contributors,
             videoUrl: note.video_url,
+            filterMetadata: note.filter_metadata || undefined,
           })
         );
 
@@ -73,20 +76,28 @@ export default function Home() {
     fetchPatchNotes();
   }, []);
 
-  const getTimePeriodLabel = (period: string) => {
-    switch (period) {
+  const getFilterLabel = (note: PatchNote) => {
+    if (note.filterMetadata) {
+      return describeFilterSelection(note.filterMetadata);
+    }
+
+    switch (note.timePeriod) {
       case "1day":
-        return "Daily";
+        return "Last 24 Hours";
       case "1week":
-        return "Weekly";
+        return "Last Week";
       case "1month":
-        return "Monthly";
+        return "Last Month";
+      case "custom":
+        return "Custom Range";
+      case "release":
+        return "Release Compare";
       default:
-        return period;
+        return note.timePeriod;
     }
   };
 
-  const getTimePeriodColor = (period: string) => {
+  const getFilterColor = (period: string) => {
     switch (period) {
       case "1day":
         return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";
@@ -94,6 +105,10 @@ export default function Home() {
         return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
       case "1month":
         return "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20";
+      case "custom":
+        return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20";
+      case "release":
+        return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20";
       default:
         return "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20";
     }
@@ -195,9 +210,9 @@ export default function Home() {
                   <div className="flex items-center justify-between mb-2">
                     <Badge
                       variant="outline"
-                      className={getTimePeriodColor(note.timePeriod)}
+                      className={getFilterColor(note.timePeriod)}
                     >
-                      {getTimePeriodLabel(note.timePeriod)}
+                      {getFilterLabel(note)}
                     </Badge>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <CalendarIcon className="h-3 w-3" />

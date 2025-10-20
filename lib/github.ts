@@ -2,9 +2,72 @@
  * GitHub API utilities for fetching repository data
  */
 
-import { z } from "zod";
-import { systemPrompt } from "../constants";
 import { VideoData } from "../types/patch-note";
+
+export type TimePreset = "1day" | "1week" | "1month";
+export type TimeSelection = TimePreset | "custom" | "release";
+
+export interface HistoryFilters {
+  preset?: TimePreset;
+  customRange?: { since: string; until: string };
+  releaseRange?: { base: string; head: string };
+  includeTags?: string[];
+  excludeTags?: string[];
+}
+
+export interface GitHubRelease {
+  id: number;
+  name: string | null;
+  tag_name: string;
+  published_at: string | null;
+}
+
+const DATE_FORMATTER = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+function normalizeList(values?: string[] | null): string[] | undefined {
+  if (!values || values.length === 0) return undefined;
+  const unique = Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+  return unique.length ? unique : undefined;
+}
+
+export function describeFilterSelection(filters: HistoryFilters): string {
+  const includeTags = normalizeList(filters.includeTags);
+  const excludeTags = normalizeList(filters.excludeTags);
+
+  let baseDescription = "Last Week";
+  if (filters.releaseRange) {
+    baseDescription = `Release ${filters.releaseRange.base} → ${filters.releaseRange.head}`;
+  } else if (filters.customRange) {
+    const since = DATE_FORMATTER.format(new Date(filters.customRange.since));
+    const until = DATE_FORMATTER.format(new Date(filters.customRange.until));
+    baseDescription = `Custom Range (${since} → ${until})`;
+  } else if (filters.preset) {
+    baseDescription =
+      filters.preset === "1day"
+        ? "Last 24 Hours"
+        : filters.preset === "1week"
+        ? "Last Week"
+        : "Last Month";
+  }
+
+  if (!includeTags && !excludeTags) {
+    return baseDescription;
+  }
+
+  const tagSegments: string[] = [];
+  if (includeTags && includeTags.length) {
+    tagSegments.push(`include tags: ${includeTags.join(", ")}`);
+  }
+  if (excludeTags && excludeTags.length) {
+    tagSegments.push(`exclude tags: ${excludeTags.join(", ")}`);
+  }
+
+  return `${baseDescription} (${tagSegments.join("; ")})`;
+}
 
 export interface GitHubCommit {
   sha: string;
@@ -52,7 +115,7 @@ export function parseGitHubUrl(
 /**
  * Calculate date range based on time period
  */
-export function getDateRange(timePeriod: "1day" | "1week" | "1month"): {
+export function getDateRange(timePeriod: TimePreset): {
   since: string;
   until: string;
 } {
@@ -191,6 +254,161 @@ export async function fetchGitHubCommits(
   return response.json();
 }
 
+export async function fetchGitHubTags(
+  owner: string,
+  repo: string
+): Promise<Record<string, string[]>> {
+  const tagMap: Record<string, string[]> = {};
+  let page = 1;
+  const perPage = 100;
+
+  while (true) {
+    const url = `https://api.github.com/repos/${owner}/${repo}/tags?per_page=${perPage}&page=${page}`;
+    const response = await fetch(url, { headers: getGitHubHeaders() });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch repository tags from GitHub");
+    }
+
+    const tags = await response.json();
+    if (!Array.isArray(tags) || tags.length === 0) {
+      break;
+    }
+
+    for (const tag of tags) {
+      const sha = tag?.commit?.sha;
+      if (!sha) continue;
+      if (!tagMap[sha]) {
+        tagMap[sha] = [];
+      }
+      tagMap[sha].push(tag.name);
+    }
+
+    if (tags.length < perPage) {
+      break;
+    }
+
+    page++;
+
+    if (page > 10) {
+      break;
+    }
+  }
+
+  return tagMap;
+}
+
+export async function fetchGitHubReleases(
+  owner: string,
+  repo: string
+): Promise<GitHubRelease[]> {
+  const releases: GitHubRelease[] = [];
+  let page = 1;
+  const perPage = 50;
+
+  while (true) {
+    const url = `https://api.github.com/repos/${owner}/${repo}/releases?per_page=${perPage}&page=${page}`;
+    const response = await fetch(url, { headers: getGitHubHeaders() });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch releases from GitHub");
+    }
+
+    const batch = await response.json();
+    if (!Array.isArray(batch) || batch.length === 0) {
+      break;
+    }
+
+    releases.push(
+      ...batch.map((release: any) => ({
+        id: release.id,
+        name: release.name,
+        tag_name: release.tag_name,
+        published_at: release.published_at,
+      }))
+    );
+
+    if (batch.length < perPage) {
+      break;
+    }
+
+    page++;
+
+    if (page > 20) {
+      break;
+    }
+  }
+
+  return releases;
+}
+
+async function fetchCommitsBetweenRefs(
+  owner: string,
+  repo: string,
+  base: string,
+  head: string
+): Promise<GitHubCommit[]> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+  const response = await fetch(url, { headers: getGitHubHeaders() });
+
+  if (!response.ok) {
+    throw new Error("Failed to compare releases on GitHub");
+  }
+
+  const data = await response.json();
+  return Array.isArray(data?.commits) ? data.commits : [];
+}
+
+export async function collectCommits(
+  owner: string,
+  repo: string,
+  filters: HistoryFilters,
+  branch?: string
+): Promise<GitHubCommit[]> {
+  let commits: GitHubCommit[] = [];
+
+  if (filters.releaseRange) {
+    commits = await fetchCommitsBetweenRefs(
+      owner,
+      repo,
+      filters.releaseRange.base,
+      filters.releaseRange.head
+    );
+  } else {
+    const { since, until } = filters.customRange
+      ? filters.customRange
+      : getDateRange(filters.preset ?? "1week");
+    commits = await fetchGitHubCommits(owner, repo, since, until, branch);
+  }
+
+  const includeTags = normalizeList(filters.includeTags);
+  const excludeTags = normalizeList(filters.excludeTags);
+
+  if (!includeTags && !excludeTags) {
+    return commits;
+  }
+
+  const tagMap = await fetchGitHubTags(owner, repo);
+
+  return commits.filter((commit) => {
+    const commitTags = tagMap[commit.sha] || [];
+
+    if (includeTags && includeTags.length) {
+      if (!commitTags.some((tag) => includeTags.includes(tag))) {
+        return false;
+      }
+    }
+
+    if (excludeTags && excludeTags.length) {
+      if (commitTags.some((tag) => excludeTags.includes(tag))) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
 /**
  * Fetch detailed commit stats including additions/deletions
  */
@@ -246,11 +464,10 @@ export async function fetchCommitDiff(
 export async function getRepoStats(
   owner: string,
   repo: string,
-  timePeriod: '1day' | '1week' | '1month',
+  filters: HistoryFilters,
   branch?: string
 ): Promise<RepoStats> {
-  const { since, until } = getDateRange(timePeriod);
-  const commits = await fetchGitHubCommits(owner, repo, since, until, branch);
+  const commits = await collectCommits(owner, repo, filters, branch);
 
   if (commits.length === 0) {
     return {
@@ -307,23 +524,18 @@ export async function getRepoStats(
  */
 export function generateBoilerplateContent(
   repoName: string,
-  timePeriod: "1day" | "1week" | "1month",
+  filters: HistoryFilters,
   stats: RepoStats
 ): string {
-  const periodLabel =
-    timePeriod === "1day"
-      ? "Daily"
-      : timePeriod === "1week"
-      ? "Weekly"
-      : "Monthly";
+  const periodLabel = describeFilterSelection(filters);
 
   const content = `# ${periodLabel} Update for ${repoName}
 
 ## 📊 Overview
 
-This ${periodLabel.toLowerCase()} summary covers changes made to the repository.
+This summary covers changes made for **${periodLabel}**.
 
-**Period Statistics:**
+**Statistics:**
 - **${stats.commits}** commits
 - **${stats.contributors.length}** active contributors
 - **${stats.additions.toLocaleString()}** lines added
@@ -334,7 +546,7 @@ This ${periodLabel.toLowerCase()} summary covers changes made to the repository.
 ${
   stats.commits > 0
     ? `
-The team has been actively developing with ${stats.commits} commits during this period. 
+The team has been actively developing with ${stats.commits} commits during this span.
 Key areas of focus include ongoing development and improvements across the codebase.
 `
     : "No commits were made during this period."
@@ -413,31 +625,10 @@ export function generateVideoDataFromAI(
 // Generate video data from raw GitHub stats (fallback if no AI summaries)
 export async function generateVideoData(
   repoName: string,
-  timePeriod: "1day" | "1week" | "1month",
+  filters: HistoryFilters,
   stats: RepoStats
 ): Promise<VideoData> {
-  const periodLabel =
-    timePeriod === "1day"
-      ? "Daily"
-      : timePeriod === "1week"
-      ? "Weekly"
-      : "Monthly";
-
-  // Create a summary of the changes for AI processing
-  const changesSummary = `
-Repository: ${repoName}
-Period: ${periodLabel}
-Commits: ${stats.commits}
-Contributors: ${stats.contributors.length}
-Lines added: ${stats.additions}
-Lines removed: ${stats.deletions}
-
-Recent commit messages:
-${stats.commitMessages
-  .slice(0, 20)
-  .map((msg, i) => `${i + 1}. ${msg.split("\n")[0]}`)
-  .join("\n")}
-`;
+  const periodLabel = describeFilterSelection(filters);
 
   try {
     // For now, we'll create a simple fallback structure
@@ -471,7 +662,7 @@ ${stats.commitMessages
           title: "Repository Updates",
           description: `Active development with ${
             stats.commits
-          } commits during this ${periodLabel.toLowerCase()} period`,
+          } commits during this window (${periodLabel})`,
         },
       ],
       allChanges: stats.commitMessages

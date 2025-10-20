@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { PatchNote } from "@/types/patch-note";
+import { describeFilterSelection } from "@/lib/github";
 import {
   ArrowLeftIcon,
   PencilIcon,
@@ -66,7 +67,7 @@ export default function BlogViewPage() {
         const data = await response.json();
 
         // Transform database format to UI format
-        const transformedNote = {
+        const transformedNote: PatchNote = {
           id: data.id,
           repoName: data.repo_name,
           repoUrl: data.repo_url,
@@ -77,6 +78,7 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          filterMetadata: data.filter_metadata || undefined,
         };
 
         setPatchNote(transformedNote);
@@ -117,6 +119,27 @@ export default function BlogViewPage() {
       setEditedTitle(patchNote.title);
     }
     setIsEditing(false);
+  };
+
+  const getFilterLabel = (note: PatchNote) => {
+    if (note.filterMetadata) {
+      return describeFilterSelection(note.filterMetadata);
+    }
+
+    switch (note.timePeriod) {
+      case "1day":
+        return "Last 24 Hours";
+      case "1week":
+        return "Last Week";
+      case "1month":
+        return "Last Month";
+      case "custom":
+        return "Custom Range";
+      case "release":
+        return "Release Compare";
+      default:
+        return note.timePeriod;
+    }
   };
 
   const handleSave = async () => {
@@ -236,19 +259,6 @@ export default function BlogViewPage() {
     }
   };
 
-  const getTimePeriodLabel = (period: string) => {
-    switch (period) {
-      case "1day":
-        return "Daily";
-      case "1week":
-        return "Weekly";
-      case "1month":
-        return "Monthly";
-      default:
-        return period;
-    }
-  };
-
   if (!patchNote) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -301,12 +311,28 @@ export default function BlogViewPage() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant="secondary">
-                  {getTimePeriodLabel(patchNote.timePeriod)}
+                  {getFilterLabel(patchNote)}
                 </Badge>
                 <Badge variant="outline">
                   {new Date(patchNote.generatedAt).toLocaleDateString()}
                 </Badge>
               </div>
+
+              {(patchNote.filterMetadata?.includeTags?.length ||
+                patchNote.filterMetadata?.excludeTags?.length) && (
+                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground mb-2">
+                  {patchNote.filterMetadata?.includeTags?.length ? (
+                    <span>
+                      Include tags: {patchNote.filterMetadata.includeTags.join(', ')}
+                    </span>
+                  ) : null}
+                  {patchNote.filterMetadata?.excludeTags?.length ? (
+                    <span>
+                      Exclude tags: {patchNote.filterMetadata.excludeTags.join(', ')}
+                    </span>
+                  ) : null}
+                </div>
+              )}
 
               {isEditing ? (
                 <Textarea

@@ -1,47 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchGitHubCommits, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
+import {
+  collectCommits,
+  fetchCommitStats,
+  fetchCommitDiff,
+  HistoryFilters,
+  describeFilterSelection,
+} from '@/lib/github';
 import { summarizeCommits, generateOverallSummary } from '@/lib/ai-summarizer';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { owner, repo, timePeriod, branch } = body;
+    const { owner, repo, branch, filters: rawFilters, timePeriod } = body;
 
-    if (!owner || !repo || !timePeriod) {
+    if (!owner || !repo) {
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
       );
     }
 
-    // Calculate date range
-    const now = new Date();
-    const since = new Date(now);
-    switch (timePeriod) {
-      case '1day':
-        since.setDate(since.getDate() - 1);
-        break;
-      case '1week':
-        since.setDate(since.getDate() - 7);
-        break;
-      case '1month':
-        since.setMonth(since.getMonth() - 1);
-        break;
+    const filters: HistoryFilters = rawFilters || {};
+
+    if (!rawFilters && timePeriod) {
+      filters.preset = timePeriod;
     }
 
-    // Fetch commits
-    const commits = await fetchGitHubCommits(
-      owner,
-      repo,
-      since.toISOString(),
-      now.toISOString(),
-      branch
-    );
+    if (!filters.preset && !filters.customRange && !filters.releaseRange) {
+      filters.preset = '1week';
+    }
+
+    const commits = await collectCommits(owner, repo, filters, branch);
 
     if (commits.length === 0) {
       return NextResponse.json({
         summaries: [],
-        overallSummary: 'No commits found in this time period.',
+        overallSummary: 'No commits found for the selected filters.',
         totalCommits: 0,
         totalAdditions: 0,
         totalDeletions: 0,
@@ -84,7 +78,7 @@ export async function POST(request: NextRequest) {
     // Generate overall summary
     const overallSummary = await generateOverallSummary(
       `${owner}/${repo}`,
-      timePeriod,
+      describeFilterSelection(filters),
       summaries,
       commits.length,
       totalAdditions,

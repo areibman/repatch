@@ -42,6 +42,7 @@ We've been hard at work improving the platform! Here's what changed:
     changes: { added: 2543, modified: 1823, removed: 456 },
     contributors: ['@alice', '@bob', '@charlie', '@diana'],
     generated_at: new Date('2025-10-01').toISOString(),
+    filter_metadata: { preset: '1week' },
   },
   {
     repo_name: 'acme/awesome-project',
@@ -64,6 +65,7 @@ This month brought significant updates including API v2, mobile app launch, and 
     changes: { added: 8234, modified: 4521, removed: 1203 },
     contributors: ['@alice', '@bob', '@charlie', '@diana', '@eve', '@frank'],
     generated_at: new Date('2025-09-30').toISOString(),
+    filter_metadata: { preset: '1month' },
   },
   {
     repo_name: 'techcorp/api-gateway',
@@ -81,6 +83,7 @@ Fixed authentication timeout issues and improved rate limiting logic.
     changes: { added: 145, modified: 89, removed: 23 },
     contributors: ['@alice', '@bob'],
     generated_at: new Date('2025-10-04').toISOString(),
+    filter_metadata: { preset: '1day' },
   },
 ];
 
