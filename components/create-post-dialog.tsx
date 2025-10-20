@@ -51,6 +51,49 @@ import {
   TimePreset,
 } from "@/types/patch-note";
 
+const RECENT_REPOS_KEY = 'repatch_recent_repos';
+const MAX_RECENT_REPOS = 5;
+
+interface RecentRepo {
+  url: string;
+  owner: string;
+  repo: string;
+  lastUsed: string;
+}
+
+function getRecentRepos(): RecentRepo[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem(RECENT_REPOS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentRepo(url: string, owner: string, repo: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const recent = getRecentRepos();
+    const existing = recent.findIndex((r) => r.url === url);
+    
+    // Remove if already exists
+    if (existing >= 0) {
+      recent.splice(existing, 1);
+    }
+    
+    // Add to front
+    recent.unshift({ url, owner, repo, lastUsed: new Date().toISOString() });
+    
+    // Keep only MAX_RECENT_REPOS
+    const trimmed = recent.slice(0, MAX_RECENT_REPOS);
+    
+    localStorage.setItem(RECENT_REPOS_KEY, JSON.stringify(trimmed));
+  } catch (error) {
+    console.error('Failed to save recent repo:', error);
+  }
+}
+
 export function CreatePostDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -58,6 +101,7 @@ export function CreatePostDialog() {
   const [loadingStep, setLoadingStep] = useState('');
   const [isFetchingBranches, setIsFetchingBranches] = useState(false);
   const [repoUrl, setRepoUrl] = useState('');
+  const [recentRepos, setRecentRepos] = useState<RecentRepo[]>([]);
   const [branches, setBranches] = useState<{ name: string; protected: boolean }[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [timePeriod, setTimePeriod] = useState<'1day' | '1week' | '1month'>('1week');
@@ -94,6 +138,12 @@ export function CreatePostDialog() {
 
     fetchTemplates();
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      setRecentRepos(getRecentRepos());
+    }
+  }, [open]);
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) || null,
@@ -585,6 +635,9 @@ export function CreatePostDialog() {
 
       const data = await response.json();
 
+      // Save to recent repos
+      saveRecentRepo(repoUrl, repoInfo.owner, repoInfo.repo);
+
       // Close modal and redirect to the new post
       setOpen(false);
       setRepoUrl('');
@@ -645,6 +698,24 @@ export function CreatePostDialog() {
                 required
                 disabled={isLoading}
               />
+              {recentRepos.length > 0 && !repoUrl && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Recent repositories:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {recentRepos.map((recent) => (
+                      <button
+                        key={recent.url}
+                        type="button"
+                        onClick={() => handleRepoUrlChange(recent.url)}
+                        disabled={isLoading}
+                        className="text-xs px-3 py-1.5 rounded-md border border-border bg-muted hover:bg-muted/80 hover:border-foreground/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="font-medium">{recent.owner}/{recent.repo}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
                 {isFetchingBranches
                   ? 'Fetching branches...'
@@ -889,10 +960,12 @@ export function CreatePostDialog() {
                   <span className="font-medium">
                     {selectedTemplate?.name || 'System Default'}
                   </span>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedTemplate?.content.length || 0} chars
+                  </span>
                 </div>
-                <div className="prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
-                  {selectedTemplate?.content.substring(0, 200) || 'Balanced tone with concise technical highlights.'}
-                  {selectedTemplate && selectedTemplate.content.length > 200 ? '...' : ''}
+                <div className="max-h-48 overflow-y-auto prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
+                  {selectedTemplate?.content || 'Balanced tone with concise technical highlights.'}
                 </div>
               </div>
             </div>

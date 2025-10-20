@@ -79,7 +79,7 @@ function buildCommitPrompt(
 
 function buildOverallPrompt(
   repoName: string,
-  timePeriod: '1day' | '1week' | '1month',
+  filters: PatchNoteFilters | undefined,
   commitSummaries: CommitSummary[],
   totalCommits: number,
   totalAdditions: number,
@@ -87,8 +87,7 @@ function buildOverallPrompt(
   template?: SummaryTemplate
 ): string {
   const resolved = template || DEFAULT_TEMPLATE;
-  const periodLabel =
-    timePeriod === '1day' ? 'day' : timePeriod === '1week' ? 'week' : 'month';
+  const filterLabel = formatFilterDetailLabel(filters);
 
   const sections: string[] = [];
   sections.push('You are writing the opening paragraph for a changelog newsletter.');
@@ -99,7 +98,7 @@ function buildOverallPrompt(
   sections.push('---');
   sections.push('');
   sections.push(`Repository: ${repoName}`);
-  sections.push(`Time Period: Past ${periodLabel}`);
+  sections.push(`Time Period: ${filterLabel}`);
   sections.push(`Total Commits: ${totalCommits}`);
   sections.push(`Lines Added: ${totalAdditions}`);
   sections.push(`Lines Deleted: ${totalDeletions}`);
@@ -141,15 +140,20 @@ export async function summarizeCommit(
 
     const google = createGoogleGenerativeAI({ apiKey });
 
+    const prompt = buildCommitPrompt(
+      commitMessage,
+      diff,
+      additions,
+      deletions,
+      template
+    );
+    
+    console.log(`[AI Template] Using template: ${template?.name || 'DEFAULT'}`);
+    console.log(`[AI Template] Prompt length: ${prompt.length} chars`);
+
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
-      prompt: buildCommitPrompt(
-        commitMessage,
-        diff,
-        additions,
-        deletions,
-        template
-      ),
+      prompt,
     });
 
     return text.trim();
@@ -229,17 +233,23 @@ export async function generateOverallSummary(
     }
 
     const google = createGoogleGenerativeAI({ apiKey });
+    
+    const prompt = buildOverallPrompt(
+      repoName,
+      filters,
+      commitSummaries,
+      totalCommits,
+      totalAdditions,
+      totalDeletions,
+      template
+    );
+    
+    console.log(`[AI Template] Overall summary using template: ${template?.name || 'DEFAULT'}`);
+    console.log(`[AI Template] Overall prompt length: ${prompt.length} chars`);
+    
     const { text } = await generateText({
       model: google('gemini-2.5-flash'),
-      prompt: buildOverallPrompt(
-        repoName,
-        timePeriod,
-        commitSummaries,
-        totalCommits,
-        totalAdditions,
-        totalDeletions,
-        template
-      ),
+      prompt,
     });
 
     return text.trim();

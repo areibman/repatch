@@ -63,6 +63,8 @@ export async function POST(request: NextRequest) {
         name: mapped.name,
         content: mapped.content,
       };
+      console.log(`[Template] Loaded template: ${template.name} (${template.id})`);
+      console.log(`[Template] Content length: ${template.content.length} chars`);
     } else if (
       templateOverride &&
       typeof templateOverride.content === 'string'
