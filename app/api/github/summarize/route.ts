@@ -23,8 +23,9 @@ export async function POST(request: NextRequest) {
       branch?: string;
       templateId?: string;
       templateOverride?: TemplateOverridePayload;
+      generateCommitTitles?: boolean;
     };
-    const { owner, repo, filters, branch, templateId, templateOverride } = body;
+    const { owner, repo, filters, branch, templateId, templateOverride, generateCommitTitles } = body;
 
     if (!owner || !repo) {
       return NextResponse.json(
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Generate AI summaries
-    const summaries = await summarizeCommits(commitsWithDiffs, template);
+    const summaries = await summarizeCommits(commitsWithDiffs, template, generateCommitTitles);
 
     // Calculate totals
     const totalAdditions = commitsWithStats.reduce((sum, c) => sum + c.additions, 0);

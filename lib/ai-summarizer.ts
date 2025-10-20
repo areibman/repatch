@@ -7,6 +7,7 @@ export interface CommitSummary {
   sha: string;
   message: string;
   aiSummary: string;
+  aiTitle?: string;
   additions: number;
   deletions: number;
 }
@@ -50,7 +51,8 @@ function buildCommitPrompt(
   diff: string,
   additions: number,
   deletions: number,
-  template?: SummaryTemplate
+  template?: SummaryTemplate,
+  generateTitle?: boolean
 ): string {
   const resolved = template || DEFAULT_TEMPLATE;
   const sections: string[] = [];
@@ -72,7 +74,14 @@ function buildCommitPrompt(
   sections.push('Diff Preview (first 2000 characters):');
   sections.push(diff.substring(0, 2000));
   sections.push('');
-  sections.push('Generate a concise summary following the template guidelines:');
+  
+  if (generateTitle) {
+    sections.push('Generate a response in this exact format:');
+    sections.push('TITLE: [A short, descriptive title (3-6 words) that captures the essence of this change]');
+    sections.push('SUMMARY: [Your concise summary following the template guidelines]');
+  } else {
+    sections.push('Generate a concise summary following the template guidelines:');
+  }
 
   return sections.join('\n');
 }
@@ -128,14 +137,15 @@ export async function summarizeCommit(
   diff: string,
   additions: number,
   deletions: number,
-  template?: SummaryTemplate
-): Promise<string> {
+  template?: SummaryTemplate,
+  generateTitle?: boolean
+): Promise<{ summary: string; title?: string }> {
   try {
     const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
       console.warn('No Google API key found, skipping AI summarization');
-      return commitMessage.split('\n')[0]; // Return first line of commit message
+      return { summary: commitMessage.split('\n')[0] }; // Return first line of commit message
     }
 
     const google = createGoogleGenerativeAI({ apiKey });
@@ -145,10 +155,12 @@ export async function summarizeCommit(
       diff,
       additions,
       deletions,
-      template
+      template,
+      generateTitle
     );
     
     console.log(`[AI Template] Using template: ${template?.name || 'DEFAULT'}`);
+    console.log(`[AI Template] Generate title: ${generateTitle ? 'YES' : 'NO'}`);
     console.log(`[AI Template] Prompt length: ${prompt.length} chars`);
 
     const { text } = await generateText({
@@ -156,11 +168,22 @@ export async function summarizeCommit(
       prompt,
     });
 
-    return text.trim();
+    if (generateTitle) {
+      // Parse the TITLE: and SUMMARY: format
+      const titleMatch = text.match(/TITLE:\s*(.+?)(?:\n|$)/i);
+      const summaryMatch = text.match(/SUMMARY:\s*([\s\S]+?)$/i);
+      
+      return {
+        title: titleMatch ? titleMatch[1].trim() : undefined,
+        summary: summaryMatch ? summaryMatch[1].trim() : text.trim(),
+      };
+    }
+
+    return { summary: text.trim() };
   } catch (error) {
     console.error('Error generating AI summary:', error);
     // Fallback to first line of commit message
-    return commitMessage.split('\n')[0];
+    return { summary: commitMessage.split('\n')[0] };
   }
 }
 
@@ -175,7 +198,8 @@ export async function summarizeCommits(
     additions: number;
     deletions: number;
   }>,
-  template?: SummaryTemplate
+  template?: SummaryTemplate,
+  generateTitles?: boolean
 ): Promise<CommitSummary[]> {
   const summaries: CommitSummary[] = [];
 
@@ -185,18 +209,20 @@ export async function summarizeCommits(
     .slice(0, 10);
 
   for (const commit of significantCommits) {
-    const aiSummary = await summarizeCommit(
+    const result = await summarizeCommit(
       commit.message,
       commit.diff || '',
       commit.additions,
       commit.deletions,
-      template
+      template,
+      generateTitles
     );
 
     summaries.push({
       sha: commit.sha,
       message: commit.message,
-      aiSummary,
+      aiSummary: result.summary,
+      aiTitle: result.title,
       additions: commit.additions,
       deletions: commit.deletions,
     });

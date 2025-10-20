@@ -109,6 +109,7 @@ export function CreatePostDialog() {
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [includeCommitMessages, setIncludeCommitMessages] = useState(false);
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -547,6 +548,7 @@ export function CreatePostDialog() {
           filters: filterPayload,
           branch: selectedBranch,
           templateId: selectedTemplateId || undefined,
+          generateCommitTitles: !includeCommitMessages,
         }),
       });
 
@@ -567,8 +569,10 @@ export function CreatePostDialog() {
       const content = aiOverallSummary
         ? `${aiOverallSummary}\n\n## Key Changes\n\n${aiSummaries
             .map(
-              (s: any) =>
-                `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`
+              (s: any) => {
+                const header = s.aiTitle || s.message.split('\n')[0];
+                return `### ${header}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`;
+              }
             )
             .join('\n\n')}`
         : generateBoilerplateContent(
@@ -968,6 +972,26 @@ export function CreatePostDialog() {
                   {selectedTemplate?.content || 'Balanced tone with concise technical highlights.'}
                 </div>
               </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="include-commit-messages"
+                  checked={includeCommitMessages}
+                  onChange={(e) => setIncludeCommitMessages(e.target.checked)}
+                  disabled={isLoading}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label 
+                  htmlFor="include-commit-messages" 
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Include original commit messages as headers
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When unchecked, AI will generate cleaner, more descriptive headers for each change instead of showing raw commit messages.
+              </p>
             </div>
           </div>
 
