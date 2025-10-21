@@ -585,3 +585,122 @@ export async function generateOverallSummary(
     return `This ${fallbackLabel.toLowerCase()} window saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
   }
 }
+
+function stripHashtags(text: string): string {
+  return text.replace(/#[A-Za-z][\w-]*/g, (match) => match.slice(1));
+}
+
+function splitIntoTweetLength(text: string): string[] {
+  const tweets: string[] = [];
+  let remaining = text.trim();
+
+  while (remaining.length > 280) {
+    let slice = remaining.slice(0, 280);
+    const lastSpace = slice.lastIndexOf(' ');
+    if (lastSpace > 200) {
+      slice = slice.slice(0, lastSpace);
+    }
+    tweets.push(slice.trim());
+    remaining = remaining.slice(slice.length).trimStart();
+  }
+
+  if (remaining.length > 0) {
+    tweets.push(remaining);
+  }
+
+  return tweets;
+}
+
+interface TweetThreadParams {
+  repoName: string;
+  title: string;
+  changelogMarkdown: string;
+  overallSummary?: string | null;
+  commitSummaries?: CommitSummary[] | null;
+}
+
+export async function generateTweetThreadFromChangelog({
+  repoName,
+  title,
+  changelogMarkdown,
+  overallSummary,
+  commitSummaries,
+}: TweetThreadParams): Promise<string[]> {
+  const buildFallback = (): string[] => {
+    const fallbackTweets: string[] = [
+      `Update from ${repoName}: ${title}`,
+    ];
+
+    if (overallSummary) {
+      fallbackTweets.push(overallSummary.slice(0, 276));
+    }
+
+    if (commitSummaries && commitSummaries.length > 0) {
+      const highlights = commitSummaries.slice(0, 3).map((summary) => {
+        const label = summary.aiTitle || summary.message.split('\n')[0];
+        return `${label}: ${summary.aiSummary}`;
+      });
+      fallbackTweets.push(...highlights.map((highlight) => highlight.slice(0, 276)));
+    }
+
+    return fallbackTweets.slice(0, 5);
+  };
+
+  try {
+    const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      return buildFallback();
+    }
+
+    const google = createGoogleGenerativeAI({ apiKey });
+    const highlightList = commitSummaries
+      ?.slice(0, 10)
+      .map((summary, index) =>
+        `${index + 1}. ${(summary.aiTitle || summary.message.split('\n')[0]).trim()} — ${summary.aiSummary}`
+      )
+      .join('\n');
+
+    const prompt = `You are a social media copywriter creating an X (Twitter) thread about a recent product update.\n\n` +
+      `Repository: ${repoName}\n` +
+      `Release Title: ${title}\n` +
+      `${overallSummary ? `Overall Summary: ${overallSummary}\n` : ''}` +
+      `Markdown Changelog:\n${changelogMarkdown}\n\n` +
+      `${highlightList ? `Key Highlights:\n${highlightList}\n\n` : ''}` +
+      `Write a polished, professional Twitter thread that teases the highlights first and walks readers through the changes.\n` +
+      `Rules:\n` +
+      `- NEVER use hashtags.\n` +
+      `- Keep the tone concise, energetic, and informative.\n` +
+      `- Each tweet must be fewer than 270 characters to stay within 280 after accounting for extra spaces.\n` +
+      `- Include clear calls-to-action only when appropriate (link to repo if helpful).\n` +
+      `- Return the thread as pure JSON: an array of tweet strings in order. No extra commentary or code fences.`;
+
+    const { text } = await generateText({
+      model: google('gemini-2.5-pro'),
+      prompt,
+    });
+
+    const response = text.trim();
+    const jsonMatch = response.match(/\[[\s\S]*\]/);
+    const payload = jsonMatch ? jsonMatch[0] : response;
+    const parsed = JSON.parse(payload);
+
+    if (!Array.isArray(parsed)) {
+      return buildFallback();
+    }
+
+    const flattened = parsed.flatMap((item) => {
+      if (typeof item !== 'string') {
+        return [];
+      }
+
+      const sanitized = stripHashtags(item).replace(/```/g, '').trim();
+      return splitIntoTweetLength(sanitized);
+    }).filter((tweet) => tweet.length > 0);
+
+    return flattened.length > 0 ? flattened : buildFallback();
+  } catch (error) {
+    console.error('Error generating tweet thread:', error);
+    return buildFallback();
+  }
+}

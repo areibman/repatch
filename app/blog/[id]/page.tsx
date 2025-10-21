@@ -58,6 +58,7 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [isDraftingThread, setIsDraftingThread] = useState(false);
   const [templates, setTemplates] = useState<AiTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
@@ -262,6 +263,39 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleDraftThread = async () => {
+    if (isDraftingThread) {
+      return;
+    }
+
+    if (!confirm('Create a Typefully draft thread for this patch note?')) {
+      return;
+    }
+
+    setIsDraftingThread(true);
+
+    try {
+      const response = await fetch(`/api/patch-notes/${params.id}/typefully`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create Typefully draft');
+      }
+
+      const data = await response.json();
+      const urlMessage = data.draftUrl ? `\nView draft: ${data.draftUrl}` : '';
+      alert(`🐦 Twitter thread draft created successfully!${urlMessage}`);
+    } catch (error) {
+      console.error('Error creating Typefully draft:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create Typefully draft';
+      alert(`❌ Error: ${errorMessage}`);
+    } finally {
+      setIsDraftingThread(false);
     }
   };
 
@@ -551,6 +585,21 @@ export default function BlogViewPage() {
                   >
                     <PaperAirplaneIcon className="h-4 w-4 mr-2" />
                     {isSending ? "Sending..." : "Send Email"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDraftThread}
+                    disabled={isDraftingThread}
+                  >
+                    {isDraftingThread ? (
+                      <>
+                        <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                        Drafting...
+                      </>
+                    ) : (
+                      <>🐦 Draft Thread</>
+                    )}
                   </Button>
                 </>
               )}
