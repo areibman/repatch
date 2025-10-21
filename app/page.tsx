@@ -230,21 +230,13 @@ export default function Home() {
                   </p>
 
                   {/* Change Stats */}
-                  <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="bg-green-500/10 rounded-md p-2 text-center">
                       <div className="font-semibold text-green-700 dark:text-green-400">
                         +{note.changes.added.toLocaleString()}
                       </div>
                       <div className="text-muted-foreground text-[10px]">
                         added
-                      </div>
-                    </div>
-                    <div className="bg-blue-500/10 rounded-md p-2 text-center">
-                      <div className="font-semibold text-blue-700 dark:text-blue-400">
-                        ~{note.changes.modified.toLocaleString()}
-                      </div>
-                      <div className="text-muted-foreground text-[10px]">
-                        modified
                       </div>
                     </div>
                     <div className="bg-red-500/10 rounded-md p-2 text-center">
