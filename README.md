@@ -36,6 +36,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 RESEND_API_KEY=your_resend_api_key
 RESEND_AUDIENCE_ID=your_resend_audience_id
 
+# Typefully (optional tweet thread drafts)
+TYPEFULLY_API_KEY=your_typefully_api_key
+
 # GitHub (REQUIRED to avoid rate limits)
 GITHUB_TOKEN=ghp_yourTokenHere
 
@@ -66,6 +69,15 @@ To set up Resend for email sending:
    - Create a new audience (e.g., "Repatch Subscribers")
    - Copy the audience ID
 4. Add both the API key and audience ID to your `.env.local` file
+
+### Typefully Setup
+
+Drafting tweet threads is optional, but if you want to create Typefully drafts directly from a patch note:
+
+1. Create a Typefully account at https://typefully.com/
+2. Generate an API key from **Settings → API**
+3. Add the key to your `.env.local` as `TYPEFULLY_API_KEY`
+4. Open any patch note and click **Draft Tweet Thread** to create a thread draft in your Typefully workspace
 
 ### 3. Set Up Supabase
 

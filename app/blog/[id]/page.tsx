@@ -35,7 +35,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@heroicons/react/16/solid";
-import { Loader2Icon } from "lucide-react";
+import { Loader2Icon, TwitterIcon, DownloadIcon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
@@ -57,6 +57,7 @@ export default function BlogViewPage() {
   const [editedTitle, setEditedTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [templates, setTemplates] = useState<AiTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
@@ -66,6 +67,7 @@ export default function BlogViewPage() {
   const [regenerateMessage, setRegenerateMessage] = useState('');
   const [showInternalChanges, setShowInternalChanges] = useState(false);
   const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
+  const [typefullyDraftUrl, setTypefullyDraftUrl] = useState<string | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -265,6 +267,56 @@ export default function BlogViewPage() {
     }
   };
 
+  const handleCreateTweetThread = async () => {
+    if (!patchNote || isCreatingThread) {
+      return;
+    }
+
+    if (!confirm('Draft this patch note as a Typefully tweet thread?')) {
+      return;
+    }
+
+    setIsCreatingThread(true);
+
+    try {
+      const response = await fetch(`/api/patch-notes/${patchNote.id}/typefully`, {
+        method: 'POST',
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const errorMessage = data?.error || 'Failed to create Typefully draft';
+        throw new Error(errorMessage);
+      }
+
+      // Extract the shareable URL from the response
+      const draftUrl =
+        data?.draft?.share_url ||
+        data?.draft?.url ||
+        data?.draft?.draft?.url ||
+        data?.draft?.data?.url ||
+        null;
+
+      if (draftUrl) {
+        setTypefullyDraftUrl(draftUrl);
+        // Automatically open the draft in a new tab
+        const newWindow = window.open(draftUrl, '_blank', 'noopener,noreferrer');
+        if (newWindow) {
+          newWindow.focus();
+        }
+      } else {
+        alert('✅ Tweet thread drafted on Typefully!');
+      }
+    } catch (error) {
+      console.error('Error creating Typefully draft:', error);
+      const message = error instanceof Error ? error.message : 'Failed to create Typefully draft';
+      alert(`❌ Error: ${message}`);
+    } finally {
+      setIsCreatingThread(false);
+    }
+  };
+
   const handleGenerateVideo = async () => {
     if (!patchNote) return;
 
@@ -303,6 +355,24 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsGeneratingVideo(false);
+    }
+  };
+
+  const handleDownloadVideo = async () => {
+    if (!patchNote?.videoUrl) return;
+
+    try {
+      // Create a temporary anchor element to trigger download
+      const link = document.createElement('a');
+      link.href = patchNote.videoUrl;
+      link.download = `${patchNote.repoName?.replace('/', '-') || 'patch-note'}-video.mp4`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading video:', error);
+      alert('❌ Error downloading video. Please try opening the video URL directly.');
     }
   };
 
@@ -525,7 +595,7 @@ export default function BlogViewPage() {
                     <PencilIcon className="h-4 w-4 mr-2" />
                     Edit
                   </Button>
-                  {!patchNote.videoUrl && (
+                  {!patchNote.videoUrl ? (
                     <Button
                       variant="outline"
                       size="sm"
@@ -543,7 +613,34 @@ export default function BlogViewPage() {
                         </>
                       )}
                     </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDownloadVideo}
+                    >
+                      <DownloadIcon className="h-4 w-4 mr-2" />
+                      Download Video
+                    </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCreateTweetThread}
+                    disabled={isCreatingThread}
+                  >
+                    {isCreatingThread ? (
+                      <>
+                        <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                        Drafting...
+                      </>
+                    ) : (
+                      <>
+                        <TwitterIcon className="h-4 w-4 mr-2" />
+                        {typefullyDraftUrl ? 'Redraft' : 'Draft'} Tweet Thread
+                      </>
+                    )}
+                  </Button>
                   <Button
                     size="sm"
                     onClick={handleSendEmail}
@@ -558,6 +655,25 @@ export default function BlogViewPage() {
           </div>
         </div>
 
+        {/* Typefully Draft Link */}
+        {typefullyDraftUrl && (
+          <a
+            href={typefullyDraftUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-6 block"
+          >
+            <div className="flex items-center gap-3 px-4 py-3 bg-muted/50 hover:bg-muted rounded-lg border transition-colors">
+              <TwitterIcon className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                Draft created on Typefully
+              </span>
+              <span className="text-sm text-foreground ml-auto font-medium">
+                Open →
+              </span>
+            </div>
+          </a>
+        )}
 
         {/* Remotion Player */}
         <div className="mb-8">

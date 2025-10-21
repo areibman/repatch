@@ -585,3 +585,189 @@ export async function generateOverallSummary(
     return `This ${fallbackLabel.toLowerCase()} window saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
   }
 }
+
+function extractJsonArray(text: string): string | null {
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+
+  if (start === -1 || end === -1 || end <= start) {
+    return null;
+  }
+
+  return text.slice(start, end + 1);
+}
+
+function sanitizeTweet(text: string): string {
+  const withoutHashtags = text.replace(/#/g, '').trim();
+  if (withoutHashtags.length <= 280) {
+    return withoutHashtags;
+  }
+
+  // Trim to the nearest sentence boundary below 280 characters when possible
+  const truncated = withoutHashtags.slice(0, 279);
+  const lastPunctuation = Math.max(
+    truncated.lastIndexOf('.'),
+    truncated.lastIndexOf('!'),
+    truncated.lastIndexOf('?')
+  );
+
+  if (lastPunctuation > 200) {
+    return truncated.slice(0, lastPunctuation + 1).trim();
+  }
+
+  return `${truncated.trim()}…`;
+}
+
+function buildFallbackThread(
+  repoName: string,
+  overallSummary?: string | null,
+  commitSummaries?: CommitSummary[] | null,
+  markdownContent?: string
+): string[] {
+  const tweets: string[] = [];
+
+  if (overallSummary) {
+    tweets.push(sanitizeTweet(overallSummary));
+  }
+
+  if (tweets.length === 0 && markdownContent) {
+    const plain = markdownContent
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/[*_`>#-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (plain) {
+      tweets.push(sanitizeTweet(plain.slice(0, 280)));
+    }
+  }
+
+  const highlights = commitSummaries
+    ? commitSummaries
+        .slice(0, 4)
+        .map((summary) => summary.aiSummary || summary.message.split('\n')[0])
+        .filter(Boolean)
+    : [];
+
+  highlights.forEach((highlight, index) => {
+    tweets.push(
+      sanitizeTweet(
+        `${index === 0 && tweets.length === 0 ? `${repoName} update:` : 'Highlight:'} ${highlight}`
+      )
+    );
+  });
+
+  if (tweets.length === 0) {
+    tweets.push(
+      sanitizeTweet(
+        `${repoName} shipped new updates—visit the latest patch notes for all the details.`
+      )
+    );
+  }
+
+  return tweets.slice(0, 6);
+}
+
+export async function generateTweetThread(
+  repoName: string,
+  filters: PatchNoteFilters | undefined,
+  options: {
+    overallSummary?: string | null;
+    commitSummaries?: CommitSummary[] | null;
+    markdownContent?: string;
+  }
+): Promise<string[]> {
+  const { overallSummary, commitSummaries, markdownContent } = options;
+  const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    return buildFallbackThread(repoName, overallSummary, commitSummaries, markdownContent);
+  }
+
+  try {
+    const google = createGoogleGenerativeAI({ apiKey });
+    const filterLabel = formatFilterSummary(
+      filters,
+      filters?.mode === 'release'
+        ? 'release'
+        : filters?.mode === 'custom'
+        ? 'custom'
+        : filters?.preset ?? '1week'
+    );
+
+    const changesList = commitSummaries
+      ?.slice(0, 6)
+      .map(
+        (summary, index) =>
+          `${index + 1}. ${(summary.aiTitle || summary.message.split('\n')[0]).trim()} — ${(summary.aiSummary || '').trim()}`
+      )
+      .join('\n');
+
+    const promptParts = [
+      'You are a social media strategist crafting an engaging Twitter thread about recent software updates.',
+      'Write copy that sounds confident and excited while staying professional.',
+      'Hard requirements:',
+      '- Output ONLY a valid JSON array of tweet texts.',
+      '- Each tweet must be fewer than 280 characters.',
+      '- Do not include hashtags, emoji overload, or marketing fluff.',
+      '- Keep continuity across the thread so it reads naturally.',
+      '- The first tweet should hook readers with the main value delivered.',
+      '',
+      `Repository: ${repoName}`,
+      `Timeframe: ${filterLabel}`,
+    ];
+
+    if (overallSummary) {
+      promptParts.push('', `Overall summary: ${overallSummary.trim()}`);
+    }
+
+    if (changesList) {
+      promptParts.push('', 'Key changes:', changesList);
+    } else if (markdownContent) {
+      promptParts.push('', 'Patch note content:', markdownContent.slice(0, 2000));
+    }
+
+    promptParts.push('', 'Respond with JSON in the form: ["tweet 1", "tweet 2", ...].');
+
+    const prompt = promptParts.join('\n');
+
+    const { text } = await generateText({
+      model: google('gemini-2.5-pro'),
+      prompt,
+    });
+
+    const jsonSnippet = extractJsonArray(text);
+
+    if (!jsonSnippet) {
+      throw new Error('AI response did not contain a JSON array');
+    }
+
+    const parsed = JSON.parse(jsonSnippet) as unknown;
+
+    if (!Array.isArray(parsed)) {
+      throw new Error('AI response JSON is not an array');
+    }
+
+    const tweets = parsed
+      .map((value) => {
+        if (typeof value === 'string') {
+          return value;
+        }
+        if (value && typeof value === 'object' && 'text' in value && typeof value.text === 'string') {
+          return value.text;
+        }
+        return null;
+      })
+      .filter((value): value is string => Boolean(value))
+      .map(sanitizeTweet)
+      .filter((tweet) => tweet.length > 0);
+
+    if (tweets.length === 0) {
+      throw new Error('AI response did not produce any tweets');
+    }
+
+    return tweets.slice(0, 8);
+  } catch (error) {
+    console.error('Error generating tweet thread:', error);
+    return buildFallbackThread(repoName, overallSummary, commitSummaries, markdownContent);
+  }
+}
