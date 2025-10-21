@@ -16,7 +16,6 @@ import { CommitSummary, PatchNote } from "@/types/patch-note";
 import { formatFilterSummary } from "@/lib/filter-utils";
 import { CreatePostDialog } from "@/components/create-post-dialog";
 import {
-  PlusIcon,
   CodeBracketIcon,
   CalendarIcon,
   UsersIcon,

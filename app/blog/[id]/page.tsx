@@ -9,7 +9,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -477,18 +476,6 @@ export default function BlogViewPage() {
     }
   };
 
-  const getTimePeriodLabel = (period: string) => {
-    switch (period) {
-      case "1day":
-        return "Daily";
-      case "1week":
-        return "Weekly";
-      case "1month":
-        return "Monthly";
-      default:
-        return period;
-    }
-  };
   const getFilterLabel = (note: PatchNote) =>
     formatFilterSummary(note.filterMetadata, note.timePeriod);
 
