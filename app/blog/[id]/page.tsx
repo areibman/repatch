@@ -35,7 +35,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@heroicons/react/16/solid";
-import { Loader2Icon } from "lucide-react";
+import { Loader2Icon, TwitterIcon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
@@ -57,6 +57,7 @@ export default function BlogViewPage() {
   const [editedTitle, setEditedTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [templates, setTemplates] = useState<AiTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
@@ -262,6 +263,50 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleCreateTweetThread = async () => {
+    if (!patchNote || isCreatingThread) {
+      return;
+    }
+
+    if (!confirm('Draft this patch note as a Typefully tweet thread?')) {
+      return;
+    }
+
+    setIsCreatingThread(true);
+
+    try {
+      const response = await fetch(`/api/patch-notes/${patchNote.id}/typefully`, {
+        method: 'POST',
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const errorMessage = data?.error || 'Failed to create Typefully draft';
+        throw new Error(errorMessage);
+      }
+
+      const draftUrl =
+        data?.draft?.url ||
+        data?.draft?.draft?.url ||
+        data?.draft?.share_url ||
+        data?.draft?.data?.url ||
+        null;
+
+      if (draftUrl) {
+        alert(`✅ Tweet thread drafted on Typefully!\n\nOpen it here: ${draftUrl}`);
+      } else {
+        alert('✅ Tweet thread drafted on Typefully!');
+      }
+    } catch (error) {
+      console.error('Error creating Typefully draft:', error);
+      const message = error instanceof Error ? error.message : 'Failed to create Typefully draft';
+      alert(`❌ Error: ${message}`);
+    } finally {
+      setIsCreatingThread(false);
     }
   };
 
@@ -544,6 +589,24 @@ export default function BlogViewPage() {
                       )}
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCreateTweetThread}
+                    disabled={isCreatingThread}
+                  >
+                    {isCreatingThread ? (
+                      <>
+                        <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                        Drafting...
+                      </>
+                    ) : (
+                      <>
+                        <TwitterIcon className="h-4 w-4 mr-2" />
+                        Draft Tweet Thread
+                      </>
+                    )}
+                  </Button>
                   <Button
                     size="sm"
                     onClick={handleSendEmail}
