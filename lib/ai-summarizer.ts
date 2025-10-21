@@ -585,3 +585,165 @@ export async function generateOverallSummary(
     return `This ${fallbackLabel.toLowerCase()} window saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
   }
 }
+
+interface TweetThreadInput {
+  title: string;
+  markdown: string;
+  repoName?: string | null;
+  repoUrl?: string | null;
+  filterMetadata?: PatchNoteFilters | null;
+  overallSummary?: string | null;
+}
+
+function cleanJsonBlock(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('```')) {
+    const withoutFence = trimmed.replace(/^```[a-zA-Z]*\n?/, '').replace(/```$/, '');
+    return withoutFence.trim();
+  }
+  return trimmed;
+}
+
+function stripMarkdown(value: string): string {
+  return value
+    .replace(/`{1,3}[^`]*`{1,3}/g, '')
+    .replace(/[*_~>#-]/g, '')
+    .replace(/\[(.*?)\]\((.*?)\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function enforceTweetConstraints(tweets: string[]): string[] {
+  const normalized: string[] = [];
+
+  for (const tweet of tweets) {
+    const withoutHashtags = tweet.replace(/#/g, '');
+    let remaining = withoutHashtags.trim();
+
+    if (!remaining) {
+      continue;
+    }
+
+    while (remaining.length > 0) {
+      if (remaining.length <= 280) {
+        normalized.push(remaining);
+        break;
+      }
+
+      let slice = remaining.slice(0, 280);
+      const lastSpace = slice.lastIndexOf(' ');
+      if (lastSpace > 200) {
+        slice = slice.slice(0, lastSpace);
+      }
+
+      normalized.push(slice.trim());
+      remaining = remaining.slice(slice.length).trim();
+    }
+  }
+
+  if (normalized.length === 0) {
+    return ['We shipped improvements across the repo and have fresh patch notes live now.'];
+  }
+
+  return normalized;
+}
+
+function parseThreadResponse(raw: string): string[] {
+  const cleaned = cleanJsonBlock(raw);
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((entry) =>
+          typeof entry === 'string'
+            ? entry
+            : typeof entry?.text === 'string'
+            ? entry.text
+            : typeof entry?.content === 'string'
+            ? entry.content
+            : ''
+        )
+        .filter(Boolean)
+        .map((entry) => stripMarkdown(entry));
+    }
+  } catch {
+    // fall through to manual parsing
+  }
+
+  return cleaned
+    .split(/\n{2,}/)
+    .map((segment) => stripMarkdown(segment))
+    .filter(Boolean);
+}
+
+export async function generateTweetThread(
+  input: TweetThreadInput
+): Promise<string[]> {
+  const {
+    title,
+    markdown,
+    repoName,
+    repoUrl,
+    filterMetadata,
+    overallSummary,
+  } = input;
+
+  const fallbackTweets = enforceTweetConstraints(
+    stripMarkdown(markdown)
+      .split('. ')
+      .filter(Boolean)
+      .map((sentence) => sentence.trim())
+  );
+
+  try {
+    const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      console.warn('No Google API key found, falling back to heuristic tweet thread generation');
+      return fallbackTweets;
+    }
+
+    const google = createGoogleGenerativeAI({ apiKey });
+
+    const filterLabel = filterMetadata
+      ? formatFilterDetailLabel(filterMetadata)
+      : undefined;
+
+    const prompt = `You are an experienced social media manager crafting a high-signal Twitter thread about a repository update.
+
+Write a succinct thread (4-8 tweets) that covers the highlights and call-to-action.
+
+Constraints:
+- Each tweet MUST be under 280 characters.
+- NEVER use hashtags or emoji hashtags.
+- Avoid excessive emojis (max 2 across the thread).
+- Each tweet should stand alone but flow logically.
+- Keep language confident, clear, and focused on value.
+- Include a final tweet with a call to action that references the repository link if provided.
+
+Context:
+Title: ${title}
+Repository: ${repoName ?? 'Unknown repo'}
+Repo URL: ${repoUrl ?? 'Not provided'}
+Time Period: ${filterLabel ?? 'Not specified'}
+Existing Summary: ${overallSummary ?? 'No separate summary available.'}
+Patch Notes Markdown:
+---
+${markdown}
+---
+
+Return ONLY a valid JSON array of tweet strings in order.`;
+
+    const { text } = await generateText({
+      model: google('gemini-2.5-pro'),
+      prompt,
+    });
+
+    const parsedTweets = parseThreadResponse(text);
+    return enforceTweetConstraints(parsedTweets);
+  } catch (error) {
+    console.error('Error generating tweet thread:', error);
+    return fallbackTweets;
+  }
+}

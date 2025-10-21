@@ -43,6 +43,11 @@ GITHUB_TOKEN=ghp_yourTokenHere
 GEMINI_API_KEY=your_gemini_api_key
 GOOGLE_API_KEY=your_google_api_key
 
+# Typefully (for Twitter threads)
+TYPEFULLY_API_KEY=your_typefully_api_key
+# Optional override if you are using a proxy
+# TYPEFULLY_API_BASE_URL=https://api.typefully.com/v1
+
 # Optional: App URL for video rendering callbacks
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
@@ -156,6 +161,12 @@ Send beautiful HTML emails to subscribers with:
 - Repository statistics
 - Contributor list
 - Custom video links (when available)
+
+### 🧵 Tweet Thread Drafts
+
+- Transform any patch note into a Twitter-ready thread using a dedicated LLM prompt
+- Automatically push the thread to Typefully as a draft for quick publishing
+- Ensure each tweet respects the 280 character limit and avoids hashtags
 
 ## Documentation
 

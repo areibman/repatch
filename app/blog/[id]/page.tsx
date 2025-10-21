@@ -34,6 +34,7 @@ import {
   XMarkIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  MegaphoneIcon,
 } from "@heroicons/react/16/solid";
 import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
@@ -57,6 +58,7 @@ export default function BlogViewPage() {
   const [editedTitle, setEditedTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isDraftingThread, setIsDraftingThread] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [templates, setTemplates] = useState<AiTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
@@ -262,6 +264,40 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleCreateTweetThreadDraft = async () => {
+    if (isDraftingThread) {
+      return;
+    }
+
+    if (!confirm('Generate a Typefully draft for this patch note?')) {
+      return;
+    }
+
+    setIsDraftingThread(true);
+
+    try {
+      const response = await fetch(`/api/patch-notes/${params.id}/typefully`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.error || 'Failed to create Typefully draft');
+      }
+
+      const data = await response.json();
+      const draftUrlMessage = data.draftUrl ? `\nOpen draft: ${data.draftUrl}` : '';
+      alert(`✅ Thread drafted in Typefully.${draftUrlMessage}`);
+    } catch (error) {
+      console.error('Error creating Typefully draft:', error);
+      const message =
+        error instanceof Error ? error.message : 'Failed to create Typefully draft';
+      alert(`❌ Error: ${message}`);
+    } finally {
+      setIsDraftingThread(false);
     }
   };
 
@@ -521,6 +557,15 @@ export default function BlogViewPage() {
                 </>
               ) : (
                 <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCreateTweetThreadDraft}
+                    disabled={isDraftingThread}
+                  >
+                    <MegaphoneIcon className="h-4 w-4 mr-2" />
+                    {isDraftingThread ? 'Drafting...' : 'Draft Tweet Thread'}
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleEdit}>
                     <PencilIcon className="h-4 w-4 mr-2" />
                     Edit
