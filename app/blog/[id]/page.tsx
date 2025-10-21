@@ -34,6 +34,7 @@ import {
   XMarkIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  SparklesIcon,
 } from "@heroicons/react/16/solid";
 import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
@@ -57,6 +58,7 @@ export default function BlogViewPage() {
   const [editedTitle, setEditedTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [templates, setTemplates] = useState<AiTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
@@ -262,6 +264,47 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const handleDraftTweetThread = async () => {
+    if (isCreatingThread) {
+      return;
+    }
+
+    setIsCreatingThread(true);
+
+    try {
+      const response = await fetch(`/api/patch-notes/${params.id}/tweet`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.error || 'Failed to create tweet thread draft'
+        );
+      }
+
+      const data = await response.json();
+      const preview = Array.isArray(data.tweets)
+        ? data.tweets
+            .map((tweet: string, index: number) => `${index + 1}. ${tweet}`)
+            .join('\n\n')
+        : '';
+
+      alert(
+        `✅ Tweet thread draft created in Typefully!\n\n${
+          preview ? `Preview:\n${preview}` : 'Open Typefully to review the draft.'
+        }`
+      );
+    } catch (error) {
+      console.error('Error creating Typefully draft:', error);
+      const message =
+        error instanceof Error ? error.message : 'Failed to create tweet thread';
+      alert(`❌ Error: ${message}`);
+    } finally {
+      setIsCreatingThread(false);
     }
   };
 
@@ -551,6 +594,24 @@ export default function BlogViewPage() {
                   >
                     <PaperAirplaneIcon className="h-4 w-4 mr-2" />
                     {isSending ? "Sending..." : "Send Email"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDraftTweetThread}
+                    disabled={isCreatingThread}
+                  >
+                    {isCreatingThread ? (
+                      <>
+                        <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                        Drafting...
+                      </>
+                    ) : (
+                      <>
+                        <SparklesIcon className="h-4 w-4 mr-2" />
+                        Draft Tweet Thread
+                      </>
+                    )}
                   </Button>
                 </>
               )}

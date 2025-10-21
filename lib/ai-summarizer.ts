@@ -585,3 +585,145 @@ export async function generateOverallSummary(
     return `This ${fallbackLabel.toLowerCase()} window saw ${totalCommits} commits with ${totalAdditions} additions and ${totalDeletions} deletions.`;
   }
 }
+
+function stripMarkdownLinks(markdown: string): string {
+  return markdown.replace(/\[(.*?)\]\((.*?)\)/g, '$1');
+}
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function stripHashtags(value: string): string {
+  return value.replace(/(^|\s)#(\w+)/g, '$1$2');
+}
+
+function truncateTweet(value: string, maxLength = 275): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  let truncated = value.slice(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(' ');
+  if (lastSpace > 200) {
+    truncated = truncated.slice(0, lastSpace);
+  }
+
+  return truncated.trim();
+}
+
+function sanitizeTweetContent(value: string): string {
+  return truncateTweet(stripHashtags(normalizeWhitespace(value)));
+}
+
+function createTweetFallback(
+  title: string,
+  repoName: string,
+  summary: string | null,
+  content: string,
+  maxTweets: number
+): string[] {
+  const base = [title, `Updates from ${repoName}`, summary || '', content]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const plain = normalizeWhitespace(
+    stripMarkdownLinks(base).replace(/[*`>_]/g, '')
+  );
+
+  if (!plain) {
+    return [];
+  }
+
+  const tweets: string[] = [];
+  let cursor = 0;
+  while (cursor < plain.length && tweets.length < maxTweets) {
+    let end = Math.min(cursor + 260, plain.length);
+    if (end < plain.length) {
+      const lastSpace = plain.lastIndexOf(' ', end);
+      if (lastSpace > cursor + 40) {
+        end = lastSpace;
+      }
+    }
+
+    const chunk = plain.slice(cursor, end).trim();
+    if (chunk) {
+      tweets.push(sanitizeTweetContent(chunk));
+    }
+    cursor = end;
+  }
+
+  return tweets.length > 0 ? tweets : [sanitizeTweetContent(plain.slice(0, 260))];
+}
+
+interface TweetThreadParams {
+  title: string;
+  repoName: string;
+  summary: string | null;
+  content: string;
+  maxTweets?: number;
+}
+
+export async function generateTweetThread({
+  title,
+  repoName,
+  summary,
+  content,
+  maxTweets = 6,
+}: TweetThreadParams): Promise<string[]> {
+  const fallbackTweets = createTweetFallback(title, repoName, summary, content, maxTweets);
+
+  try {
+    const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return fallbackTweets;
+    }
+
+    const google = createGoogleGenerativeAI({ apiKey });
+    const prompt = `You are a social media manager tasked with turning release notes into an engaging Twitter thread.
+
+Write between 3 and ${maxTweets} tweets that:
+- Highlight the biggest improvements and product wins
+- Are under 280 characters each (hard requirement)
+- Never use hashtags or emojis
+- Feel conversational yet professional, focusing on the value for users
+- End with a clear call to action to read the full notes
+
+Format your response as valid JSON with this exact shape:
+{
+  "tweets": ["tweet 1", "tweet 2", "tweet 3"]
+}
+
+Repository: ${repoName}
+Title: ${title}
+Summary: ${summary || 'No summary provided'}
+Patch notes (markdown):\n${content}`;
+
+    const { text } = await generateText({
+      model: google('gemini-2.5-pro'),
+      prompt,
+    });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return fallbackTweets;
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed.tweets)) {
+      return fallbackTweets;
+    }
+
+    const tweets = parsed.tweets
+      .map((tweet: unknown) =>
+        typeof tweet === 'string' ? sanitizeTweetContent(stripMarkdownLinks(tweet)) : null
+      )
+      .filter((tweet): tweet is string => Boolean(tweet))
+      .slice(0, maxTweets);
+
+    return tweets.length > 0 ? tweets : fallbackTweets;
+  } catch (error) {
+    console.error('Error generating tweet thread:', error);
+    return fallbackTweets;
+  }
+}

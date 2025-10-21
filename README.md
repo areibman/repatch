@@ -36,6 +36,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 RESEND_API_KEY=your_resend_api_key
 RESEND_AUDIENCE_ID=your_resend_audience_id
 
+# Typefully (optional: draft tweet threads)
+TYPEFULLY_API_KEY=your_typefully_api_key
+# Optional if your workspace uses multiple profiles
+TYPEFULLY_PROFILE_ID=your_typefully_profile_id
+
 # GitHub (REQUIRED to avoid rate limits)
 GITHUB_TOKEN=ghp_yourTokenHere
 
@@ -66,6 +71,15 @@ To set up Resend for email sending:
    - Create a new audience (e.g., "Repatch Subscribers")
    - Copy the audience ID
 4. Add both the API key and audience ID to your `.env.local` file
+
+### Typefully Setup (Optional)
+
+To create Twitter threads directly from Repatch:
+
+1. Create an API key from the **Settings → API** section in Typefully
+2. If you manage multiple Twitter profiles, copy the profile ID you want to use
+3. Add `TYPEFULLY_API_KEY` (and optionally `TYPEFULLY_PROFILE_ID`) to `.env.local`
+4. Open any patch note and click **Draft Tweet Thread** to generate a Typefully draft
 
 ### 3. Set Up Supabase
 
@@ -148,7 +162,7 @@ Using Google's Gemini 2.5 Flash, Repatch:
 - Creates an overall summary of all changes
 - Processes the top 10 most significant commits
 
-### 📧 Email Newsletters
+### 📧 Email Newsletters & 📣 Social Threads
 
 Send beautiful HTML emails to subscribers with:
 - Styled patch note content
@@ -156,6 +170,7 @@ Send beautiful HTML emails to subscribers with:
 - Repository statistics
 - Contributor list
 - Custom video links (when available)
+- Optional Typefully drafts that turn the summary into a ready-to-schedule tweet thread
 
 ## Documentation
 
