@@ -552,49 +552,50 @@ export function CreatePostDialog() {
         }),
       });
 
-      let aiSummaries: any[] = [];
-      let aiOverallSummary: string | null = null;
+      let aiGeneratedContent: string | null = null;
+      let detailedContexts: any[] = [];
 
       if (summariesResponse.ok) {
         const summaryData = await summariesResponse.json();
-        aiSummaries = summaryData.summaries || [];
-        aiOverallSummary = summaryData.overallSummary || null;
-        console.log('AI summaries generated:', aiSummaries.length, 'commits summarized');
+        aiGeneratedContent = summaryData.content || null;
+        detailedContexts = summaryData.detailedContexts || [];
+        console.log('AI changelog generated from', detailedContexts.length, 'commits');
       } else {
-        console.warn('Failed to generate AI summaries, continuing without them');
+        console.warn('Failed to generate AI changelog, continuing without it');
       }
 
-      // Use AI summary as content, or fallback to boilerplate
+      // Use AI-generated content, or fallback to boilerplate
       setLoadingStep('✍️ Generating patch note content...');
-      const content = aiOverallSummary
-        ? `${aiOverallSummary}\n\n## Key Changes\n\n${aiSummaries
-            .map(
-              (s: any) => {
-                const header = s.aiTitle || s.message.split('\n')[0];
-                return `### ${header}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`;
-              }
-            )
-            .join('\n\n')}`
+      const content = aiGeneratedContent
+        ? aiGeneratedContent
         : generateBoilerplateContent(
             `${repoInfo.owner}/${repoInfo.repo}`,
             filterPayload,
             stats
           );
 
-      // Generate video data - use AI summaries if available, otherwise fallback to raw stats
+      // Generate video data - use detailed contexts if available, otherwise fallback to raw stats
       console.log(
         `🎬 Generating video data using ${
-          aiSummaries.length > 0 ? 'AI summaries' : 'raw GitHub stats'
+          detailedContexts.length > 0 ? 'AI contexts' : 'raw GitHub stats'
         }`
       );
-      const videoData =
-        aiSummaries.length > 0
-          ? generateVideoDataFromAI(aiSummaries, aiOverallSummary || undefined)
-          : await generateVideoData(
-              `${repoInfo.owner}/${repoInfo.repo}`,
-              filterPayload,
-              stats
-            );
+      const videoData = detailedContexts.length > 0
+        ? generateVideoDataFromAI(
+            detailedContexts.map((ctx, idx) => ({
+              sha: `ctx-${idx}`,
+              message: ctx.message,
+              aiSummary: ctx.context,
+              additions: ctx.additions,
+              deletions: ctx.deletions,
+            })),
+            undefined
+          )
+        : await generateVideoData(
+            `${repoInfo.owner}/${repoInfo.repo}`,
+            filterPayload,
+            stats
+          );
 
       const descriptor =
         filterPayload.mode === 'preset' && filterPayload.preset
@@ -624,8 +625,7 @@ export function CreatePostDialog() {
           },
           contributors: stats.contributors,
           video_data: videoData,
-          ai_summaries: aiSummaries,
-          ai_overall_summary: aiOverallSummary,
+          ai_detailed_contexts: detailedContexts,
           ai_template_id: selectedTemplateId,
           filter_metadata: filterPayload,
           generated_at: new Date().toISOString(),

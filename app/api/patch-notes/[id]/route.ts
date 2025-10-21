@@ -59,6 +59,8 @@ export async function PUT(
       updateData.ai_summaries = body.ai_summaries;
     if (body.ai_overall_summary !== undefined)
       updateData.ai_overall_summary = body.ai_overall_summary;
+    if (body.ai_detailed_contexts !== undefined)
+      updateData.ai_detailed_contexts = body.ai_detailed_contexts;
     if (body.ai_template_id !== undefined)
       updateData.ai_template_id = body.ai_template_id;
     if (body.filter_metadata !== undefined)

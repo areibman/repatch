@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCommitsForFilters, fetchCommitStats, fetchCommitDiff } from '@/lib/github';
+import { getCommitsForFilters, fetchCommitStats, fetchCommitDiff, fetchPullRequestDetails } from '@/lib/github';
 import {
-  summarizeCommits,
-  generateOverallSummary,
+  generateDetailedContext,
+  generateFinalChangelog,
   type SummaryTemplate,
 } from '@/lib/ai-summarizer';
 import { createClient } from '@/lib/supabase/server';
@@ -93,53 +93,86 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Fetch stats and diffs for significant commits (top 10 by size)
+    // Fetch stats and diffs for ALL commits
     const commitsWithStats = await Promise.all(
-      commits.slice(0, 20).map(async (commit) => {
+      commits.map(async (commit) => {
         const stats = await fetchCommitStats(owner, repo, commit.sha);
+        
+        // Extract PR number from commit message if present
+        const prMatch = commit.commit.message.match(/#(\d+)/);
+        const prNumber = prMatch ? parseInt(prMatch[1], 10) : undefined;
+        
+        // Get author info
+        const authorName = commit.author?.login || commit.commit.author.name;
+        
         return {
           sha: commit.sha,
           message: commit.commit.message,
           additions: stats.additions,
           deletions: stats.deletions,
+          authors: [authorName],
+          prNumber,
         };
       })
     );
 
-    // Get the top 10 most significant commits
+    // Sort ALL commits by significance (no limits!)
     const significantCommits = commitsWithStats
-      .sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions))
-      .slice(0, 10);
+      .sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions));
 
-    // Fetch diffs for these commits
-    const commitsWithDiffs = await Promise.all(
-      significantCommits.map(async (commit) => ({
-        ...commit,
-        diff: await fetchCommitDiff(owner, repo, commit.sha),
-      }))
+    // STEP 1: Generate detailed internal contexts for each commit
+    console.log('[Step 1] Generating detailed contexts for each commit...');
+    const detailedContexts = await Promise.all(
+      significantCommits.map(async (commit) => {
+        const diff = await fetchCommitDiff(owner, repo, commit.sha);
+        
+        // Fetch PR details if we have a PR number
+        let prDetails = null;
+        if (commit.prNumber) {
+          console.log(`[Step 1] Fetching PR details for #${commit.prNumber}...`);
+          prDetails = await fetchPullRequestDetails(owner, repo, commit.prNumber);
+        }
+        
+        const detailedContext = await generateDetailedContext(
+          commit.message,
+          diff,
+          commit.additions,
+          commit.deletions,
+          commit.authors,
+          owner,
+          repo,
+          commit.prNumber,
+          prDetails
+        );
+        
+        return {
+          context: detailedContext,
+          message: commit.message,
+          additions: commit.additions,
+          deletions: commit.deletions,
+          authors: commit.authors,
+          prNumber: commit.prNumber,
+        };
+      })
     );
-
-    // Generate AI summaries
-    const summaries = await summarizeCommits(commitsWithDiffs, template, generateCommitTitles);
 
     // Calculate totals
     const totalAdditions = commitsWithStats.reduce((sum, c) => sum + c.additions, 0);
     const totalDeletions = commitsWithStats.reduce((sum, c) => sum + c.deletions, 0);
 
-    // Generate overall summary
-    const overallSummary = await generateOverallSummary(
-      `${owner}/${repo}`,
+    // STEP 2: Apply template to generate final changelog
+    console.log('[Step 2] Applying template to generate final changelog...');
+    const finalChangelog = await generateFinalChangelog(
+      owner,
+      repo,
       filters,
-      summaries,
-      commits.length,
-      totalAdditions,
-      totalDeletions,
+      detailedContexts,
       template
     );
 
     return NextResponse.json({
-      summaries,
-      overallSummary,
+      content: finalChangelog,
+      detailedContexts, // Include for debugging/reference
       totalCommits: commits.length,
       totalAdditions,
       totalDeletions,

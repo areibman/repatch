@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { CommitSummary, PatchNote } from "@/types/patch-note";
+import { CommitSummary, PatchNote, DetailedContext } from "@/types/patch-note";
 import type { AiTemplate } from "@/types/ai-template";
 import { formatFilterDetailLabel, formatFilterSummary } from "@/lib/filter-utils";
 import {
@@ -32,6 +32,8 @@ import {
   CheckIcon,
   PaperAirplaneIcon,
   XMarkIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from "@heroicons/react/16/solid";
 import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
@@ -62,6 +64,8 @@ export default function BlogViewPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateMessage, setRegenerateMessage] = useState('');
+  const [showInternalChanges, setShowInternalChanges] = useState(false);
+  const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -104,6 +108,7 @@ export default function BlogViewPage() {
           repoBranch: data.repo_branch,
           aiSummaries: data.ai_summaries as CommitSummary[] | null,
           aiOverallSummary: data.ai_overall_summary,
+          aiDetailedContexts: data.ai_detailed_contexts as DetailedContext[] | null,
           aiTemplateId: data.ai_template_id,
           filterMetadata: data.filter_metadata ?? null,
         };
@@ -118,7 +123,7 @@ export default function BlogViewPage() {
     };
 
     fetchPatchNote();
-    
+
     // Poll for video status every 5 seconds if no video exists yet
     const pollInterval = setInterval(async () => {
       if (!patchNote?.videoUrl) {
@@ -132,7 +137,7 @@ export default function BlogViewPage() {
         }
       }
     }, 5000);
-    
+
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
@@ -238,7 +243,7 @@ export default function BlogViewPage() {
     }
 
     setIsSending(true);
-    
+
     try {
       const response = await fetch(`/api/patch-notes/${params.id}/send`, {
         method: 'POST',
@@ -283,13 +288,13 @@ export default function BlogViewPage() {
       }
 
       const data = await response.json();
-      
+
       // Update the patch note with the new video URL
       setPatchNote({
         ...patchNote,
         videoUrl: data.videoUrl,
       });
-      
+
       alert('✅ Video generated successfully! The page will refresh.');
       window.location.reload();
     } catch (error) {
@@ -343,17 +348,10 @@ export default function BlogViewPage() {
       const summaryData = await summarizeResponse.json();
       const summaries: CommitSummary[] = summaryData.summaries || [];
       const overallSummary: string | null = summaryData.overallSummary || null;
+      const formattedChanges: string | null = summaryData.formattedChanges || null;
 
-      const commitSection = summaries.length
-        ? `\n\n## Key Changes\n\n${summaries
-            .map(
-              (s: CommitSummary) =>
-                `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`
-            )
-            .join('\n\n')}`
-        : '';
-      const newContent = overallSummary
-        ? `${overallSummary}${commitSection}`
+      const newContent = overallSummary && formattedChanges
+        ? `${overallSummary}\n\n${formattedChanges}`
         : patchNote.content;
 
       setRegenerateMessage('Saving patch note...');
@@ -400,8 +398,7 @@ export default function BlogViewPage() {
     } catch (error) {
       console.error('Error regenerating summary:', error);
       alert(
-        `Failed to regenerate summary: ${
-          error instanceof Error ? error.message : 'Unknown error'
+        `Failed to regenerate summary: ${error instanceof Error ? error.message : 'Unknown error'
         }`
       );
     } finally {
@@ -450,15 +447,15 @@ export default function BlogViewPage() {
 
           {/* Hero Image/Video */}
           <div className="mb-6 rounded-lg overflow-hidden shadow-lg relative">
-            <a 
-              href={patchNote.videoUrl || "https://openedit-uploads.openchatui.com/basecomp.mp4"} 
-              target="_blank" 
+            <a
+              href={patchNote.videoUrl || "https://openedit-uploads.openchatui.com/basecomp.mp4"}
+              target="_blank"
               rel="noopener noreferrer"
               className="block hover:opacity-90 transition-opacity"
             >
-              <img 
-                src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png" 
-                alt="Watch Patch Note Video" 
+              <img
+                src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png"
+                alt="Watch Patch Note Video"
                 className="w-full h-auto"
               />
             </a>
@@ -529,10 +526,10 @@ export default function BlogViewPage() {
                     Edit
                   </Button>
                   {!patchNote.videoUrl && (
-                    <Button 
+                    <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleGenerateVideo} 
+                      onClick={handleGenerateVideo}
                       disabled={isGeneratingVideo || !patchNote.videoData}
                     >
                       {isGeneratingVideo ? (
@@ -561,84 +558,6 @@ export default function BlogViewPage() {
           </div>
         </div>
 
-        <Card className="mb-8">
-          <CardContent>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="detail-template">Template</Label>
-                <Select
-                  value={selectedTemplateId ?? DEFAULT_TEMPLATE_OPTION}
-                  onValueChange={(value) =>
-                    setSelectedTemplateId(
-                      value === DEFAULT_TEMPLATE_OPTION ? null : value
-                    )
-                  }
-                  disabled={isRegenerating || isLoadingTemplates}
-                >
-                  <SelectTrigger
-                    id="detail-template"
-                    data-testid="detail-template-select"
-                  >
-                    <SelectValue placeholder="Select template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={DEFAULT_TEMPLATE_OPTION}>
-                      System Default
-                    </SelectItem>
-                    {templates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  {templateError
-                    ? `Error loading templates: ${templateError}`
-                    : isLoadingTemplates
-                    ? 'Loading templates...'
-                    : 'Preview shows the expected tone for regenerated summaries.'}
-                </p>
-              </div>
-              <div className="space-y-2 rounded-md border bg-muted/40 p-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">
-                    {selectedTemplate?.name || 'System Default'}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {selectedTemplate?.content.length || 0} chars
-                  </span>
-                </div>
-                <div className="max-h-48 overflow-y-auto prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
-                  {selectedTemplate?.content || 'Balanced tone with concise technical highlights.'}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-muted-foreground">
-              {patchNote.repoBranch
-                ? `Generated from branch ${patchNote.repoBranch}`
-                : 'Branch defaults to main'}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRegenerateSummary}
-              disabled={isRegenerating || isLoadingTemplates}
-              data-testid="regenerate-template-button"
-            >
-              {isRegenerating ? (
-                <>
-                  <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                  {regenerateMessage || 'Regenerating...'}
-                </>
-              ) : (
-                'Regenerate'
-              )}
-            </Button>
-          </CardFooter>
-        </Card>
 
         {/* Remotion Player */}
         <div className="mb-8">
@@ -702,10 +621,46 @@ export default function BlogViewPage() {
         {/* Main Content */}
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>Patch Notes</CardTitle>
-            <CardDescription>
-              AI-generated summary of changes for this period
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <CardTitle>Patch Notes</CardTitle>
+                <CardDescription>
+                  {showInternalChanges 
+                    ? "Detailed technical analysis (Step 1) that was fed into the final changelog"
+                    : "AI-generated summary of changes for this period"}
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-4">
+                {!showInternalChanges && !isEditing && (
+                  <span className="text-sm text-muted-foreground">
+                    {patchNote.content.length.toLocaleString()} characters
+                  </span>
+                )}
+                {isEditing && (
+                  <span className="text-sm text-muted-foreground">
+                    {editedContent.length.toLocaleString()} characters
+                  </span>
+                )}
+                {patchNote.aiDetailedContexts && patchNote.aiDetailedContexts.length > 0 && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Button
+                      variant={!showInternalChanges ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setShowInternalChanges(false)}
+                    >
+                      Final Output
+                    </Button>
+                    <Button
+                      variant={showInternalChanges ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setShowInternalChanges(true)}
+                    >
+                      Internal Changes ({patchNote.aiDetailedContexts.length})
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isEditing ? (
@@ -715,6 +670,118 @@ export default function BlogViewPage() {
                 className="min-h-[500px] font-mono text-sm"
                 placeholder="Enter patch notes content..."
               />
+            ) : showInternalChanges && patchNote.aiDetailedContexts && patchNote.aiDetailedContexts.length > 0 ? (
+              <div className="space-y-6">
+                {/* Template Controls */}
+                <div className="bg-muted/30 rounded-lg p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <Label htmlFor="template-select" className="text-sm font-medium mb-2 block">
+                        Output Template
+                      </Label>
+                      <Select
+                        value={selectedTemplateId ?? DEFAULT_TEMPLATE_OPTION}
+                        onValueChange={(value) =>
+                          setSelectedTemplateId(
+                            value === DEFAULT_TEMPLATE_OPTION ? null : value
+                          )
+                        }
+                        disabled={isRegenerating || isLoadingTemplates}
+                      >
+                        <SelectTrigger id="template-select" data-testid="detail-template-select">
+                          <SelectValue placeholder="Select template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={DEFAULT_TEMPLATE_OPTION}>
+                            System Default
+                          </SelectItem>
+                          {templates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="pt-6">
+                      <Button
+                        onClick={handleRegenerateSummary}
+                        disabled={isRegenerating || isLoadingTemplates}
+                        size="default"
+                        data-testid="regenerate-template-button"
+                      >
+                        {isRegenerating ? (
+                          <>
+                            <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                            {regenerateMessage || 'Regenerating...'}
+                          </>
+                        ) : (
+                          'Regenerate with Template'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Template Preview */}
+                  <details className="group">
+                    <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+                      Preview Template ({selectedTemplate?.content.length || 0} chars)
+                    </summary>
+                    <div className="mt-3 rounded-md border bg-background p-3">
+                      <div className="max-h-48 overflow-y-auto prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
+                        {selectedTemplate?.content || 'Balanced tone with concise technical highlights.'}
+                      </div>
+                    </div>
+                  </details>
+
+                  {patchNote.repoBranch && (
+                    <div className="text-xs text-muted-foreground pt-2 border-t">
+                      Generated from branch <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{patchNote.repoBranch}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Internal Change Summaries */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground">
+                    Step 1: Internal Technical Summaries
+                  </h3>
+                  {patchNote.aiDetailedContexts.map((ctx, index) => (
+                    <details key={index} className="group rounded-lg border p-4 hover:bg-muted/50 transition-colors">
+                      <summary className="cursor-pointer font-medium text-sm mb-2 flex items-start gap-2">
+                        <span className="flex-shrink-0 text-muted-foreground">#{index + 1}</span>
+                        <span className="flex-1">{ctx.message.split('\n')[0]}</span>
+                        <span className="text-xs text-muted-foreground">
+                          +{ctx.additions} -{ctx.deletions}
+                        </span>
+                      </summary>
+                      <div className="mt-3 pl-6 space-y-3 text-sm">
+                        <div className="bg-muted/30 p-3 rounded-md">
+                          <p className="text-muted-foreground whitespace-pre-wrap">{ctx.context}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span>
+                            <strong>Authors:</strong> {ctx.authors.join(', ')}
+                          </span>
+                          {ctx.prNumber && (
+                            <span>
+                              <strong>PR:</strong>{' '}
+                              <a
+                                href={`${patchNote.repoUrl}/pull/${ctx.prNumber}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                              >
+                                #{ctx.prNumber}
+                              </a>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </div>
             ) : (
               <div className="prose prose-neutral dark:prose-invert max-w-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
