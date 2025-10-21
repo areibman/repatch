@@ -66,14 +66,6 @@ export default function RootLayout({
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                       <SidebarMenuButton asChild>
-                        <Link href="/integrations">
-                          <Cog6ToothIcon />
-                          <span>Integrations</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild>
                         <Link href="/subscribers">
                           <UsersIcon />
                           <span>Subscribers</span>
