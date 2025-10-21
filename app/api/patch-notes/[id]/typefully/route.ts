@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { Database } from "@/lib/supabase/database.types";
-import { generateTweetThread, type CommitSummary } from "@/lib/ai-summarizer";
 import { createTypefullyDraft } from "@/lib/typefully";
-import type { PatchNoteFilters } from "@/types/patch-note";
 
 type PatchNoteRow = Database["public"]["Tables"]["patch_notes"]["Row"];
 
@@ -35,23 +33,24 @@ export async function POST(
       );
     }
 
-    const filters = patchNote.filter_metadata as PatchNoteFilters | null;
-    const commitSummaries = patchNote.ai_summaries as
-      | CommitSummary[]
-      | null;
+    // Use the final markdown content directly (Step 2 output)
+    const content = patchNote.content || "";
+    
+    if (!content.trim()) {
+      return NextResponse.json(
+        { error: "Patch note has no content to post" },
+        { status: 400 }
+      );
+    }
 
-    const thread = await generateTweetThread(patchNote.repo_name || patchNote.title || "Repository", filters || undefined, {
-      overallSummary: patchNote.ai_overall_summary,
-      commitSummaries: commitSummaries || undefined,
-      markdownContent: patchNote.content || undefined,
-    });
-
-    const draft = await createTypefullyDraft(thread, {
-      title: patchNote.title || undefined,
+    // Post the content as-is (already summarized and tweet-ready)
+    const draft = await createTypefullyDraft([content], {
+      threadify: false, // Content is already in the right format
+      share: true, // Generate a shareable link
     });
 
     return NextResponse.json({
-      thread,
+      content,
       draft,
     });
   } catch (error) {

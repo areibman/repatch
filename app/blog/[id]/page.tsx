@@ -35,7 +35,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@heroicons/react/16/solid";
-import { Loader2Icon, TwitterIcon } from "lucide-react";
+import { Loader2Icon, TwitterIcon, DownloadIcon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
@@ -67,6 +67,7 @@ export default function BlogViewPage() {
   const [regenerateMessage, setRegenerateMessage] = useState('');
   const [showInternalChanges, setShowInternalChanges] = useState(false);
   const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
+  const [typefullyDraftUrl, setTypefullyDraftUrl] = useState<string | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -289,15 +290,21 @@ export default function BlogViewPage() {
         throw new Error(errorMessage);
       }
 
+      // Extract the shareable URL from the response
       const draftUrl =
+        data?.draft?.share_url ||
         data?.draft?.url ||
         data?.draft?.draft?.url ||
-        data?.draft?.share_url ||
         data?.draft?.data?.url ||
         null;
 
       if (draftUrl) {
-        alert(`✅ Tweet thread drafted on Typefully!\n\nOpen it here: ${draftUrl}`);
+        setTypefullyDraftUrl(draftUrl);
+        // Automatically open the draft in a new tab
+        const newWindow = window.open(draftUrl, '_blank', 'noopener,noreferrer');
+        if (newWindow) {
+          newWindow.focus();
+        }
       } else {
         alert('✅ Tweet thread drafted on Typefully!');
       }
@@ -348,6 +355,24 @@ export default function BlogViewPage() {
       alert(`❌ Error: ${errorMessage}`);
     } finally {
       setIsGeneratingVideo(false);
+    }
+  };
+
+  const handleDownloadVideo = async () => {
+    if (!patchNote?.videoUrl) return;
+
+    try {
+      // Create a temporary anchor element to trigger download
+      const link = document.createElement('a');
+      link.href = patchNote.videoUrl;
+      link.download = `${patchNote.repoName?.replace('/', '-') || 'patch-note'}-video.mp4`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading video:', error);
+      alert('❌ Error downloading video. Please try opening the video URL directly.');
     }
   };
 
@@ -570,7 +595,7 @@ export default function BlogViewPage() {
                     <PencilIcon className="h-4 w-4 mr-2" />
                     Edit
                   </Button>
-                  {!patchNote.videoUrl && (
+                  {!patchNote.videoUrl ? (
                     <Button
                       variant="outline"
                       size="sm"
@@ -588,6 +613,15 @@ export default function BlogViewPage() {
                         </>
                       )}
                     </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDownloadVideo}
+                    >
+                      <DownloadIcon className="h-4 w-4 mr-2" />
+                      Download Video
+                    </Button>
                   )}
                   <Button
                     variant="outline"
@@ -603,7 +637,7 @@ export default function BlogViewPage() {
                     ) : (
                       <>
                         <TwitterIcon className="h-4 w-4 mr-2" />
-                        Draft Tweet Thread
+                        {typefullyDraftUrl ? 'Redraft' : 'Draft'} Tweet Thread
                       </>
                     )}
                   </Button>
@@ -621,6 +655,25 @@ export default function BlogViewPage() {
           </div>
         </div>
 
+        {/* Typefully Draft Link */}
+        {typefullyDraftUrl && (
+          <a
+            href={typefullyDraftUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-6 block"
+          >
+            <div className="flex items-center gap-3 px-4 py-3 bg-muted/50 hover:bg-muted rounded-lg border transition-colors">
+              <TwitterIcon className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">
+                Draft created on Typefully
+              </span>
+              <span className="text-sm text-foreground ml-auto font-medium">
+                Open →
+              </span>
+            </div>
+          </a>
+        )}
 
         {/* Remotion Player */}
         <div className="mb-8">
