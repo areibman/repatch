@@ -74,9 +74,9 @@ export default function RootLayout({
                     </SidebarMenuItem>
                     <SidebarMenuItem>
                       <SidebarMenuButton asChild>
-                        <Link href="/settings">
+                        <Link href="/settings/templates">
                           <Cog6ToothIcon />
-                          <span>Settings</span>
+                          <span>Templates</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
