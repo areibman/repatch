@@ -387,6 +387,92 @@ export async function fetchCommitStats(
 /**
  * Fetch commit diff/patch for AI summarization
  */
+export async function fetchPullRequestDetails(
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<{
+  title: string;
+  body: string | null;
+  comments: Array<{ author: string; body: string }>;
+  issueNumber?: number;
+  issueTitle?: string;
+  issueBody?: string | null;
+} | null> {
+  const token = process.env.GITHUB_TOKEN;
+  const headers: HeadersInit = {
+    Accept: 'application/vnd.github.v3+json',
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  try {
+    // Fetch PR details
+    const prResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`,
+      { headers }
+    );
+
+    if (!prResponse.ok) {
+      console.warn(`Failed to fetch PR #${prNumber}: ${prResponse.status}`);
+      return null;
+    }
+
+    const prData = await prResponse.json();
+
+    // Fetch PR comments
+    const commentsResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+      { headers }
+    );
+
+    let comments: Array<{ author: string; body: string }> = [];
+    if (commentsResponse.ok) {
+      const commentsData = await commentsResponse.json();
+      comments = commentsData.map((comment: any) => ({
+        author: comment.user?.login || 'unknown',
+        body: comment.body || '',
+      }));
+    }
+
+    // Extract linked issue from PR body if present
+    let issueNumber: number | undefined;
+    let issueTitle: string | undefined;
+    let issueBody: string | null = null;
+
+    const issueMatch = prData.body?.match(/#(\d+)|closes #(\d+)|fixes #(\d+)/i);
+    if (issueMatch) {
+      issueNumber = parseInt(issueMatch[1] || issueMatch[2] || issueMatch[3], 10);
+      
+      // Fetch the linked issue
+      const issueResponse = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`,
+        { headers }
+      );
+
+      if (issueResponse.ok) {
+        const issueData = await issueResponse.json();
+        issueTitle = issueData.title;
+        issueBody = issueData.body;
+      }
+    }
+
+    return {
+      title: prData.title,
+      body: prData.body,
+      comments,
+      issueNumber,
+      issueTitle,
+      issueBody,
+    };
+  } catch (error) {
+    console.error(`Error fetching PR details for #${prNumber}:`, error);
+    return null;
+  }
+}
+
 export async function fetchCommitDiff(
   owner: string,
   repo: string,

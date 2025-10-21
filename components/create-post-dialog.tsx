@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, KeyboardEvent, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -36,6 +36,9 @@ import {
   parseGitHubUrl,
   generateBoilerplateContent,
 } from "@/lib/github";
+import type { AiTemplate } from "@/types/ai-template";
+
+const DEFAULT_TEMPLATE_OPTION = "__default__";
 import {
   deriveTimePeriodValue,
   formatFilterDetailLabel,
@@ -48,6 +51,49 @@ import {
   TimePreset,
 } from "@/types/patch-note";
 
+const RECENT_REPOS_KEY = 'repatch_recent_repos';
+const MAX_RECENT_REPOS = 5;
+
+interface RecentRepo {
+  url: string;
+  owner: string;
+  repo: string;
+  lastUsed: string;
+}
+
+function getRecentRepos(): RecentRepo[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem(RECENT_REPOS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentRepo(url: string, owner: string, repo: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const recent = getRecentRepos();
+    const existing = recent.findIndex((r) => r.url === url);
+    
+    // Remove if already exists
+    if (existing >= 0) {
+      recent.splice(existing, 1);
+    }
+    
+    // Add to front
+    recent.unshift({ url, owner, repo, lastUsed: new Date().toISOString() });
+    
+    // Keep only MAX_RECENT_REPOS
+    const trimmed = recent.slice(0, MAX_RECENT_REPOS);
+    
+    localStorage.setItem(RECENT_REPOS_KEY, JSON.stringify(trimmed));
+  } catch (error) {
+    console.error('Failed to save recent repo:', error);
+  }
+}
+
 export function CreatePostDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -55,8 +101,55 @@ export function CreatePostDialog() {
   const [loadingStep, setLoadingStep] = useState('');
   const [isFetchingBranches, setIsFetchingBranches] = useState(false);
   const [repoUrl, setRepoUrl] = useState('');
+  const [recentRepos, setRecentRepos] = useState<RecentRepo[]>([]);
   const [branches, setBranches] = useState<{ name: string; protected: boolean }[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
+  const [timePeriod, setTimePeriod] = useState<'1day' | '1week' | '1month'>('1week');
+  const [templates, setTemplates] = useState<AiTemplate[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [includeCommitMessages, setIncludeCommitMessages] = useState(false);
+
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        setIsLoadingTemplates(true);
+        setTemplateError(null);
+        const response = await fetch('/api/ai-templates');
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to load templates');
+        }
+
+        const data = (await response.json()) as AiTemplate[];
+        setTemplates(data);
+        if (data.length > 0) {
+          setSelectedTemplateId((current) => current ?? data[0].id);
+        }
+      } catch (error) {
+        console.error('Error loading templates:', error);
+        setTemplateError(
+          error instanceof Error ? error.message : 'Failed to load templates'
+        );
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    };
+
+    fetchTemplates();
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      setRecentRepos(getRecentRepos());
+    }
+  }, [open]);
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) || null,
+    [templates, selectedTemplateId]
+  );
   const [filterMode, setFilterMode] = useState<FilterMode>('preset');
   const [timePreset, setTimePreset] = useState<TimePreset>('1week');
   const [customStart, setCustomStart] = useState('');
@@ -454,50 +547,55 @@ export function CreatePostDialog() {
           repo: repoInfo.repo,
           filters: filterPayload,
           branch: selectedBranch,
+          templateId: selectedTemplateId || undefined,
+          generateCommitTitles: !includeCommitMessages,
         }),
       });
 
-      let aiSummaries: any[] = [];
-      let aiOverallSummary: string | null = null;
+      let aiGeneratedContent: string | null = null;
+      let detailedContexts: any[] = [];
 
       if (summariesResponse.ok) {
         const summaryData = await summariesResponse.json();
-        aiSummaries = summaryData.summaries || [];
-        aiOverallSummary = summaryData.overallSummary || null;
-        console.log('AI summaries generated:', aiSummaries.length, 'commits summarized');
+        aiGeneratedContent = summaryData.content || null;
+        detailedContexts = summaryData.detailedContexts || [];
+        console.log('AI changelog generated from', detailedContexts.length, 'commits');
       } else {
-        console.warn('Failed to generate AI summaries, continuing without them');
+        console.warn('Failed to generate AI changelog, continuing without it');
       }
 
-      // Use AI summary as content, or fallback to boilerplate
+      // Use AI-generated content, or fallback to boilerplate
       setLoadingStep('✍️ Generating patch note content...');
-      const content = aiOverallSummary
-        ? `${aiOverallSummary}\n\n## Key Changes\n\n${aiSummaries
-            .map(
-              (s: any) =>
-                `### ${s.message.split('\n')[0]}\n${s.aiSummary}\n\n**Changes:** +${s.additions} -${s.deletions} lines`
-            )
-            .join('\n\n')}`
+      const content = aiGeneratedContent
+        ? aiGeneratedContent
         : generateBoilerplateContent(
             `${repoInfo.owner}/${repoInfo.repo}`,
             filterPayload,
             stats
           );
 
-      // Generate video data - use AI summaries if available, otherwise fallback to raw stats
+      // Generate video data - use detailed contexts if available, otherwise fallback to raw stats
       console.log(
         `🎬 Generating video data using ${
-          aiSummaries.length > 0 ? 'AI summaries' : 'raw GitHub stats'
+          detailedContexts.length > 0 ? 'AI contexts' : 'raw GitHub stats'
         }`
       );
-      const videoData =
-        aiSummaries.length > 0
-          ? generateVideoDataFromAI(aiSummaries, aiOverallSummary || undefined)
-          : await generateVideoData(
-              `${repoInfo.owner}/${repoInfo.repo}`,
-              filterPayload,
-              stats
-            );
+      const videoData = detailedContexts.length > 0
+        ? generateVideoDataFromAI(
+            detailedContexts.map((ctx, idx) => ({
+              sha: `ctx-${idx}`,
+              message: ctx.message,
+              aiSummary: ctx.context,
+              additions: ctx.additions,
+              deletions: ctx.deletions,
+            })),
+            undefined
+          )
+        : await generateVideoData(
+            `${repoInfo.owner}/${repoInfo.repo}`,
+            filterPayload,
+            stats
+          );
 
       const descriptor =
         filterPayload.mode === 'preset' && filterPayload.preset
@@ -516,6 +614,7 @@ export function CreatePostDialog() {
         body: JSON.stringify({
           repo_name: `${repoInfo.owner}/${repoInfo.repo}`,
           repo_url: repoUrl,
+          repo_branch: selectedBranch,
           time_period: deriveTimePeriodValue(filterPayload),
           title: `${descriptor} Update - ${repoInfo.repo}`,
           content,
@@ -526,8 +625,8 @@ export function CreatePostDialog() {
           },
           contributors: stats.contributors,
           video_data: videoData,
-          ai_summaries: aiSummaries,
-          ai_overall_summary: aiOverallSummary,
+          ai_detailed_contexts: detailedContexts,
+          ai_template_id: selectedTemplateId,
           filter_metadata: filterPayload,
           generated_at: new Date().toISOString(),
         }),
@@ -539,6 +638,9 @@ export function CreatePostDialog() {
       }
 
       const data = await response.json();
+
+      // Save to recent repos
+      saveRecentRepo(repoUrl, repoInfo.owner, repoInfo.repo);
 
       // Close modal and redirect to the new post
       setOpen(false);
@@ -600,6 +702,24 @@ export function CreatePostDialog() {
                 required
                 disabled={isLoading}
               />
+              {recentRepos.length > 0 && !repoUrl && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Recent repositories:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {recentRepos.map((recent) => (
+                      <button
+                        key={recent.url}
+                        type="button"
+                        onClick={() => handleRepoUrlChange(recent.url)}
+                        disabled={isLoading}
+                        className="text-xs px-3 py-1.5 rounded-md border border-border bg-muted hover:bg-muted/80 hover:border-foreground/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="font-medium">{recent.owner}/{recent.repo}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
                 {isFetchingBranches
                   ? 'Fetching branches...'
@@ -799,6 +919,79 @@ export function CreatePostDialog() {
                 'Exclude tag and press Enter',
                 'Skip commits associated with these Git tags'
               )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="summary-template">Summary Template</Label>
+              <Select
+                value={selectedTemplateId ?? DEFAULT_TEMPLATE_OPTION}
+                onValueChange={(value) =>
+                  setSelectedTemplateId(
+                    value === DEFAULT_TEMPLATE_OPTION ? null : value
+                  )
+                }
+                disabled={isLoading || isLoadingTemplates}
+              >
+                <SelectTrigger
+                  id="summary-template"
+                  data-testid="template-select"
+                >
+                  <SelectValue placeholder="Select template" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={DEFAULT_TEMPLATE_OPTION}>
+                    System Default
+                  </SelectItem>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {templateError
+                  ? `Error loading templates: ${templateError}`
+                  : isLoadingTemplates
+                  ? 'Loading templates...'
+                  : 'Preview shows how the AI summary will read.'}
+              </p>
+              <div
+                className="space-y-2 rounded-md border bg-muted/40 p-3 text-sm"
+                data-testid="template-preview"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">
+                    {selectedTemplate?.name || 'System Default'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedTemplate?.content.length || 0} chars
+                  </span>
+                </div>
+                <div className="max-h-48 overflow-y-auto prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
+                  {selectedTemplate?.content || 'Balanced tone with concise technical highlights.'}
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="include-commit-messages"
+                  checked={includeCommitMessages}
+                  onChange={(e) => setIncludeCommitMessages(e.target.checked)}
+                  disabled={isLoading}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label 
+                  htmlFor="include-commit-messages" 
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Include original commit messages as headers
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When unchecked, AI will generate cleaner, more descriptive headers for each change instead of showing raw commit messages.
+              </p>
             </div>
           </div>
 

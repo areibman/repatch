@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
+import { formatFilterSummary } from "@/lib/filter-utils";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
 
@@ -317,13 +318,10 @@ export async function POST(
       <h1 class="title">${(patchNote as PatchNote).title}</h1>
       <div class="metadata">
         <span class="badge">${(patchNote as PatchNote).repo_name}</span>
-        <span class="badge">${
-          (patchNote as PatchNote).time_period === "1day"
-            ? "Daily"
-            : (patchNote as PatchNote).time_period === "1week"
-            ? "Weekly"
-            : "Monthly"
-        }</span>
+        <span class="badge">${formatFilterSummary(
+          (patchNote as PatchNote).filter_metadata,
+          (patchNote as PatchNote).time_period
+        )}</span>
         <span>${new Date(
           (patchNote as PatchNote).generated_at
         ).toLocaleDateString("en-US", {

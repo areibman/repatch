@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
         {
           repo_name: body.repo_name,
           repo_url: body.repo_url,
+          repo_branch: body.repo_branch || 'main',
           time_period: body.time_period,
           title: body.title,
           content: body.content,
@@ -44,6 +45,8 @@ export async function POST(request: NextRequest) {
           video_data: body.video_data,
           ai_summaries: body.ai_summaries || null,
           ai_overall_summary: body.ai_overall_summary || null,
+          ai_detailed_contexts: body.ai_detailed_contexts || null,
+          ai_template_id: body.ai_template_id || null,
           filter_metadata: body.filter_metadata || null,
           generated_at: body.generated_at || new Date().toISOString(),
         },

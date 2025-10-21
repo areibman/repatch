@@ -9,12 +9,22 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { PatchNote } from "@/types/patch-note";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { CommitSummary, PatchNote, DetailedContext } from "@/types/patch-note";
+import type { AiTemplate } from "@/types/ai-template";
 import { formatFilterDetailLabel, formatFilterSummary } from "@/lib/filter-utils";
 import {
   ArrowLeftIcon,
@@ -22,6 +32,8 @@ import {
   CheckIcon,
   PaperAirplaneIcon,
   XMarkIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from "@heroicons/react/16/solid";
 import { Loader2Icon } from "lucide-react";
 import { Player } from "@remotion/player";
@@ -34,6 +46,8 @@ const BaseComp = dynamic(() => import("@/remotion/BaseComp"), {
   ssr: false,
 });
 
+const DEFAULT_TEMPLATE_OPTION = "__default__";
+
 export default function BlogViewPage() {
   const params = useParams();
   const router = useRouter();
@@ -44,6 +58,14 @@ export default function BlogViewPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [templates, setTemplates] = useState<AiTemplate[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateMessage, setRegenerateMessage] = useState('');
+  const [showInternalChanges, setShowInternalChanges] = useState(false);
+  const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -56,6 +78,11 @@ export default function BlogViewPage() {
       return 30 * 4; // fallback duration
     }
   }, [patchNote?.videoData]);
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) || null,
+    [templates, selectedTemplateId]
+  );
 
   useEffect(() => {
     const fetchPatchNote = async () => {
@@ -78,19 +105,25 @@ export default function BlogViewPage() {
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
+          repoBranch: data.repo_branch,
+          aiSummaries: data.ai_summaries as CommitSummary[] | null,
+          aiOverallSummary: data.ai_overall_summary,
+          aiDetailedContexts: data.ai_detailed_contexts as DetailedContext[] | null,
+          aiTemplateId: data.ai_template_id,
           filterMetadata: data.filter_metadata ?? null,
         };
 
         setPatchNote(transformedNote);
         setEditedContent(transformedNote.content);
         setEditedTitle(transformedNote.title);
+        setSelectedTemplateId(transformedNote.aiTemplateId ?? null);
       } catch (error) {
         console.error("Error fetching patch note:", error);
       }
     };
 
     fetchPatchNote();
-    
+
     // Poll for video status every 5 seconds if no video exists yet
     const pollInterval = setInterval(async () => {
       if (!patchNote?.videoUrl) {
@@ -104,10 +137,45 @@ export default function BlogViewPage() {
         }
       }
     }, 5000);
-    
+
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        setIsLoadingTemplates(true);
+        setTemplateError(null);
+        const response = await fetch('/api/ai-templates');
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to load templates');
+        }
+
+        const data = (await response.json()) as AiTemplate[];
+        setTemplates(data);
+      } catch (error) {
+        console.error('Error loading templates:', error);
+        setTemplateError(
+          error instanceof Error ? error.message : 'Failed to load templates'
+        );
+      } finally {
+        setIsLoadingTemplates(false);
+      }
+    };
+
+    loadTemplates();
+  }, []);
+
+  useEffect(() => {
+    if (selectedTemplateId && templates.length > 0) {
+      const exists = templates.some((template) => template.id === selectedTemplateId);
+      if (!exists) {
+        setSelectedTemplateId(templates[0]?.id ?? null);
+      }
+    }
+  }, [templates, selectedTemplateId]);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -175,7 +243,7 @@ export default function BlogViewPage() {
     }
 
     setIsSending(true);
-    
+
     try {
       const response = await fetch(`/api/patch-notes/${params.id}/send`, {
         method: 'POST',
@@ -199,7 +267,7 @@ export default function BlogViewPage() {
 
   const handleGenerateVideo = async () => {
     if (!patchNote) return;
-    
+
     setIsGeneratingVideo(true);
     try {
       const response = await fetch('/api/videos/render', {
@@ -220,13 +288,13 @@ export default function BlogViewPage() {
       }
 
       const data = await response.json();
-      
+
       // Update the patch note with the new video URL
       setPatchNote({
         ...patchNote,
         videoUrl: data.videoUrl,
       });
-      
+
       alert('✅ Video generated successfully! The page will refresh.');
       window.location.reload();
     } catch (error) {
@@ -238,6 +306,119 @@ export default function BlogViewPage() {
     }
   };
 
+  const handleRegenerateSummary = async () => {
+    if (!patchNote || isRegenerating) {
+      return;
+    }
+
+    const [owner, repo] = patchNote.repoName.split('/');
+    if (!owner || !repo) {
+      alert('Unable to determine repository name for regeneration.');
+      return;
+    }
+
+    if (!patchNote.filterMetadata) {
+      alert('Unable to regenerate: filter metadata is missing.');
+      return;
+    }
+
+    try {
+      setIsRegenerating(true);
+      setRegenerateMessage('Analyzing commits...');
+
+      const summarizeResponse = await fetch('/api/github/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          owner,
+          repo,
+          filters: patchNote.filterMetadata,
+          branch: patchNote.repoBranch || 'main',
+          templateId: selectedTemplateId || undefined,
+        }),
+      });
+
+      if (!summarizeResponse.ok) {
+        const error = await summarizeResponse.json();
+        throw new Error(error.error || 'Failed to regenerate summaries');
+      }
+
+      const summaryData = await summarizeResponse.json();
+      const summaries: CommitSummary[] = summaryData.summaries || [];
+      const overallSummary: string | null = summaryData.overallSummary || null;
+      const formattedChanges: string | null = summaryData.formattedChanges || null;
+
+      const newContent = overallSummary && formattedChanges
+        ? `${overallSummary}\n\n${formattedChanges}`
+        : patchNote.content;
+
+      setRegenerateMessage('Saving patch note...');
+
+      const updateResponse = await fetch(`/api/patch-notes/${patchNote.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: patchNote.title,
+          content: newContent,
+          repo_name: patchNote.repoName,
+          repo_url: patchNote.repoUrl,
+          repo_branch: patchNote.repoBranch || 'main',
+          time_period: patchNote.timePeriod,
+          changes: patchNote.changes,
+          contributors: patchNote.contributors,
+          ai_summaries: summaries,
+          ai_overall_summary: overallSummary,
+          ai_template_id: selectedTemplateId,
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        const error = await updateResponse.json();
+        throw new Error(error.error || 'Failed to save regenerated summary');
+      }
+
+      const updated = await updateResponse.json();
+
+      const updatedNote: PatchNote = {
+        ...patchNote,
+        content: newContent,
+        repoBranch: updated.repo_branch,
+        aiSummaries: summaries,
+        aiOverallSummary: overallSummary,
+        aiTemplateId: selectedTemplateId ?? null,
+      };
+
+      setPatchNote(updatedNote);
+      setEditedContent(newContent);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error regenerating summary:', error);
+      alert(
+        `Failed to regenerate summary: ${error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    } finally {
+      setRegenerateMessage('');
+      setIsRegenerating(false);
+    }
+  };
+
+  const getTimePeriodLabel = (period: string) => {
+    switch (period) {
+      case "1day":
+        return "Daily";
+      case "1week":
+        return "Weekly";
+      case "1month":
+        return "Monthly";
+      default:
+        return period;
+    }
+  };
   const getFilterLabel = (note: PatchNote) =>
     formatFilterSummary(note.filterMetadata, note.timePeriod);
 
@@ -266,15 +447,15 @@ export default function BlogViewPage() {
 
           {/* Hero Image/Video */}
           <div className="mb-6 rounded-lg overflow-hidden shadow-lg relative">
-            <a 
-              href={patchNote.videoUrl || "https://openedit-uploads.openchatui.com/basecomp.mp4"} 
-              target="_blank" 
+            <a
+              href={patchNote.videoUrl || "https://openedit-uploads.openchatui.com/basecomp.mp4"}
+              target="_blank"
               rel="noopener noreferrer"
               className="block hover:opacity-90 transition-opacity"
             >
-              <img 
-                src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png" 
-                alt="Watch Patch Note Video" 
+              <img
+                src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png"
+                alt="Watch Patch Note Video"
                 className="w-full h-auto"
               />
             </a>
@@ -345,10 +526,10 @@ export default function BlogViewPage() {
                     Edit
                   </Button>
                   {!patchNote.videoUrl && (
-                    <Button 
+                    <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleGenerateVideo} 
+                      onClick={handleGenerateVideo}
                       disabled={isGeneratingVideo || !patchNote.videoData}
                     >
                       {isGeneratingVideo ? (
@@ -376,6 +557,7 @@ export default function BlogViewPage() {
             </div>
           </div>
         </div>
+
 
         {/* Remotion Player */}
         <div className="mb-8">
@@ -439,10 +621,46 @@ export default function BlogViewPage() {
         {/* Main Content */}
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>Patch Notes</CardTitle>
-            <CardDescription>
-              AI-generated summary of changes for this period
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <CardTitle>Patch Notes</CardTitle>
+                <CardDescription>
+                  {showInternalChanges 
+                    ? "Detailed technical analysis (Step 1) that was fed into the final changelog"
+                    : "AI-generated summary of changes for this period"}
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-4">
+                {!showInternalChanges && !isEditing && (
+                  <span className="text-sm text-muted-foreground">
+                    {patchNote.content.length.toLocaleString()} characters
+                  </span>
+                )}
+                {isEditing && (
+                  <span className="text-sm text-muted-foreground">
+                    {editedContent.length.toLocaleString()} characters
+                  </span>
+                )}
+                {patchNote.aiDetailedContexts && patchNote.aiDetailedContexts.length > 0 && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Button
+                      variant={!showInternalChanges ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setShowInternalChanges(false)}
+                    >
+                      Final Output
+                    </Button>
+                    <Button
+                      variant={showInternalChanges ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setShowInternalChanges(true)}
+                    >
+                      Internal Changes ({patchNote.aiDetailedContexts.length})
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isEditing ? (
@@ -452,6 +670,118 @@ export default function BlogViewPage() {
                 className="min-h-[500px] font-mono text-sm"
                 placeholder="Enter patch notes content..."
               />
+            ) : showInternalChanges && patchNote.aiDetailedContexts && patchNote.aiDetailedContexts.length > 0 ? (
+              <div className="space-y-6">
+                {/* Template Controls */}
+                <div className="bg-muted/30 rounded-lg p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <Label htmlFor="template-select" className="text-sm font-medium mb-2 block">
+                        Output Template
+                      </Label>
+                      <Select
+                        value={selectedTemplateId ?? DEFAULT_TEMPLATE_OPTION}
+                        onValueChange={(value) =>
+                          setSelectedTemplateId(
+                            value === DEFAULT_TEMPLATE_OPTION ? null : value
+                          )
+                        }
+                        disabled={isRegenerating || isLoadingTemplates}
+                      >
+                        <SelectTrigger id="template-select" data-testid="detail-template-select">
+                          <SelectValue placeholder="Select template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={DEFAULT_TEMPLATE_OPTION}>
+                            System Default
+                          </SelectItem>
+                          {templates.map((template) => (
+                            <SelectItem key={template.id} value={template.id}>
+                              {template.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="pt-6">
+                      <Button
+                        onClick={handleRegenerateSummary}
+                        disabled={isRegenerating || isLoadingTemplates}
+                        size="default"
+                        data-testid="regenerate-template-button"
+                      >
+                        {isRegenerating ? (
+                          <>
+                            <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                            {regenerateMessage || 'Regenerating...'}
+                          </>
+                        ) : (
+                          'Regenerate with Template'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Template Preview */}
+                  <details className="group">
+                    <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+                      Preview Template ({selectedTemplate?.content.length || 0} chars)
+                    </summary>
+                    <div className="mt-3 rounded-md border bg-background p-3">
+                      <div className="max-h-48 overflow-y-auto prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
+                        {selectedTemplate?.content || 'Balanced tone with concise technical highlights.'}
+                      </div>
+                    </div>
+                  </details>
+
+                  {patchNote.repoBranch && (
+                    <div className="text-xs text-muted-foreground pt-2 border-t">
+                      Generated from branch <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{patchNote.repoBranch}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Internal Change Summaries */}
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold text-muted-foreground">
+                    Step 1: Internal Technical Summaries
+                  </h3>
+                  {patchNote.aiDetailedContexts.map((ctx, index) => (
+                    <details key={index} className="group rounded-lg border p-4 hover:bg-muted/50 transition-colors">
+                      <summary className="cursor-pointer font-medium text-sm mb-2 flex items-start gap-2">
+                        <span className="flex-shrink-0 text-muted-foreground">#{index + 1}</span>
+                        <span className="flex-1">{ctx.message.split('\n')[0]}</span>
+                        <span className="text-xs text-muted-foreground">
+                          +{ctx.additions} -{ctx.deletions}
+                        </span>
+                      </summary>
+                      <div className="mt-3 pl-6 space-y-3 text-sm">
+                        <div className="bg-muted/30 p-3 rounded-md">
+                          <p className="text-muted-foreground whitespace-pre-wrap">{ctx.context}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span>
+                            <strong>Authors:</strong> {ctx.authors.join(', ')}
+                          </span>
+                          {ctx.prNumber && (
+                            <span>
+                              <strong>PR:</strong>{' '}
+                              <a
+                                href={`${patchNote.repoUrl}/pull/${ctx.prNumber}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                              >
+                                #{ctx.prNumber}
+                              </a>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </div>
             ) : (
               <div className="prose prose-neutral dark:prose-invert max-w-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>

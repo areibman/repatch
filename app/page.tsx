@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PatchNote } from "@/types/patch-note";
+import { CommitSummary, PatchNote } from "@/types/patch-note";
 import { formatFilterSummary } from "@/lib/filter-utils";
 import { CreatePostDialog } from "@/components/create-post-dialog";
 import {
@@ -61,6 +61,10 @@ export default function Home() {
             changes: note.changes,
             contributors: note.contributors,
             videoUrl: note.video_url,
+            repoBranch: note.repo_branch,
+            aiSummaries: note.ai_summaries as CommitSummary[] | null,
+            aiOverallSummary: note.ai_overall_summary,
+            aiTemplateId: note.ai_template_id,
             filterMetadata: note.filter_metadata ?? null,
           })
         );
@@ -128,7 +132,12 @@ export default function Home() {
               AI-generated patch notes from your repositories
             </p>
           </div>
-          <CreatePostDialog />
+          <div className="flex items-center gap-3">
+            <Button asChild variant="outline">
+              <Link href="/settings/templates">Templates</Link>
+            </Button>
+            <CreatePostDialog />
+          </div>
         </div>
       </header>
 
@@ -221,21 +230,13 @@ export default function Home() {
                   </p>
 
                   {/* Change Stats */}
-                  <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="bg-green-500/10 rounded-md p-2 text-center">
                       <div className="font-semibold text-green-700 dark:text-green-400">
                         +{note.changes.added.toLocaleString()}
                       </div>
                       <div className="text-muted-foreground text-[10px]">
                         added
-                      </div>
-                    </div>
-                    <div className="bg-blue-500/10 rounded-md p-2 text-center">
-                      <div className="font-semibold text-blue-700 dark:text-blue-400">
-                        ~{note.changes.modified.toLocaleString()}
-                      </div>
-                      <div className="text-muted-foreground text-[10px]">
-                        modified
                       </div>
                     </div>
                     <div className="bg-red-500/10 rounded-md p-2 text-center">
