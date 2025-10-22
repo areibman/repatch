@@ -667,6 +667,276 @@ function buildFallbackThread(
   return tweets.slice(0, 6);
 }
 
+/**
+ * Extract top 3 changes from final changelog content for video
+ * Uses the polished final output instead of raw commits
+ */
+export async function generateVideoTopChangesFromContent(
+  changelogContent: string,
+  repoName: string
+): Promise<Array<{ title: string; description: string }>> {
+  try {
+    const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      console.warn('No Google API key found, cannot generate video summaries from content');
+      return [];
+    }
+
+    const google = createGoogleGenerativeAI({ apiKey });
+
+    const prompt = `You are extracting the TOP 3 most important changes from a changelog for a video animation.
+
+CRITICAL REQUIREMENTS:
+1. TITLE: 2-4 words maximum (e.g., "Real-time Search Index", "CLI Image Editor")
+2. DESCRIPTION: 1-2 short sentences, 15-25 words total. NO adjectives, NO embellishments. Just state the facts.
+3. Focus on user-facing features, not internal refactors
+
+Here is the final changelog for ${repoName}:
+
+${changelogContent.substring(0, 4000)}
+
+Generate the TOP 3 most important changes in this EXACT format:
+
+CHANGE_1_TITLE: [2-4 words]
+CHANGE_1_DESC: [1-2 sentences, 15-25 words, factual only]
+
+CHANGE_2_TITLE: [2-4 words]
+CHANGE_2_DESC: [1-2 sentences, 15-25 words, factual only]
+
+CHANGE_3_TITLE: [2-4 words]
+CHANGE_3_DESC: [1-2 sentences, 15-25 words, factual only]
+
+GOOD EXAMPLES:
+
+CHANGE_1_TITLE: Real-time Search Index
+CHANGE_1_DESC: Index content in real-time for fast, filtered search. Powered by Pinecone with RRF ranking.
+
+CHANGE_2_TITLE: CLI Image Editor
+CHANGE_2_DESC: Create and edit images in CLI using Gemini 2.5 Flash. Supports screenshots and artistic styles.
+
+CHANGE_3_TITLE: RabbitMQ Event System
+CHANGE_3_DESC: Jobs now use event-based communication via RabbitMQ. Improves scalability and reduces database contention.`;
+
+    console.log(`[Video AI] Extracting top 3 from final changelog (${changelogContent.length} chars)`);
+
+    const { text } = await generateText({
+      model: google('gemini-2.5-flash'),
+      prompt,
+    });
+
+    // Parse the response
+    const changes: Array<{ title: string; description: string }> = [];
+    
+    for (let i = 1; i <= 3; i++) {
+      const titleMatch = text.match(new RegExp(`CHANGE_${i}_TITLE:\\s*(.+?)(?:\\n|$)`, 'i'));
+      const descMatch = text.match(new RegExp(`CHANGE_${i}_DESC:\\s*(.+?)(?:\\n|$)`, 'i'));
+      
+      if (titleMatch && descMatch) {
+        let title = titleMatch[1].trim();
+        let description = descMatch[1].trim();
+        
+        // STRICT enforcement: Truncate if too long
+        if (title.length > 40) {
+          console.warn(`[Video AI] Title too long (${title.length} chars), truncating...`);
+          title = title.substring(0, 37) + "...";
+        }
+        
+        if (description.length > 150) {
+          console.warn(`[Video AI] Description too long (${description.length} chars), truncating...`);
+          const truncated = description.substring(0, 147);
+          const lastPeriod = truncated.lastIndexOf('.');
+          description = lastPeriod > 80 
+            ? truncated.substring(0, lastPeriod + 1) 
+            : truncated + "...";
+        }
+        
+        changes.push({ title, description });
+      }
+    }
+
+    console.log('[Video AI] Extracted changes from content:');
+    changes.forEach((change, i) => {
+      console.log(`  ${i + 1}. "${change.title}" (${change.title.length} chars)`);
+      console.log(`     "${change.description}" (${change.description.length} chars)`);
+    });
+
+    return changes;
+  } catch (error) {
+    console.error('Error generating video top changes from content:', error);
+    return [];
+  }
+}
+
+/**
+ * Generate video-friendly summaries for the top 3 changes
+ * This produces concise header + description pairs optimized for video display
+ * @deprecated Use generateVideoTopChangesFromContent instead for better results
+ */
+export async function generateVideoTopChanges(
+  commits: Array<{
+    sha: string;
+    message: string;
+    aiSummary?: string;
+    additions: number;
+    deletions: number;
+  }>,
+  repoName: string
+): Promise<Array<{ title: string; description: string }>> {
+  try {
+    const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      console.warn('No Google API key found, using fallback video summaries');
+      // Fallback to simple truncation with strict limits
+      return commits.slice(0, 3).map((commit) => {
+        const commitTitle = commit.message.split("\n")[0];
+        const title = commitTitle.length > 50 ? commitTitle.substring(0, 47) + "..." : commitTitle;
+        
+        let description = commit.aiSummary || commitTitle;
+        if (description.length > 120) {
+          const truncated = description.substring(0, 117);
+          const lastPeriod = truncated.lastIndexOf('.');
+          description = lastPeriod > 60 
+            ? truncated.substring(0, lastPeriod + 1) 
+            : truncated + "...";
+        }
+        
+        return { title, description };
+      });
+    }
+
+    const google = createGoogleGenerativeAI({ apiKey });
+
+    // Take top 3 most significant commits
+    const topCommits = commits
+      .sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions))
+      .slice(0, 3);
+
+    const commitsDetail = topCommits.map((commit, index) => `
+Change ${index + 1}:
+Commit: ${commit.message}
+${commit.aiSummary ? `Summary: ${commit.aiSummary}` : ''}
+Lines Changed: +${commit.additions} -${commit.deletions}
+`).join('\n');
+
+    const prompt = `You are creating ULTRA-CONCISE video-friendly summaries for a release video about ${repoName}.
+
+CRITICAL CONSTRAINTS - DO NOT EXCEED:
+- TITLE: Maximum 5-8 words (50 characters absolute max)
+- DESCRIPTION: Maximum 2 sentences, 20-30 words total (120 characters absolute max)
+
+Guidelines:
+- Titles should be headline-style: "Feature Name" or "What Changed"
+- Descriptions should answer: "Why does this matter?" in 1-2 simple sentences
+- NO technical jargon, NO implementation details, NO code snippets
+- Focus ONLY on user-facing impact
+- Be conversational and clear
+
+Here are the changes:
+${commitsDetail}
+
+Generate a response in this EXACT format:
+
+CHANGE_1_TITLE: [5-8 words max]
+CHANGE_1_DESC: [2 sentences max, 20-30 words]
+
+CHANGE_2_TITLE: [5-8 words max]
+CHANGE_2_DESC: [2 sentences max, 20-30 words]
+
+CHANGE_3_TITLE: [5-8 words max]
+CHANGE_3_DESC: [2 sentences max, 20-30 words]
+
+EXAMPLES:
+CHANGE_1_TITLE: Automatic Code Formatting
+CHANGE_1_DESC: Pre-commit hooks now format your code automatically. No more manual formatting needed.
+
+CHANGE_2_TITLE: Faster Search Performance
+CHANGE_2_DESC: Search queries run 3x faster with new indexing. Results appear instantly for better user experience.`;
+
+    console.log(`[Video AI] Generating video summaries for top 3 changes`);
+
+    const { text } = await generateText({
+      model: google('gemini-2.5-flash'),
+      prompt,
+    });
+
+    // Parse the response
+    const changes: Array<{ title: string; description: string }> = [];
+    
+    for (let i = 1; i <= 3; i++) {
+      const titleMatch = text.match(new RegExp(`CHANGE_${i}_TITLE:\\s*(.+?)(?:\\n|$)`, 'i'));
+      const descMatch = text.match(new RegExp(`CHANGE_${i}_DESC:\\s*(.+?)(?:\\n|$)`, 'i'));
+      
+      if (titleMatch && descMatch) {
+        let title = titleMatch[1].trim();
+        let description = descMatch[1].trim();
+        
+        // STRICT enforcement: Truncate if too long
+        if (title.length > 50) {
+          console.warn(`[Video AI] Title too long (${title.length} chars), truncating...`);
+          title = title.substring(0, 47) + "...";
+        }
+        
+        if (description.length > 120) {
+          console.warn(`[Video AI] Description too long (${description.length} chars), truncating...`);
+          // Try to truncate at sentence boundary
+          const truncated = description.substring(0, 117);
+          const lastPeriod = truncated.lastIndexOf('.');
+          description = lastPeriod > 60 
+            ? truncated.substring(0, lastPeriod + 1) 
+            : truncated + "...";
+        }
+        
+        changes.push({ title, description });
+      } else if (topCommits[i - 1]) {
+        // Fallback to truncated commit message
+        const commit = topCommits[i - 1];
+        const commitTitle = commit.message.split("\n")[0];
+        const title = commitTitle.length > 50 ? commitTitle.substring(0, 47) + "..." : commitTitle;
+        
+        // Create a very short description from the AI summary
+        let description = commit.aiSummary || commitTitle;
+        if (description.length > 120) {
+          const truncated = description.substring(0, 117);
+          const lastPeriod = truncated.lastIndexOf('.');
+          description = lastPeriod > 60 
+            ? truncated.substring(0, lastPeriod + 1) 
+            : truncated + "...";
+        }
+        
+        changes.push({ title, description });
+      }
+    }
+
+    console.log('[Video AI] Generated changes:');
+    changes.forEach((change, i) => {
+      console.log(`  ${i + 1}. "${change.title}" (${change.title.length} chars)`);
+      console.log(`     "${change.description}" (${change.description.length} chars)`);
+    });
+
+    return changes;
+  } catch (error) {
+    console.error('Error generating video top changes:', error);
+    // Fallback to simple truncation with strict limits
+    return commits.slice(0, 3).map((commit) => {
+      const commitTitle = commit.message.split("\n")[0];
+      const title = commitTitle.length > 50 ? commitTitle.substring(0, 47) + "..." : commitTitle;
+      
+      let description = commit.aiSummary || commitTitle;
+      if (description.length > 120) {
+        const truncated = description.substring(0, 117);
+        const lastPeriod = truncated.lastIndexOf('.');
+        description = lastPeriod > 60 
+          ? truncated.substring(0, lastPeriod + 1) 
+          : truncated + "...";
+      }
+      
+      return { title, description };
+    });
+  }
+}
+
 export async function generateTweetThread(
   repoName: string,
   filters: PatchNoteFilters | undefined,

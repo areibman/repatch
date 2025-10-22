@@ -59,6 +59,11 @@ const BaseComp = ({
   const effectiveLangCode = langCode ?? openaiGeneration?.langCode ?? "en";
   const effectiveTopChanges = topChanges ?? openaiGeneration?.topChanges ?? [];
   const effectiveAllChanges = allChanges ?? openaiGeneration?.allChanges ?? [];
+  
+  // Extract just the repo name from the slug (e.g., "firecrawl/firecrawl" -> "firecrawl")
+  const repoName = repositorySlug.includes('/') 
+    ? repositorySlug.split('/').pop() || repositorySlug 
+    : repositorySlug;
 
   return (
     <AbsoluteFill className="bg-black">
@@ -70,11 +75,11 @@ const BaseComp = ({
         <Series.Sequence
           durationInFrames={fps * 1.5}
           className="text-white"
-          name="remotion-dev/remotion"
+          name="repo-name"
         >
           <SlidingDoors>
             <First className="bg-black">
-              <h1 className="text-9xl font-black">{repositorySlug}</h1>
+              <h1 className="text-9xl font-black">{repoName}</h1>
             </First>
           </SlidingDoors>
         </Series.Sequence>
@@ -96,12 +101,12 @@ const BaseComp = ({
           durationInFrames={fps * 3}
           offset={-20}
           className="text-black"
-          name={"remotion-dev/remotion | v4.0.0"}
+          name={"repo-name | Latest Update"}
         >
           <SlidingDoors>
             <First className="bg-white text-center">
               <div className="flex items-center justify-center gap-10 flex-col">
-                <h1 className="text-9xl font-black">{repositorySlug}</h1>
+                <h1 className="text-9xl font-black">{repoName}</h1>
                 <h1 className="text-5xl font-bold">{releaseTag}</h1>
               </div>
             </First>
@@ -221,13 +226,13 @@ const BaseComp = ({
           durationInFrames={fps * 3}
           offset={-20}
           className="text-black"
-          name={"remotion-dev/remotion | v4.0.0"}
+          name={"repo-name | Latest Update"}
         >
           <FadeOutExit>
             <SlidingDoors>
               <First className="bg-white text-center">
                 <div className="flex items-center justify-center gap-10 flex-col">
-                  <h1 className="text-9xl font-black">{repositorySlug}</h1>
+                  <h1 className="text-9xl font-black">{repoName}</h1>
                   <h1 className="text-5xl font-bold">{releaseTag}</h1>
                 </div>
               </First>
