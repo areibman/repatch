@@ -25,6 +25,8 @@ export default function Home() {
   const [patchNotes, setPatchNotes] = useState<PatchNote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [providerName, setProviderName] = useState("Resend");
+  const [providerConfigured, setProviderConfigured] = useState(true);
 
   useEffect(() => {
     const fetchPatchNotes = async () => {
@@ -77,6 +79,43 @@ export default function Home() {
     };
 
     fetchPatchNotes();
+  }, []);
+
+  useEffect(() => {
+    const fetchProvider = async () => {
+      try {
+        const response = await fetch("/api/email/providers");
+        if (!response.ok) {
+          const err = await response.json().catch(() => null);
+          throw new Error(err?.error || "Failed to load provider settings");
+        }
+
+        const data = await response.json();
+        const providers = (data.providers ?? []) as Array<{
+          id: string;
+          name: string;
+          configured: boolean;
+        }>;
+        const active = providers.find(
+          provider => provider.id === data.activeProvider
+        );
+
+        if (active) {
+          setProviderName(active.name);
+          setProviderConfigured(Boolean(active.configured));
+        } else if (providers.length > 0) {
+          setProviderName(providers[0].name);
+          setProviderConfigured(Boolean(providers[0].configured));
+        } else {
+          setProviderConfigured(false);
+        }
+      } catch (err) {
+        console.error("Error loading provider info:", err);
+        setProviderConfigured(false);
+      }
+    };
+
+    fetchProvider();
   }, []);
 
   const getFilterLabel = (note: PatchNote) =>
@@ -132,6 +171,18 @@ export default function Home() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Badge
+              variant={providerConfigured ? "secondary" : "outline"}
+              className={
+                providerConfigured
+                  ? "text-xs"
+                  : "text-xs border-destructive/50 text-destructive"
+              }
+            >
+              {providerConfigured
+                ? `Email via ${providerName}`
+                : `Configure ${providerName}`}
+            </Badge>
             <Button asChild variant="outline">
               <Link href="/settings/templates">Templates</Link>
             </Button>

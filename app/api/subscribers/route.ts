@@ -1,112 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+import { resolveActiveEmailProvider } from "@/lib/email";
 
-// GET /api/subscribers - Fetch all email subscribers from Resend audience
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function toResponseShape(subscriber: {
+  id: string;
+  email: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}) {
+  return {
+    id: subscriber.id,
+    email: subscriber.email,
+    active: subscriber.active,
+    created_at: subscriber.createdAt,
+    updated_at: subscriber.updatedAt,
+  };
+}
+
 export async function GET() {
   try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
-
-    const contacts = await resend.contacts.list({ audienceId });
-
-    if (!contacts.data) {
-      return NextResponse.json(
-        { error: "Failed to fetch contacts from Resend" },
-        { status: 500 }
-      );
-    }
-
-    // Transform Resend contacts to match the expected format
-    const subscribers = contacts.data.data.map((contact: any) => ({
-      id: contact.id,
-      email: contact.email,
-      active: !contact.unsubscribed,
-      created_at: contact.created_at,
-      updated_at: contact.updated_at,
-    }));
-
-    return NextResponse.json(subscribers);
+    const { provider } = await resolveActiveEmailProvider();
+    const subscribers = await provider.listSubscribers();
+    return NextResponse.json(subscribers.map(toResponseShape));
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to fetch subscribers" },
-      { status: 500 }
-    );
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch subscribers";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-// POST /api/subscribers - Add a new email subscriber to Resend audience
 export async function POST(request: NextRequest) {
   try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
-
     const body = await request.json();
+    const email = String(body.email ?? "").trim();
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(body.email)) {
+    if (!EMAIL_REGEX.test(email)) {
       return NextResponse.json(
         { error: "Invalid email format" },
         { status: 400 }
       );
     }
 
-    // Add contact to Resend audience
-    const contact = await resend.contacts.create({
-      email: body.email,
-      firstName: body.firstName || "",
-      lastName: body.lastName || "",
-      unsubscribed: false,
-      audienceId: audienceId,
+    const { provider } = await resolveActiveEmailProvider();
+    const subscriber = await provider.addSubscriber({
+      email,
+      firstName: body.firstName,
+      lastName: body.lastName,
     });
 
-    if (!contact.data) {
-      return NextResponse.json(
-        { error: "Failed to add contact to Resend audience" },
-        { status: 500 }
-      );
-    }
-
-    // Transform the response to match expected format
-    const subscriber = {
-      id: contact.data.id,
-      email: body.email, // Use the email from the request body
-      active: true, // New contacts are active by default
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    return NextResponse.json(subscriber, { status: 201 });
-  } catch (error: any) {
-    // Handle duplicate email error from Resend
-    if (
-      error.message?.includes("already exists") ||
-      error.message?.includes("duplicate")
-    ) {
-      return NextResponse.json(
-        { error: "Email already subscribed" },
-        { status: 409 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Failed to add subscriber" },
-      { status: 500 }
-    );
+    return NextResponse.json(toResponseShape(subscriber), { status: 201 });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to add subscriber";
+    const status = message.includes("already") ? 409 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }
 
-// DELETE /api/subscribers - Remove a subscriber from Resend audience
 export async function DELETE(request: NextRequest) {
   try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
-
     const { searchParams } = new URL(request.url);
-    const email = searchParams.get("email");
-    const id = searchParams.get("id");
+    const email = searchParams.get("email") ?? undefined;
+    const id = searchParams.get("id") ?? undefined;
 
     if (!email && !id) {
       return NextResponse.json(
@@ -115,36 +73,23 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Remove contact from Resend audience
-    const result = await resend.contacts.remove({
-      ...(id ? { id } : { email: email! }),
-      audienceId: audienceId,
-    });
-
-    if (!result.data) {
-      return NextResponse.json(
-        { error: "Failed to remove contact from Resend audience" },
-        { status: 500 }
-      );
-    }
-
+    const { provider } = await resolveActiveEmailProvider();
+    await provider.removeSubscriber({ email, id });
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to remove subscriber" },
-      { status: 500 }
-    );
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to remove subscriber";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-// PUT /api/subscribers - Update a subscriber (e.g., unsubscribe)
 export async function PUT(request: NextRequest) {
   try {
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
-
     const body = await request.json();
-    const { email, id, unsubscribed } = body;
+    const email = body.email ? String(body.email).trim() : undefined;
+    const id = body.id ? String(body.id).trim() : undefined;
 
     if (!email && !id) {
       return NextResponse.json(
@@ -153,34 +98,19 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Update contact in Resend audience
-    const result = await resend.contacts.update({
-      ...(id ? { id } : { email }),
-      audienceId: audienceId,
-      unsubscribed: unsubscribed ?? false,
+    const { provider } = await resolveActiveEmailProvider();
+    const subscriber = await provider.updateSubscriber({
+      email,
+      id,
+      unsubscribed: Boolean(body.unsubscribed),
     });
 
-    if (!result.data) {
-      return NextResponse.json(
-        { error: "Failed to update contact in Resend audience" },
-        { status: 500 }
-      );
-    }
-
-    // Transform the response to match expected format
-    const subscriber = {
-      id: result.data.id,
-      email: email || id || "", // Use the email or id from the request
-      active: !(unsubscribed ?? false),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    return NextResponse.json(subscriber);
+    return NextResponse.json(toResponseShape(subscriber));
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to update subscriber" },
-      { status: 500 }
-    );
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to update subscriber";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

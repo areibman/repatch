@@ -72,6 +72,8 @@ export default function BlogViewPage() {
   const [videoRegenerationMessage, setVideoRegenerationMessage] = useState('');
   const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
   const [typefullyDraftUrl, setTypefullyDraftUrl] = useState<string | null>(null);
+  const [providerName, setProviderName] = useState("Resend");
+  const [providerConfigured, setProviderConfigured] = useState(true);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -149,6 +151,43 @@ export default function BlogViewPage() {
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    const fetchProvider = async () => {
+      try {
+        const response = await fetch("/api/email/providers");
+        if (!response.ok) {
+          const err = await response.json().catch(() => null);
+          throw new Error(err?.error || "Failed to load provider");
+        }
+
+        const data = await response.json();
+        const providers = (data.providers ?? []) as Array<{
+          id: string;
+          name: string;
+          configured: boolean;
+        }>;
+        const active = providers.find(
+          provider => provider.id === data.activeProvider
+        );
+
+        if (active) {
+          setProviderName(active.name);
+          setProviderConfigured(Boolean(active.configured));
+        } else if (providers.length > 0) {
+          setProviderName(providers[0].name);
+          setProviderConfigured(Boolean(providers[0].configured));
+        } else {
+          setProviderConfigured(false);
+        }
+      } catch (err) {
+        console.error("Error loading provider info:", err);
+        setProviderConfigured(false);
+      }
+    };
+
+    fetchProvider();
+  }, []);
 
   useEffect(() => {
     const loadTemplates = async () => {
@@ -657,14 +696,26 @@ export default function BlogViewPage() {
                       </>
                     )}
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSendEmail}
-                    disabled={isSending}
-                  >
-                    <PaperAirplaneIcon className="h-4 w-4 mr-2" />
-                    {isSending ? "Sending..." : "Send Email"}
-                  </Button>
+                  <div className="flex flex-col items-start gap-1">
+                    <Button
+                      size="sm"
+                      onClick={handleSendEmail}
+                      disabled={isSending || !providerConfigured}
+                    >
+                      <PaperAirplaneIcon className="h-4 w-4 mr-2" />
+                      {isSending
+                        ? `Sending via ${providerName}...`
+                        : providerConfigured
+                          ? `Send Email via ${providerName}`
+                          : "Configure Email Provider"}
+                    </Button>
+                    {!providerConfigured && (
+                      <span className="text-xs text-destructive">
+                        Add {providerName} credentials in Settings → Email to
+                        enable sending.
+                      </span>
+                    )}
+                  </div>
                 </>
               )}
             </div>
