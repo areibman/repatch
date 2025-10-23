@@ -38,6 +38,8 @@ import { Loader2Icon, TwitterIcon, DownloadIcon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
+import type { EmailIntegrationConfig, EmailProvider } from "@/types/email";
+import { EMAIL_PROVIDER_LABELS } from "@/lib/email/providers";
 
 import dynamic from "next/dynamic";
 
@@ -72,6 +74,9 @@ export default function BlogViewPage() {
   const [videoRegenerationMessage, setVideoRegenerationMessage] = useState('');
   const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
   const [typefullyDraftUrl, setTypefullyDraftUrl] = useState<string | null>(null);
+  const [providerConfig, setProviderConfig] = useState<EmailIntegrationConfig | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [providerLoading, setProviderLoading] = useState(true);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -89,6 +94,13 @@ export default function BlogViewPage() {
     () => templates.find((template) => template.id === selectedTemplateId) || null,
     [templates, selectedTemplateId]
   );
+
+  const providerLabel = useMemo(() => {
+    if (!providerConfig) {
+      return EMAIL_PROVIDER_LABELS.resend;
+    }
+    return EMAIL_PROVIDER_LABELS[providerConfig.provider as EmailProvider];
+  }, [providerConfig]);
 
   useEffect(() => {
     const fetchPatchNote = async () => {
@@ -177,6 +189,29 @@ export default function BlogViewPage() {
   }, []);
 
   useEffect(() => {
+    const loadProvider = async () => {
+      setProviderLoading(true);
+      setProviderError(null);
+      try {
+        const response = await fetch('/api/email/providers');
+        if (!response.ok) {
+          throw new Error('Failed to load email provider');
+        }
+        const data = await response.json();
+        setProviderConfig(data.active ?? null);
+      } catch (error) {
+        setProviderError(
+          error instanceof Error ? error.message : 'Email provider unavailable'
+        );
+      } finally {
+        setProviderLoading(false);
+      }
+    };
+
+    loadProvider();
+  }, []);
+
+  useEffect(() => {
     if (selectedTemplateId && templates.length > 0) {
       const exists = templates.some((template) => template.id === selectedTemplateId);
       if (!exists) {
@@ -241,12 +276,16 @@ export default function BlogViewPage() {
   };
 
   const handleSendEmail = async () => {
-    // Prevent multiple calls
     if (isSending) {
       return;
     }
 
-    if (!confirm('Send this patch note to all email subscribers?')) {
+    if (!providerConfig) {
+      alert('No email provider is configured. Configure a provider in Settings > Email.');
+      return;
+    }
+
+    if (!confirm(`Send this patch note to all ${providerLabel} subscribers?`)) {
       return;
     }
 
@@ -263,7 +302,7 @@ export default function BlogViewPage() {
       }
 
       const data = await response.json();
-      alert(`✅ Patch note successfully sent to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''}!`);
+      alert(`✅ Patch note successfully sent via ${providerLabel} to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''}!`);
     } catch (error) {
       console.error('Error sending email:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
@@ -657,14 +696,23 @@ export default function BlogViewPage() {
                       </>
                     )}
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSendEmail}
-                    disabled={isSending}
-                  >
-                    <PaperAirplaneIcon className="h-4 w-4 mr-2" />
-                    {isSending ? "Sending..." : "Send Email"}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleSendEmail}
+                      disabled={isSending}
+                    >
+                      <PaperAirplaneIcon className="h-4 w-4 mr-2" />
+                      {isSending ? "Sending..." : "Send Email"}
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      {providerLoading
+                        ? "Checking provider..."
+                        : providerError
+                        ? providerError
+                        : `Delivered by ${providerLabel}`}
+                    </span>
+                  </div>
                 </>
               )}
             </div>

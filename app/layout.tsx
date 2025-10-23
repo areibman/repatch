@@ -17,7 +17,7 @@ import {
   SidebarRail,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { HomeIcon, Cog6ToothIcon, UsersIcon } from "@heroicons/react/16/solid";
+import { HomeIcon, Cog6ToothIcon, UsersIcon, EnvelopeIcon } from "@heroicons/react/16/solid";
 import { SidebarHeaderContent } from "@/components/sidebar-header";
 import "./globals.css";
 
@@ -77,6 +77,14 @@ export default function RootLayout({
                         <Link href="/settings/templates">
                           <Cog6ToothIcon />
                           <span>Templates</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild>
+                        <Link href="/settings/email">
+                          <EnvelopeIcon />
+                          <span>Email</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
