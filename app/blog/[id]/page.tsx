@@ -72,6 +72,12 @@ export default function BlogViewPage() {
   const [videoRegenerationMessage, setVideoRegenerationMessage] = useState('');
   const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
   const [typefullyDraftUrl, setTypefullyDraftUrl] = useState<string | null>(null);
+  const [providerSummary, setProviderSummary] = useState<
+    | { provider: string; displayName: string }
+    | null
+  >(null);
+  const [providerLoading, setProviderLoading] = useState(true);
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -149,6 +155,43 @@ export default function BlogViewPage() {
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadProvider = async () => {
+      setProviderLoading(true);
+      setProviderError(null);
+      try {
+        const response = await fetch(`/api/patch-notes/${params.id}/send`);
+        if (!response.ok) {
+          throw new Error("Failed to load email provider");
+        }
+        const data = await response.json();
+        if (!cancelled) {
+          setProviderSummary(data);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setProviderError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load email provider"
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setProviderLoading(false);
+        }
+      }
+    };
+
+    loadProvider();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id]);
 
   useEffect(() => {
     const loadTemplates = async () => {
@@ -263,7 +306,17 @@ export default function BlogViewPage() {
       }
 
       const data = await response.json();
-      alert(`✅ Patch note successfully sent to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''}!`);
+      if (data.provider && data.providerId) {
+        setProviderSummary({
+          provider: data.providerId,
+          displayName: data.provider,
+        });
+      }
+      alert(
+        `✅ Patch note successfully sent via ${data.provider} to ${data.sentTo} subscriber${
+          data.sentTo !== 1 ? "s" : ""
+        }!`
+      );
     } catch (error) {
       console.error('Error sending email:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
@@ -665,6 +718,22 @@ export default function BlogViewPage() {
                     <PaperAirplaneIcon className="h-4 w-4 mr-2" />
                     {isSending ? "Sending..." : "Send Email"}
                   </Button>
+                  <div className="text-xs text-muted-foreground">
+                    {providerLoading ? (
+                      "Checking provider..."
+                    ) : providerError ? (
+                      providerError
+                    ) : providerSummary ? (
+                      <span className="flex items-center gap-2">
+                        <Badge variant="outline">
+                          {providerSummary.displayName}
+                        </Badge>
+                        delivers this campaign
+                      </span>
+                    ) : (
+                      "No email provider configured"
+                    )}
+                  </div>
                 </>
               )}
             </div>
