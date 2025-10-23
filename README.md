@@ -11,7 +11,7 @@ Repatch uses LLMs to analyze GitHub repository changes over customizable rangesâ
 - **Framework**: Next.js 15 with App Router
 - **Database**: Supabase (PostgreSQL)
 - **UI**: ShadCN UI + Tailwind CSS
-- **Email**: Resend
+- **Email**: Resend or Customer.io
 - **AI**: Google Generative AI (Gemini 2.5 Flash) via Vercel AI SDK
 - **Video Generation**: Remotion 4.0
 
@@ -35,6 +35,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 # Resend (for sending emails)
 RESEND_API_KEY=your_resend_api_key
 RESEND_AUDIENCE_ID=your_resend_audience_id
+
+# Customer.io (optional alternative provider)
+CUSTOMER_IO_APP_API_KEY=your_customer_io_app_key
+CUSTOMER_IO_SITE_ID=your_customer_io_site_id
+CUSTOMER_IO_TRACK_API_KEY=your_customer_io_track_key
+CUSTOMER_IO_TRANSACTIONAL_MESSAGE_ID=optional_transactional_message
+CUSTOMER_IO_FROM_EMAIL="Repatch <newsletters@example.com>"
+CUSTOMER_IO_REGION=us
 
 # Typefully (optional tweet thread drafts)
 TYPEFULLY_API_KEY=your_typefully_api_key
@@ -69,6 +77,18 @@ To set up Resend for email sending:
    - Create a new audience (e.g., "Repatch Subscribers")
    - Copy the audience ID
 4. Add both the API key and audience ID to your `.env.local` file
+5. In the **Subscribers** screen, open the **Email Provider** section and save your Resend settings.
+
+### Customer.io Setup
+
+To deliver newsletters with Customer.io's transactional API:
+
+1. Create a Customer.io workspace at https://customer.io.
+2. Generate an **App API key** (for transactional sends) and a **Track API key** (for subscriber profiles).
+3. Locate your workspace **Site ID** and optional transactional message ID if you want to reuse a template.
+4. Add the credentials to `.env.local` as shown above.
+5. Open the **Email Provider** panel on the **Subscribers** page, enter your Customer.io details, and click **Save settings**.
+6. Activate Customer.io to switch the active provider. Supabase will persist credentials inside the `email_integrations` table.
 
 ### Typefully Setup
 
@@ -173,7 +193,7 @@ Send beautiful HTML emails to subscribers with:
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration
 - [Video Generation](./VIDEO_GENERATION.md) - Remotion video rendering
-- [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
+- Email integration settings are managed inside the app under **Subscribers â†’ Email Provider**.
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
 
 ## Learn More
