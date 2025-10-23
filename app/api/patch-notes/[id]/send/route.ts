@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
 import { formatFilterSummary } from "@/lib/filter-utils";
+import {
+  getActiveProviderWithSubscribers,
+  getActiveIntegration,
+  instantiateProvider,
+} from "@/lib/email/integrations";
+
+import type { EmailProviderId } from "@/lib/email/types";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+type IntegrationSummary = {
+  provider: EmailProviderId;
+  displayName: string;
+};
 
 // Configure marked for GitHub-flavored markdown
 marked.setOptions({
@@ -20,9 +29,45 @@ function markdownToHtml(markdown: string): string {
   return marked(markdown) as string;
 }
 
+function getBaseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000")
+  );
+}
+
+function getProviderSummary(provider: IntegrationSummary) {
+  return {
+    provider: provider.provider,
+    displayName: provider.displayName,
+  };
+}
+
+export async function GET() {
+  try {
+    const supabase = await createClient();
+    const integration = await getActiveIntegration(supabase);
+    const provider = instantiateProvider(integration, { supabase });
+
+    return NextResponse.json(
+      getProviderSummary({
+        provider: integration?.provider === "customerio" ? "customerio" : "resend",
+        displayName: provider.displayName,
+      })
+    );
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Failed to load provider configuration" },
+      { status: 500 }
+    );
+  }
+}
+
 // POST /api/patch-notes/[id]/send - Send patch note via email
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -43,48 +88,25 @@ export async function POST(
       );
     }
 
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+    const { provider, subscribers } = await getActiveProviderWithSubscribers(
+      supabase
+    );
 
-    // Get contacts from the audience (we need their emails for the 'to' field)
-    const contacts = await resend.contacts.list({ audienceId });
+    const activeSubscribers = subscribers.filter((sub) => sub.active);
 
-    if (!contacts.data || contacts.data.data.length === 0) {
-      return NextResponse.json(
-        { error: "No subscribers found in audience" },
-        { status: 400 }
-      );
-    }
-
-    // Filter out unsubscribed contacts and extract emails
-    const activeEmails = contacts.data.data
-      .filter((contact: any) => !contact.unsubscribed)
-      .map((contact: any) => contact.email);
-
-    if (activeEmails.length === 0) {
+    if (activeSubscribers.length === 0) {
       return NextResponse.json(
         { error: "No active subscribers found" },
         { status: 400 }
       );
     }
 
-    // Add a small delay to avoid hitting rate limits (2 req/sec = 500ms between calls)
-    await new Promise(resolve => setTimeout(resolve, 600));
-
-    // Convert markdown content to HTML
     const htmlContent = markdownToHtml((patchNote as PatchNote).content);
-
-    // Get the base URL for absolute links
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
-                    'http://localhost:3000');
-    
-    // Convert relative video URL to absolute URL
-    const videoUrl = (patchNote as PatchNote).video_url 
+    const baseUrl = getBaseUrl();
+    const videoUrl = (patchNote as PatchNote).video_url
       ? `${baseUrl}${(patchNote as PatchNote).video_url}`
-      : 'https://openedit-uploads.openchatui.com/basecomp.mp4';
+      : "https://openedit-uploads.openchatui.com/basecomp.mp4";
 
-    // Create styled HTML email
     const emailHtml = `
 <!DOCTYPE html>
 <html>
@@ -198,228 +220,87 @@ export async function POST(
       font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
       font-size: 14px;
     }
-    .content pre {
-      background-color: #1F2937;
-      color: #F9FAFB;
-      padding: 16px;
-      border-radius: 6px;
-      overflow-x: auto;
-    }
-    .content pre code {
-      background-color: transparent;
-      color: inherit;
-      padding: 0;
-    }
-    .contributors {
+    .video-section {
       margin-top: 30px;
-      padding: 20px;
       background-color: #F9FAFB;
       border-radius: 8px;
+      padding: 20px;
     }
-    .contributors-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 10px;
-    }
-    .contributor-tag {
-      display: inline-block;
-      background-color: #E0E7FF;
-      color: #4F46E5;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 13px;
-      margin: 4px;
-    }
-    .ai-summaries {
-      margin: 30px 0;
-      padding: 24px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 12px;
-      color: #ffffff;
-    }
-    .ai-summaries-title {
-      font-size: 18px;
-      font-weight: 700;
-      margin-bottom: 16px;
-      display: flex;
+    .video-link {
+      display: inline-flex;
       align-items: center;
       gap: 8px;
-    }
-    .ai-badge {
-      background-color: rgba(255, 255, 255, 0.2);
-      padding: 2px 8px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-    .ai-summary-item {
-      background-color: rgba(255, 255, 255, 0.1);
-      padding: 16px;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      border-left: 3px solid rgba(255, 255, 255, 0.5);
-    }
-    .ai-summary-item:last-child {
-      margin-bottom: 0;
-    }
-    .ai-commit-title {
-      font-size: 14px;
-      font-weight: 600;
-      opacity: 0.9;
-      margin-bottom: 8px;
-    }
-    .ai-commit-summary {
-      font-size: 14px;
-      line-height: 1.6;
-      opacity: 0.95;
-    }
-    .ai-stats {
-      font-size: 12px;
-      opacity: 0.8;
-      margin-top: 8px;
-    }
-    .footer {
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 1px solid #E5E7EB;
-      text-align: center;
-      color: #6B7280;
-      font-size: 13px;
-    }
-    .footer a {
       color: #4F46E5;
       text-decoration: none;
-    }
-    .footer a:hover {
-      text-decoration: underline;
-    }
-    .hero-image {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .hero-image img {
-      max-width: 100%;
-      height: auto;
-      border-radius: 8px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      font-weight: 600;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="hero-image">
-      <a href="${videoUrl}" target="_blank">
-        <img src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png" alt="Watch Patch Note Video" />
-      </a>
-    </div>
-    
     <div class="header">
       <h1 class="title">${(patchNote as PatchNote).title}</h1>
       <div class="metadata">
-        <span class="badge">${(patchNote as PatchNote).repo_name}</span>
         <span class="badge">${formatFilterSummary(
-          (patchNote as PatchNote).filter_metadata,
-          (patchNote as PatchNote).time_period
+          (patchNote as PatchNote).filter_metadata
         )}</span>
         <span>${new Date(
           (patchNote as PatchNote).generated_at
-        ).toLocaleDateString("en-US", {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        })}</span>
+        ).toLocaleDateString()}</span>
       </div>
     </div>
-
     <div class="stats">
       <div class="stat">
-        <div class="stat-label">Added</div>
-        <div class="stat-value added">+${(
-          patchNote as PatchNote
-        ).changes.added.toLocaleString()}</div>
+        <div class="stat-label">Additions</div>
+        <div class="stat-value added">${
+          (patchNote as PatchNote).changes?.added ?? 0
+        }</div>
       </div>
       <div class="stat">
-        <div class="stat-label">Removed</div>
-        <div class="stat-value removed">-${(
-          patchNote as PatchNote
-        ).changes.removed.toLocaleString()}</div>
+        <div class="stat-label">Modifications</div>
+        <div class="stat-value modified">${
+          (patchNote as PatchNote).changes?.modified ?? 0
+        }</div>
       </div>
       <div class="stat">
-        <div class="stat-label">Contributors</div>
-        <div class="stat-value">${
-          (patchNote as PatchNote).contributors.length
+        <div class="stat-label">Removals</div>
+        <div class="stat-value removed">${
+          (patchNote as PatchNote).changes?.removed ?? 0
         }</div>
       </div>
     </div>
-
     <div class="content">
       ${htmlContent}
     </div>
-
-    ${
-      (patchNote as PatchNote).contributors &&
-      (patchNote as PatchNote).contributors.length > 0
-        ? `
-    <div class="contributors">
-      <div class="contributors-title">Contributors</div>
-      <div>
-        ${(patchNote as PatchNote).contributors
-          .map(
-            (contributor: string) =>
-              `<span class="contributor-tag">${contributor}</span>`
-          )
-          .join("")}
-      </div>
-    </div>
-    `
-        : ""
-    }
-
-    <div class="footer">
-      <p>
-        View this patch note on the web: <a href="${
-          (patchNote as PatchNote).repo_url
-        }" target="_blank">${(patchNote as PatchNote).repo_name}</a>
-      </p>
-      <p>
-        <small>This email was sent by Repatch - AI-powered patch notes for your repositories</small>
-      </p>
+    <div class="video-section">
+      <h3>Watch the highlight video</h3>
+      <a class="video-link" href="${videoUrl}" target="_blank" rel="noreferrer">
+        Watch recap →
+      </a>
     </div>
   </div>
 </body>
 </html>
-    `;
+`;
 
-    // Send email using Resend to all active subscribers
-    const { data, error } = await resend.emails.send({
-      from: "Repatch <onboarding@resend.dev>",
-      to: activeEmails, // Array of email addresses
-      subject: `${(patchNote as PatchNote).title} - ${
-        (patchNote as PatchNote).repo_name
-      }`,
+    const sendResult = await provider.sendCampaign({
+      subject: (patchNote as PatchNote).title,
       html: emailHtml,
+      text: (patchNote as PatchNote).content,
+      previewText: (patchNote as PatchNote).ai_overall_summary ?? undefined,
+      recipients: activeSubscribers.map((sub) => sub.email),
     });
-
-    if (error) {
-      console.error("Resend error:", error);
-      return NextResponse.json(
-        { error: error.message || "Failed to send email" },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
-      success: true,
-      sentTo: activeEmails.length,
-      emailId: data?.id,
+      sentTo: sendResult.sentTo,
+      provider: provider.displayName,
+      providerId: provider.id,
     });
   } catch (error) {
-    console.error("API error:", error);
+    console.error("Failed to send patch note email", error);
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to send email",
-      },
+      { error: "Failed to send patch note email" },
       { status: 500 }
     );
   }
