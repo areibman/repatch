@@ -47,6 +47,14 @@ const BaseComp = dynamic(() => import("@/remotion/BaseComp"), {
 
 const DEFAULT_TEMPLATE_OPTION = "__default__";
 
+type EmailProviderName = "resend" | "customer_io";
+
+interface ActiveProviderSummary {
+  provider: EmailProviderName;
+  displayName: string | null;
+  fromEmail: string;
+}
+
 export default function BlogViewPage() {
   const params = useParams();
   const router = useRouter();
@@ -72,6 +80,8 @@ export default function BlogViewPage() {
   const [videoRegenerationMessage, setVideoRegenerationMessage] = useState('');
   const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
   const [typefullyDraftUrl, setTypefullyDraftUrl] = useState<string | null>(null);
+  const [activeProvider, setActiveProvider] =
+    useState<ActiveProviderSummary | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -149,6 +159,25 @@ export default function BlogViewPage() {
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  useEffect(() => {
+    const fetchActiveProvider = async () => {
+      try {
+        const response = await fetch("/api/email-integrations/active");
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        if (data.integration) {
+          setActiveProvider(data.integration);
+        }
+      } catch {
+        setActiveProvider(null);
+      }
+    };
+
+    fetchActiveProvider();
+  }, []);
 
   useEffect(() => {
     const loadTemplates = async () => {
@@ -263,7 +292,13 @@ export default function BlogViewPage() {
       }
 
       const data = await response.json();
-      alert(`✅ Patch note successfully sent to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''}!`);
+      const providerSummary = data.provider as ActiveProviderSummary | undefined;
+      if (providerSummary) {
+        setActiveProvider(providerSummary);
+      }
+      const providerLabel =
+        providerSummary?.provider === 'customer_io' ? 'Customer.io' : 'Resend';
+      alert(`✅ Patch note sent to ${data.sentTo} subscriber${data.sentTo !== 1 ? 's' : ''} via ${providerLabel}!`);
     } catch (error) {
       console.error('Error sending email:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
@@ -657,14 +692,32 @@ export default function BlogViewPage() {
                       </>
                     )}
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleSendEmail}
-                    disabled={isSending}
-                  >
-                    <PaperAirplaneIcon className="h-4 w-4 mr-2" />
-                    {isSending ? "Sending..." : "Send Email"}
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    {activeProvider ? (
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Badge variant="secondary">
+                          {activeProvider.provider === "customer_io"
+                            ? "Customer.io"
+                            : "Resend"}
+                        </Badge>
+                        <span className="hidden md:inline">
+                          From {activeProvider.fromEmail}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-xs text-destructive">
+                        Connect an email provider before sending
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={handleSendEmail}
+                      disabled={isSending || !activeProvider}
+                    >
+                      <PaperAirplaneIcon className="h-4 w-4 mr-2" />
+                      {isSending ? "Sending..." : "Send Email"}
+                    </Button>
+                  </div>
                 </>
               )}
             </div>
