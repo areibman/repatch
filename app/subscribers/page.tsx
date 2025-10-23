@@ -26,13 +26,35 @@ interface Subscriber {
   updated_at: string;
 }
 
+interface ProviderField {
+  key: string;
+  label: string;
+  type: "text" | "password" | "email" | "select";
+  description?: string;
+  required?: boolean;
+  options?: Array<{ label: string; value: string }>;
+  value: string;
+  maskedValue?: string | null;
+}
+
+interface ProviderSummary {
+  id: "resend" | "customerio";
+  name: string;
+  isActive: boolean;
+  configured: boolean;
+  source: "database" | "environment" | "missing";
+  lastUpdated: string | null;
+  fields: ProviderField[];
+}
+
 export default function SubscribersPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Hardcoded audience ID from the docs
-  const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+  const [providerInfo, setProviderInfo] = useState<ProviderSummary | null>(
+    null
+  );
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSubscribers = async () => {
@@ -55,6 +77,69 @@ export default function SubscribersPage() {
     fetchSubscribers();
   }, []);
 
+  useEffect(() => {
+    const fetchProvider = async () => {
+      try {
+        setProviderError(null);
+        const response = await fetch("/api/email/providers");
+        if (!response.ok) {
+          const err = await response.json().catch(() => null);
+          throw new Error(err?.error || "Failed to load provider settings");
+        }
+
+        const data = await response.json();
+        const providers = (data.providers ?? []) as ProviderSummary[];
+        const active = providers.find(
+          provider => provider.id === data.activeProvider
+        );
+        setProviderInfo(active ?? providers[0] ?? null);
+      } catch (err) {
+        console.error("Error loading email provider:", err);
+        setProviderError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load email provider"
+        );
+      }
+    };
+
+    fetchProvider();
+  }, []);
+
+  const providerName = providerInfo?.name ?? "Resend";
+  const providerConsoleUrl =
+    providerInfo?.id === "customerio"
+      ? "https://fly.customer.io"
+      : "https://resend.com";
+  const providerSource = providerInfo?.source ?? "environment";
+  const providerConfigured = providerInfo?.configured ?? false;
+
+  const providerFields = providerInfo?.fields ?? [];
+
+  const getFieldDisplayValue = (field: ProviderField) => {
+    if (field.maskedValue) {
+      return field.maskedValue;
+    }
+
+    if (field.value) {
+      if (field.type === "select" && field.options) {
+        const option = field.options.find(option => option.value === field.value);
+        return option?.label ?? field.value;
+      }
+
+      return field.value;
+    }
+
+    return "Not set";
+  };
+
+  const filteredProviderFields = providerFields.filter(field => {
+    if (field.type === "password") {
+      return Boolean(field.maskedValue);
+    }
+    return Boolean(field.value);
+  });
+
   const activeSubscribers = subscribers.filter((sub) => sub.active);
   const totalSubscribers = subscribers.length;
 
@@ -75,11 +160,11 @@ export default function SubscribersPage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
             <Link
-              href="https://resend.com"
+              href={providerConsoleUrl}
               target="_blank"
               className="flex items-center gap-1"
             >
-              Manage in Resend{" "}
+              Manage in {providerName}{" "}
               <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
             </Link>
           </Button>
@@ -94,18 +179,61 @@ export default function SubscribersPage() {
             Audience Configuration
           </CardTitle>
           <CardDescription>
-            Your Resend audience for patch notes subscribers
+            {`Your ${providerName} configuration for patch notes subscribers.`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">
-                Audience ID
-              </label>
-              <div className="mt-1 p-3 bg-muted rounded-md font-mono text-sm">
-                {audienceId}
+          <div className="space-y-5">
+            <div className="rounded-md border p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium">Provider Status</div>
+                  <p className="text-xs text-muted-foreground">
+                    {providerConfigured
+                      ? providerSource === "database"
+                        ? "Credentials stored securely in Supabase."
+                        : "Credentials loaded from environment variables."
+                      : "Add credentials in Settings → Email to start sending."}
+                  </p>
+                  {providerError && (
+                    <p className="mt-2 text-xs text-destructive">
+                      {providerError}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className={`rounded-full px-2 py-1 text-xs font-medium ${
+                    providerConfigured
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-orange-100 text-orange-700"
+                  }`}
+                >
+                  {providerConfigured ? "Configured" : "Needs setup"}
+                </span>
               </div>
+            </div>
+
+            <div className="grid gap-3">
+              {filteredProviderFields.length > 0 ? (
+                filteredProviderFields.map(field => (
+                  <div
+                    key={field.key}
+                    className="rounded-md border p-3"
+                  >
+                    <div className="text-xs font-medium uppercase text-muted-foreground">
+                      {field.label}
+                    </div>
+                    <div className="mt-1 font-mono text-sm">
+                      {getFieldDisplayValue(field)}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  No provider details available yet. Configure credentials in
+                  Settings → Email.
+                </div>
+              )}
             </div>
 
             {loading ? (
@@ -149,11 +277,11 @@ export default function SubscribersPage() {
         <CardFooter className="justify-end">
           <Button variant="outline" asChild>
             <Link
-              href="https://resend.com"
+              href={providerConsoleUrl}
               target="_blank"
               className="flex items-center gap-1"
             >
-              Manage in Resend{" "}
+              Manage in {providerName}{" "}
               <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
             </Link>
           </Button>
@@ -199,11 +327,11 @@ export default function SubscribersPage() {
           <CardFooter className="justify-end">
             <Button variant="outline" asChild>
               <Link
-                href="https://resend.com"
+                href={providerConsoleUrl}
                 target="_blank"
                 className="flex items-center gap-1"
               >
-                View All in Resend{" "}
+                View All in {providerName}{" "}
                 <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -218,17 +346,17 @@ export default function SubscribersPage() {
             <UsersIcon className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No subscribers yet</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Your audience is empty. Add subscribers through Resend or your
+              Your audience is empty. Add subscribers through {providerName} or
               signup forms.
             </p>
             <Button variant="outline" asChild>
               <Link
-                href="https://resend.com"
+                href={providerConsoleUrl}
                 target="_blank"
                 className="flex items-center gap-1"
               >
                 <PlusIcon className="h-4 w-4" />
-                Add Subscribers in Resend
+                Add Subscribers in {providerName}
               </Link>
             </Button>
           </CardContent>
