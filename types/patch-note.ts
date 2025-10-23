@@ -74,4 +74,5 @@ export interface PatchNote {
   aiTemplateId?: string | null;
   aiTemplate?: AiTemplate;
   filterMetadata?: PatchNoteFilters | null;
+  videoTopChanges?: Array<{ title: string; description: string }> | null;
 }

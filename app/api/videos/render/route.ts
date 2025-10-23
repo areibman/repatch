@@ -26,11 +26,11 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Starting video render for patch note:', patchNoteId);
     
-    // Fetch the patch note from database to get AI summaries, final content, and detailed contexts
+    // Fetch the patch note from database to get AI summaries, final content, detailed contexts, and manual video edits
     const supabase = await createClient();
     const { data: patchNote, error: fetchError } = await supabase
       .from('patch_notes')
-      .select('ai_summaries, video_data, repo_name, content, ai_detailed_contexts')
+      .select('ai_summaries, video_data, repo_name, content, ai_detailed_contexts, video_top_changes')
       .eq('id', patchNoteId)
       .single();
       
@@ -49,8 +49,46 @@ export async function POST(request: NextRequest) {
       ? patchNote.repo_name.split('/').pop() || patchNote.repo_name 
       : patchNote.repo_name || 'repository';
     
-    // PRIORITY 1: Use final changelog content if available
-    if (patchNote.content && typeof patchNote.content === 'string' && patchNote.content.length > 100) {
+    // PRIORITY 0: Use manually edited video top changes if available
+    if (patchNote.video_top_changes && Array.isArray(patchNote.video_top_changes) && patchNote.video_top_changes.length > 0) {
+      console.log('✨ Using MANUALLY EDITED video top changes!');
+      console.log('   - Found', patchNote.video_top_changes.length, 'edited changes');
+      
+      const topChanges = patchNote.video_top_changes.map((change: any) => ({
+        title: change.title || '',
+        description: change.description || '',
+      }));
+      
+      // Build allChanges list from detailed contexts or ai_summaries
+      let allChanges: string[] = [];
+      
+      if (patchNote.ai_detailed_contexts && Array.isArray(patchNote.ai_detailed_contexts) && patchNote.ai_detailed_contexts.length > 0) {
+        console.log('📝 Using detailed contexts for scrolling section');
+        allChanges = patchNote.ai_detailed_contexts.map((ctx: any) => {
+          const commitTitle = ctx.message?.split("\n")[0] || 'Change';
+          return `${commitTitle}\n${ctx.context || ctx.message}`;
+        });
+      } else if (patchNote.ai_summaries && Array.isArray(patchNote.ai_summaries)) {
+        console.log('📝 Using ai_summaries for scrolling section');
+        allChanges = patchNote.ai_summaries.map((summary: any) => {
+          const commitTitle = summary.message.split("\n")[0];
+          return `${commitTitle}\n${summary.aiSummary || summary.message}`;
+        });
+      }
+      
+      finalVideoData = {
+        langCode: "en",
+        topChanges,
+        allChanges,
+      };
+      
+      console.log('📹 Using manually edited video data:');
+      console.log('   - Top changes:', topChanges.length);
+      console.log('   - All changes (scrolling):', allChanges.length);
+    }
+    
+    // PRIORITY 1: Use final changelog content if available (only if no manual edits)
+    if (!finalVideoData?.topChanges && patchNote.content && typeof patchNote.content === 'string' && patchNote.content.length > 100) {
       console.log('✨ Using FINAL CHANGELOG CONTENT for video generation!');
       console.log('   - Content length:', patchNote.content.length, 'chars');
       

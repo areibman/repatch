@@ -65,6 +65,11 @@ export default function BlogViewPage() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateMessage, setRegenerateMessage] = useState('');
   const [showInternalChanges, setShowInternalChanges] = useState(false);
+  const [showVideoTop3, setShowVideoTop3] = useState(false);
+  const [editedVideoTop3, setEditedVideoTop3] = useState<Array<{ title: string; description: string }>>([]);
+  const [isEditingVideoTop3, setIsEditingVideoTop3] = useState(false);
+  const [isRegeneratingVideo, setIsRegeneratingVideo] = useState(false);
+  const [videoRegenerationMessage, setVideoRegenerationMessage] = useState('');
   const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
   const [typefullyDraftUrl, setTypefullyDraftUrl] = useState<string | null>(null);
 
@@ -112,12 +117,14 @@ export default function BlogViewPage() {
           aiDetailedContexts: data.ai_detailed_contexts as DetailedContext[] | null,
           aiTemplateId: data.ai_template_id,
           filterMetadata: data.filter_metadata ?? null,
+          videoTopChanges: data.video_top_changes ?? null,
         };
 
         setPatchNote(transformedNote);
         setEditedContent(transformedNote.content);
         setEditedTitle(transformedNote.title);
         setSelectedTemplateId(transformedNote.aiTemplateId ?? null);
+        setEditedVideoTop3(transformedNote.videoTopChanges || []);
       } catch (error) {
         console.error("Error fetching patch note:", error);
       }
@@ -516,7 +523,12 @@ export default function BlogViewPage() {
                 className="w-full h-auto"
               />
             </a>
-            {patchNote.videoUrl ? (
+            {isRegeneratingVideo ? (
+              <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-3 py-2 rounded shadow-md flex items-center gap-2">
+                <Loader2Icon className="h-3 w-3 animate-spin" />
+                <span>{videoRegenerationMessage || 'Regenerating...'}</span>
+              </div>
+            ) : patchNote.videoUrl ? (
               <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded shadow-md">
                 ✓ Custom Video
               </div>
@@ -526,6 +538,23 @@ export default function BlogViewPage() {
               </div>
             )}
           </div>
+          
+          {/* Video Regeneration Status Banner */}
+          {isRegeneratingVideo && (
+            <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Loader2Icon className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="font-semibold text-blue-900 dark:text-blue-100">
+                    Regenerating Video
+                  </p>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                    {videoRegenerationMessage}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1">
@@ -728,13 +757,15 @@ export default function BlogViewPage() {
               <div className="flex-1">
                 <CardTitle>Patch Notes</CardTitle>
                 <CardDescription>
-                  {showInternalChanges 
+                  {showVideoTop3
+                    ? "Edit top 3 changes displayed in the video animation"
+                    : showInternalChanges 
                     ? "Detailed technical analysis (Step 1) that was fed into the final changelog"
                     : "AI-generated summary of changes for this period"}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-4">
-                {!showInternalChanges && !isEditing && (
+                {!showInternalChanges && !showVideoTop3 && !isEditing && (
                   <span className="text-sm text-muted-foreground">
                     {patchNote.content.length.toLocaleString()} characters
                   </span>
@@ -747,18 +778,34 @@ export default function BlogViewPage() {
                 {patchNote.aiDetailedContexts && patchNote.aiDetailedContexts.length > 0 && (
                   <div className="flex items-center gap-2 text-sm">
                     <Button
-                      variant={!showInternalChanges ? "default" : "outline"}
+                      variant={!showInternalChanges && !showVideoTop3 ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setShowInternalChanges(false)}
+                      onClick={() => {
+                        setShowInternalChanges(false);
+                        setShowVideoTop3(false);
+                      }}
                     >
                       Final Output
                     </Button>
                     <Button
                       variant={showInternalChanges ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setShowInternalChanges(true)}
+                      onClick={() => {
+                        setShowInternalChanges(true);
+                        setShowVideoTop3(false);
+                      }}
                     >
                       Internal Changes ({patchNote.aiDetailedContexts.length})
+                    </Button>
+                    <Button
+                      variant={showVideoTop3 ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setShowInternalChanges(false);
+                        setShowVideoTop3(true);
+                      }}
+                    >
+                      Video Content
                     </Button>
                   </div>
                 )}
@@ -884,6 +931,271 @@ export default function BlogViewPage() {
                     </details>
                   ))}
                 </div>
+              </div>
+            ) : showVideoTop3 ? (
+              <div className="space-y-6">
+                {/* Generate Button */}
+                <div className="flex items-center justify-between bg-muted/30 rounded-lg p-4">
+                  <p className="text-sm text-muted-foreground">
+                    {editedVideoTop3.length === 0
+                      ? "Generate video-optimized top 3 changes from the final changelog"
+                      : `${editedVideoTop3.length} change${editedVideoTop3.length !== 1 ? 's' : ''} configured`}
+                  </p>
+                  <div className="flex gap-2">
+                    {editedVideoTop3.length === 0 && (
+                      <Button
+                        onClick={async () => {
+                          try {
+                            setIsGeneratingVideo(true);
+                            
+                            // Call the LLM to generate top 3 from final content
+                            const response = await fetch('/api/patch-notes/generate-video-top3', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                content: patchNote.content,
+                                repoName: patchNote.repoName,
+                              }),
+                            });
+                            
+                            if (!response.ok) throw new Error('Failed to generate video top 3');
+                            
+                            const data = await response.json();
+                            setEditedVideoTop3(data.topChanges);
+                            setIsEditingVideoTop3(true);
+                          } catch (error) {
+                            console.error('Error generating video top 3:', error);
+                            alert('Failed to generate video top 3');
+                          } finally {
+                            setIsGeneratingVideo(false);
+                          }
+                        }}
+                        disabled={isGeneratingVideo}
+                      >
+                        {isGeneratingVideo ? (
+                          <>
+                            <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          'Generate Top 3'
+                        )}
+                      </Button>
+                    )}
+                    {editedVideoTop3.length > 0 && !isEditingVideoTop3 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsEditingVideoTop3(true)}
+                      >
+                        <PencilIcon className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                    )}
+                    {isEditingVideoTop3 && (
+                      <>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setIsEditingVideoTop3(false);
+                            setEditedVideoTop3(patchNote.videoTopChanges || []);
+                          }}
+                        >
+                          <XMarkIcon className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            try {
+                              setIsSaving(true);
+                              setVideoRegenerationMessage('Saving Video Top 3...');
+                              
+                              const response = await fetch(`/api/patch-notes/${patchNote.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  video_top_changes: editedVideoTop3,
+                                }),
+                              });
+                              
+                              if (!response.ok) throw new Error('Failed to save');
+                              
+                              const updated = await response.json();
+                              setPatchNote({
+                                ...patchNote,
+                                videoTopChanges: updated.video_top_changes,
+                              });
+                              setIsEditingVideoTop3(false);
+                              
+                              // Trigger video regeneration
+                              setVideoRegenerationMessage('Regenerating video with new changes...');
+                              setIsRegeneratingVideo(true);
+                              
+                              const videoResponse = await fetch('/api/videos/render', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  patchNoteId: patchNote.id,
+                                  videoData: {
+                                    langCode: 'en',
+                                    topChanges: editedVideoTop3,
+                                    allChanges: [],
+                                  },
+                                  repoName: patchNote.repoName,
+                                }),
+                              });
+                              
+                              if (videoResponse.ok) {
+                                const videoData = await videoResponse.json();
+                                setVideoRegenerationMessage('Video rendered successfully!');
+                                
+                                // Update patch note with new video URL
+                                setPatchNote({
+                                  ...patchNote,
+                                  videoTopChanges: updated.video_top_changes,
+                                  videoUrl: videoData.videoUrl,
+                                });
+                                
+                                setTimeout(() => {
+                                  setVideoRegenerationMessage('');
+                                  setIsRegeneratingVideo(false);
+                                  alert('Video Top 3 saved and video regenerated successfully!');
+                                }, 1500);
+                              } else {
+                                setVideoRegenerationMessage('Video regeneration queued (processing in background)');
+                                setTimeout(() => {
+                                  setVideoRegenerationMessage('');
+                                  setIsRegeneratingVideo(false);
+                                  alert('Video Top 3 saved! Video is being regenerated in the background.');
+                                }, 2000);
+                              }
+                            } catch (error) {
+                              console.error('Error saving video top 3:', error);
+                              alert('Failed to save video top 3');
+                              setVideoRegenerationMessage('');
+                              setIsRegeneratingVideo(false);
+                            } finally {
+                              setIsSaving(false);
+                            }
+                          }}
+                          disabled={isSaving || isRegeneratingVideo}
+                        >
+                          {isSaving || isRegeneratingVideo ? (
+                            <>
+                              <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                              {videoRegenerationMessage || 'Saving...'}
+                            </>
+                          ) : (
+                            <>
+                              <CheckIcon className="h-4 w-4 mr-2" />
+                              Save & Regenerate Video
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Video Top 3 Edit Fields */}
+                {editedVideoTop3.length > 0 && (
+                  <div className="space-y-6">
+                    {editedVideoTop3.map((change, index) => (
+                      <Card key={index} className="border-2">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <Badge variant="secondary">Change #{index + 1}</Badge>
+                            {isEditingVideoTop3 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const newChanges = editedVideoTop3.filter((_, i) => i !== index);
+                                  setEditedVideoTop3(newChanges);
+                                }}
+                              >
+                                <XMarkIcon className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div>
+                            <Label htmlFor={`title-${index}`} className="text-sm font-medium">
+                              Title (2-4 words, max 40 chars)
+                            </Label>
+                            {isEditingVideoTop3 ? (
+                              <input
+                                id={`title-${index}`}
+                                type="text"
+                                value={change.title}
+                                onChange={(e) => {
+                                  const newChanges = [...editedVideoTop3];
+                                  newChanges[index].title = e.target.value;
+                                  setEditedVideoTop3(newChanges);
+                                }}
+                                className="mt-1 w-full px-3 py-2 border rounded-md text-lg font-bold"
+                                placeholder="e.g., Real-time Search Index"
+                                maxLength={40}
+                              />
+                            ) : (
+                              <p className="mt-1 text-lg font-bold">{change.title}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {change.title.length}/40 characters
+                            </p>
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor={`desc-${index}`} className="text-sm font-medium">
+                              Description (1-2 sentences, 15-25 words, max 150 chars)
+                            </Label>
+                            {isEditingVideoTop3 ? (
+                              <Textarea
+                                id={`desc-${index}`}
+                                value={change.description}
+                                onChange={(e) => {
+                                  const newChanges = [...editedVideoTop3];
+                                  newChanges[index].description = e.target.value;
+                                  setEditedVideoTop3(newChanges);
+                                }}
+                                className="mt-1 min-h-[100px]"
+                                placeholder="e.g., Index content in real-time for fast, filtered search. Powered by Pinecone with RRF ranking."
+                                maxLength={150}
+                              />
+                            ) : (
+                              <p className="mt-1 text-sm leading-relaxed">{change.description}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {change.description.length}/150 characters
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                    
+                    {isEditingVideoTop3 && editedVideoTop3.length < 3 && (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          setEditedVideoTop3([
+                            ...editedVideoTop3,
+                            { title: '', description: '' },
+                          ]);
+                        }}
+                      >
+                        Add Change
+                      </Button>
+                    )}
+                  </div>
+                )}
+                
+                {editedVideoTop3.length === 0 && (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <p>No video top 3 changes configured.</p>
+                    <p className="text-sm mt-2">Click "Generate Top 3" to automatically extract from your final changelog.</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="prose prose-neutral dark:prose-invert max-w-none">

@@ -65,6 +65,8 @@ export async function PUT(
       updateData.ai_template_id = body.ai_template_id;
     if (body.filter_metadata !== undefined)
       updateData.filter_metadata = body.filter_metadata;
+    if (body.video_top_changes !== undefined)
+      updateData.video_top_changes = body.video_top_changes;
 
     const { data, error } = await supabase
       .from("patch_notes")
