@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +17,8 @@ import {
   ExclamationTriangleIcon,
   PlusIcon,
 } from "@heroicons/react/16/solid";
+import type { EmailIntegrationConfig, EmailProvider } from "@/types/email";
+import { EMAIL_PROVIDER_LABELS } from "@/lib/email/providers";
 
 interface Subscriber {
   id: string;
@@ -30,9 +32,9 @@ export default function SubscribersPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Hardcoded audience ID from the docs
-  const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+  const [integration, setIntegration] = useState<EmailIntegrationConfig | null>(null);
+  const [providerLoading, setProviderLoading] = useState(true);
+  const [providerError, setProviderError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSubscribers = async () => {
@@ -55,6 +57,57 @@ export default function SubscribersPage() {
     fetchSubscribers();
   }, []);
 
+  useEffect(() => {
+    const fetchProvider = async () => {
+      setProviderLoading(true);
+      setProviderError(null);
+      try {
+        const response = await fetch("/api/email/providers");
+        if (!response.ok) {
+          throw new Error("Failed to load email provider");
+        }
+        const data = await response.json();
+        setIntegration(data.active ?? null);
+      } catch (err) {
+        setProviderError(
+          err instanceof Error ? err.message : "Unable to load provider"
+        );
+      } finally {
+        setProviderLoading(false);
+      }
+    };
+
+    fetchProvider();
+  }, []);
+
+  const providerLabel = useMemo(() => {
+    if (!integration) {
+      return EMAIL_PROVIDER_LABELS.resend;
+    }
+    return EMAIL_PROVIDER_LABELS[integration.provider as EmailProvider];
+  }, [integration]);
+
+  const managementUrl = useMemo(() => {
+    if (!integration) {
+      return "https://resend.com";
+    }
+    if (integration.provider === "customerio") {
+      const settings = integration.settings as any;
+      return settings.region === "eu"
+        ? "https://app-eu.customer.io"
+        : "https://app.customer.io";
+    }
+    return "https://resend.com";
+  }, [integration]);
+
+  const audienceId = useMemo(() => {
+    if (integration?.provider === "resend") {
+      const settings = integration.settings as any;
+      return settings.audienceId ?? "Not configured";
+    }
+    return null;
+  }, [integration]);
+
   const activeSubscribers = subscribers.filter((sub) => sub.active);
   const totalSubscribers = subscribers.length;
 
@@ -75,11 +128,11 @@ export default function SubscribersPage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
             <Link
-              href="https://resend.com"
+              href={managementUrl}
               target="_blank"
               className="flex items-center gap-1"
             >
-              Manage in Resend{" "}
+              Manage in {providerLabel}{" "}
               <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
             </Link>
           </Button>
@@ -91,22 +144,48 @@ export default function SubscribersPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UsersIcon className="h-5 w-5" />
-            Audience Configuration
+            {providerLabel} Configuration
           </CardTitle>
           <CardDescription>
-            Your Resend audience for patch notes subscribers
+            {providerLoading
+              ? "Detecting email provider..."
+              : providerError
+              ? providerError
+              : `Your ${providerLabel} setup for patch notes subscribers`}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">
-                Audience ID
-              </label>
-              <div className="mt-1 p-3 bg-muted rounded-md font-mono text-sm">
-                {audienceId}
+            {integration?.provider === "resend" && (
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">
+                  Audience ID
+                </label>
+                <div className="mt-1 p-3 bg-muted rounded-md font-mono text-sm">
+                  {audienceId}
+                </div>
               </div>
-            </div>
+            )}
+            {integration?.provider === "customerio" && (
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    Region
+                  </label>
+                  <div className="mt-1 p-3 bg-muted rounded-md text-sm">
+                    {((integration.settings as any).region ?? "us").toUpperCase()}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">
+                    From Email
+                  </label>
+                  <div className="mt-1 p-3 bg-muted rounded-md text-sm">
+                    {(integration.settings as any).fromEmail ?? "Not set"}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {loading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -149,11 +228,11 @@ export default function SubscribersPage() {
         <CardFooter className="justify-end">
           <Button variant="outline" asChild>
             <Link
-              href="https://resend.com"
+              href={managementUrl}
               target="_blank"
               className="flex items-center gap-1"
             >
-              Manage in Resend{" "}
+              Manage in {providerLabel}{" "}
               <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
             </Link>
           </Button>
@@ -199,11 +278,11 @@ export default function SubscribersPage() {
           <CardFooter className="justify-end">
             <Button variant="outline" asChild>
               <Link
-                href="https://resend.com"
+                href={managementUrl}
                 target="_blank"
                 className="flex items-center gap-1"
               >
-                View All in Resend{" "}
+                View in {providerLabel}{" "}
                 <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -218,17 +297,17 @@ export default function SubscribersPage() {
             <UsersIcon className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No subscribers yet</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Your audience is empty. Add subscribers through Resend or your
+              Your audience is empty. Add subscribers through {providerLabel} or your
               signup forms.
             </p>
             <Button variant="outline" asChild>
               <Link
-                href="https://resend.com"
+                href={managementUrl}
                 target="_blank"
                 className="flex items-center gap-1"
               >
                 <PlusIcon className="h-4 w-4" />
-                Add Subscribers in Resend
+                Add Subscribers in {providerLabel}
               </Link>
             </Button>
           </CardContent>

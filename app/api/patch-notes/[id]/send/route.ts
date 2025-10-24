@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
-import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
+import { createClient } from "@/lib/supabase/server";
 import { Database } from "@/lib/supabase/database.types";
 import { formatFilterSummary } from "@/lib/filter-utils";
+import { createEmailProviderAdapter } from "@/lib/email/providers";
+import { getActiveEmailIntegration } from "@/lib/email/integrations";
+import type { CustomerIoSettings, ResendSettings } from "@/types/email";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Configure marked for GitHub-flavored markdown
 marked.setOptions({
@@ -43,40 +43,12 @@ export async function POST(
       );
     }
 
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
-
-    // Get contacts from the audience (we need their emails for the 'to' field)
-    const contacts = await resend.contacts.list({ audienceId });
-
-    if (!contacts.data || contacts.data.data.length === 0) {
-      return NextResponse.json(
-        { error: "No subscribers found in audience" },
-        { status: 400 }
-      );
-    }
-
-    // Filter out unsubscribed contacts and extract emails
-    const activeEmails = contacts.data.data
-      .filter((contact: any) => !contact.unsubscribed)
-      .map((contact: any) => contact.email);
-
-    if (activeEmails.length === 0) {
-      return NextResponse.json(
-        { error: "No active subscribers found" },
-        { status: 400 }
-      );
-    }
-
-    // Add a small delay to avoid hitting rate limits (2 req/sec = 500ms between calls)
-    await new Promise(resolve => setTimeout(resolve, 600));
-
     // Convert markdown content to HTML
     const htmlContent = markdownToHtml((patchNote as PatchNote).content);
 
     // Get the base URL for absolute links
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
+                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
                     'http://localhost:3000');
     
     // Convert relative video URL to absolute URL
@@ -391,28 +363,81 @@ export async function POST(
 </html>
     `;
 
-    // Send email using Resend to all active subscribers
-    const { data, error } = await resend.emails.send({
-      from: "Repatch <onboarding@resend.dev>",
-      to: activeEmails, // Array of email addresses
+    const integration = await getActiveEmailIntegration(supabase);
+
+    if (!integration) {
+      return NextResponse.json(
+        { error: "Email provider is not configured" },
+        { status: 503 }
+      );
+    }
+
+    const provider = createEmailProviderAdapter(integration);
+
+    const textBody = emailHtml
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    let fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+    let fromName = process.env.RESEND_FROM_NAME ?? "Repatch";
+
+    // For Customer.io, check if we should trigger an API-triggered broadcast
+    const isCustomerIo = integration.provider === "customerio";
+    const customerIoSettings = isCustomerIo ? (integration.settings as CustomerIoSettings) : null;
+    const broadcastId = customerIoSettings?.broadcastId ?? process.env.CUSTOMERIO_BROADCAST_ID;
+
+    let emailsToSend: string[] = [];
+
+    if (isCustomerIo && broadcastId) {
+      // Customer.io: Trigger API-triggered broadcast
+      fromEmail = customerIoSettings?.fromEmail ?? fromEmail;
+      fromName = customerIoSettings?.fromName ?? fromName;
+      // Leave emailsToSend empty - we'll use broadcastId instead
+    } else {
+      // Resend or Customer.io without broadcast: Send to individual subscribers
+      const subscribers = await provider.listSubscribers();
+      const activeEmails = subscribers.filter((subscriber) => subscriber.active);
+
+      if (activeEmails.length === 0) {
+        return NextResponse.json(
+          { error: "No active subscribers found" },
+          { status: 400 }
+        );
+      }
+
+      emailsToSend = activeEmails.map((subscriber) => subscriber.email);
+
+      if (integration.provider === "resend") {
+        const settings = integration.settings as ResendSettings;
+        fromEmail = settings.fromEmail ?? fromEmail;
+        fromName = settings.fromName ?? fromName;
+      } else if (integration.provider === "customerio") {
+        fromEmail = customerIoSettings?.fromEmail ?? fromEmail;
+        fromName = customerIoSettings?.fromName ?? fromName;
+      }
+    }
+
+    const sendResult = await provider.sendEmail({
+      fromEmail,
+      fromName,
+      to: emailsToSend,
       subject: `${(patchNote as PatchNote).title} - ${
         (patchNote as PatchNote).repo_name
       }`,
       html: emailHtml,
+      text: textBody,
+      broadcastId: broadcastId ?? undefined,
     });
-
-    if (error) {
-      console.error("Resend error:", error);
-      return NextResponse.json(
-        { error: error.message || "Failed to send email" },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,
-      sentTo: activeEmails.length,
-      emailId: data?.id,
+      sentTo: sendResult.deliveredTo,
+      emailId: sendResult.id,
+      provider: provider.id,
     });
   } catch (error) {
     console.error("API error:", error);
