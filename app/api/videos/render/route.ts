@@ -9,6 +9,10 @@ import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { generateVideoTopChangesFromContent, generateVideoTopChanges } from '@/lib/ai-summarizer';
 
+// Configure route for video rendering - requires longer timeout and more memory
+export const maxDuration = 300; // 5 minutes (requires Vercel Pro plan)
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const { patchNoteId, videoData, repoName } = await request.json();

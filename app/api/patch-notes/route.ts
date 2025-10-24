@@ -110,8 +110,21 @@ export async function POST(request: NextRequest) {
           videoData: videoData,
           repoName: body.repo_name,
         }),
-      }).then(res => {
+      }).then(async res => {
         console.log('✅ Video rendering request sent, status:', res.status);
+        
+        // Check if response is actually JSON before parsing
+        const contentType = res.headers.get('content-type');
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Video render API returned ${res.status}: ${text.substring(0, 200)}`);
+        }
+        
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await res.text();
+          throw new Error(`Video render API returned non-JSON response (${contentType}): ${text.substring(0, 200)}`);
+        }
+        
         return res.json();
       }).then(result => {
         console.log('✅ Video rendering response:', result);
