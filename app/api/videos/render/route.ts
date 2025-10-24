@@ -252,15 +252,11 @@ export async function POST(request: NextRequest) {
         throw new Error('Failed to upload video to storage');
       }
 
-      const {
-        data: { publicUrl },
-      } = serviceSupabase.storage.from(videoBucket).getPublicUrl(storagePath);
-
-      if (!publicUrl) {
-        throw new Error('Failed to generate public URL for uploaded video');
-      }
-
-      videoUrl = publicUrl;
+      // Store the storage path instead of public URL for gated access
+      // Access will be controlled via signed URLs
+      videoUrl = storagePath;
+      
+      console.log('✅ Video uploaded to storage path:', storagePath);
     } finally {
       await fs.unlink(outputPath).catch(err => {
         console.warn('⚠️  Failed to clean up temporary video file:', err);
@@ -268,10 +264,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (!videoUrl) {
-      throw new Error('Video URL missing after upload');
+      throw new Error('Video storage path missing after upload');
     }
 
-    console.log('📝 Updating database with video URL:', videoUrl);
+    console.log('📝 Updating database with video storage path:', videoUrl);
 
     // Update the patch note with the video URL (reuse existing supabase client)
     const { data: updateData, error: updateError } = await supabase
