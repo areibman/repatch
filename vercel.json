@@ -2,7 +2,7 @@
   "functions": {
     "app/api/videos/render/route.ts": {
       "maxDuration": 300,
-      "memory": 3008
+      "memory": 2048
     },
     "app/api/patch-notes/generate-video-top3/route.ts": {
       "maxDuration": 60

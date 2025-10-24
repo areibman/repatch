@@ -100,10 +100,15 @@ export async function POST(request: NextRequest) {
       console.log('   - Video API URL:', videoRenderUrl);
       console.log('   - Has video_data:', !!body.video_data);
       
+      // Get cookies from the current request to pass to internal API call
+      const cookieHeader = request.headers.get('cookie');
+      
       fetch(videoRenderUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // Pass cookies for authentication in production
+          ...(cookieHeader ? { 'Cookie': cookieHeader } : {}),
         },
         body: JSON.stringify({
           patchNoteId: data.id,
