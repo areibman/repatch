@@ -89,7 +89,11 @@ export async function POST(request: NextRequest) {
 
     // Trigger video rendering asynchronously (don't wait for it)
     if (videoData && data.id) {
-      const videoRenderUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/videos/render`;
+      // In Vercel production, use VERCEL_URL; in local dev, use localhost
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
+                      'http://localhost:3000');
+      const videoRenderUrl = `${baseUrl}/api/videos/render`;
       console.log('🎬 Triggering video rendering...');
       console.log('   - Patch Note ID:', data.id);
       console.log('   - Repo:', body.repo_name);
