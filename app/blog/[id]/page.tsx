@@ -547,18 +547,28 @@ export default function BlogViewPage() {
 
           {/* Hero Image/Video */}
           <div className="mb-6 rounded-lg overflow-hidden shadow-lg relative">
-            <a
-              href={signedVideoUrl || patchNote.videoUrl || "https://openedit-uploads.openchatui.com/basecomp.mp4"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block hover:opacity-90 transition-opacity"
-            >
-              <img
-                src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png"
-                alt="Watch Patch Note Video"
-                className="w-full h-auto"
-              />
-            </a>
+            {signedVideoUrl || patchNote.videoUrl ? (
+              <a
+                href={signedVideoUrl || patchNote.videoUrl || undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block hover:opacity-90 transition-opacity"
+              >
+                <img
+                  src="/preview.png"
+                  alt="Watch Patch Note Video"
+                  className="w-full h-auto"
+                />
+              </a>
+            ) : (
+              <div className="block cursor-not-allowed">
+                <img
+                  src="/preview.png"
+                  alt="Video is rendering"
+                  className="w-full h-auto opacity-60"
+                />
+              </div>
+            )}
             {isRegeneratingVideo ? (
               <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-3 py-2 rounded shadow-md flex items-center gap-2">
                 <Loader2Icon className="h-3 w-3 animate-spin" />
@@ -696,7 +706,8 @@ export default function BlogViewPage() {
                   <Button
                     size="sm"
                     onClick={handleSendEmail}
-                    disabled={isSending}
+                    disabled={isSending || !patchNote.videoUrl}
+                    title={!patchNote.videoUrl ? "Wait for video to finish rendering" : ""}
                   >
                     <PaperAirplaneIcon className="h-4 w-4 mr-2" />
                     {isSending ? "Sending..." : "Send Email"}

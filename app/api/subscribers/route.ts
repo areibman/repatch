@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy-initialize Resend client to avoid build-time errors
+function getResendClient() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 // GET /api/subscribers - Fetch all email subscribers from Resend audience
 export async function GET() {
@@ -9,6 +12,7 @@ export async function GET() {
     // Use hardcoded audience ID from the docs
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
+    const resend = getResendClient();
     const contacts = await resend.contacts.list({ audienceId });
 
     if (!contacts.data) {
@@ -54,6 +58,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Add contact to Resend audience
+    const resend = getResendClient();
     const contact = await resend.contacts.create({
       email: body.email,
       firstName: body.firstName || "",
@@ -116,6 +121,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Remove contact from Resend audience
+    const resend = getResendClient();
     const result = await resend.contacts.remove({
       ...(id ? { id } : { email: email! }),
       audienceId: audienceId,
@@ -154,6 +160,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Update contact in Resend audience
+    const resend = getResendClient();
     const result = await resend.contacts.update({
       ...(id ? { id } : { email }),
       audienceId: audienceId,

@@ -9,7 +9,10 @@ import type { PatchNoteFilters } from "@/types/patch-note";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy-initialize Resend client to avoid build-time errors
+function getResendClient() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 // Configure marked for GitHub-flavored markdown
 marked.setOptions({
@@ -49,6 +52,7 @@ export async function POST(
     const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
 
     // Get contacts from the audience (we need their emails for the 'to' field)
+    const resend = getResendClient();
     const contacts = await resend.contacts.list({ audienceId });
 
     if (!contacts.data || contacts.data.data.length === 0) {
@@ -70,6 +74,15 @@ export async function POST(
       );
     }
 
+    // Check if video is ready before sending
+    const rawVideoUrl = (patchNote as PatchNote).video_url;
+    if (!rawVideoUrl) {
+      return NextResponse.json(
+        { error: "Video is still rendering. Please wait until the video is ready before sending." },
+        { status: 400 }
+      );
+    }
+
     // Add a small delay to avoid hitting rate limits (2 req/sec = 500ms between calls)
     await new Promise(resolve => setTimeout(resolve, 600));
 
@@ -81,39 +94,37 @@ export async function POST(
                     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
                     'http://localhost:3000');
     
-    // Generate a signed URL for the video (7 days expiration for emails)
-    let videoUrl = 'https://openedit-uploads.openchatui.com/basecomp.mp4';
-    const rawVideoUrl = (patchNote as PatchNote).video_url;
+    // Generate a signed URL for the video
+    let videoUrl: string;
     
-    if (rawVideoUrl) {
-      try {
-        // If it's already a full URL, use it as is (legacy)
-        if (/^https?:\/\//i.test(rawVideoUrl)) {
-          videoUrl = rawVideoUrl;
+    try {
+      // If it's already a full URL, use it as is (legacy)
+      if (/^https?:\/\//i.test(rawVideoUrl)) {
+        videoUrl = rawVideoUrl;
+      } else {
+        // Generate a signed URL valid for 1 year (effectively permanent for email blasts)
+        // Email blasts are effectively public once sent (can be forwarded, shared, etc.)
+        // so expiration doesn't add meaningful security, just creates bad UX
+        const serviceSupabase = createServiceClient();
+        const videoBucket = process.env.SUPABASE_VIDEO_BUCKET || 'videos';
+        
+        const { data: signedData, error: signedError } = await serviceSupabase.storage
+          .from(videoBucket)
+          .createSignedUrl(rawVideoUrl, 31536000); // 365 days in seconds
+        
+        if (signedData && !signedError) {
+          videoUrl = signedData.signedUrl;
         } else {
-          // Generate a signed URL valid for 1 year (effectively permanent for email blasts)
-          // Email blasts are effectively public once sent (can be forwarded, shared, etc.)
-          // so expiration doesn't add meaningful security, just creates bad UX
-          const serviceSupabase = createServiceClient();
-          const videoBucket = process.env.SUPABASE_VIDEO_BUCKET || 'videos';
-          
-          const { data: signedData, error: signedError } = await serviceSupabase.storage
-            .from(videoBucket)
-            .createSignedUrl(rawVideoUrl, 31536000); // 365 days in seconds
-          
-          if (signedData && !signedError) {
-            videoUrl = signedData.signedUrl;
-          } else {
-            console.error('Failed to generate signed URL for email:', signedError);
-            // Fallback to patch note URL
-            videoUrl = `${baseUrl}/blog/${id}`;
-          }
+          console.error('Failed to generate signed URL for email:', signedError);
+          throw new Error('Failed to generate video URL');
         }
-      } catch (error) {
-        console.error('Error generating signed URL:', error);
-        // Fallback to patch note URL
-        videoUrl = `${baseUrl}/blog/${id}`;
       }
+    } catch (error) {
+      console.error('Error generating signed URL:', error);
+      return NextResponse.json(
+        { error: "Failed to generate video URL for email. Please try again." },
+        { status: 500 }
+      );
     }
 
     // Create styled HTML email
@@ -342,7 +353,7 @@ export async function POST(
   <div class="container">
     <div class="hero-image">
       <a href="${videoUrl}" target="_blank">
-        <img src="https://openedit-uploads.openchatui.com/CleanShot%202025-10-04%20at%205%E2%80%AF.21.46.png" alt="Watch Patch Note Video" />
+        <img src="${baseUrl}/preview.png" alt="Watch Patch Note Video" />
       </a>
     </div>
     
