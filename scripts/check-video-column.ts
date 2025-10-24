@@ -30,7 +30,7 @@ async function checkColumn() {
   
   if (data && data.length > 0) {
     const testId = data[0].id;
-    const testUrl = '/videos/test.mp4';
+    const testUrl = 'https://example.com/videos/test.mp4';
     
     const { data: updateData, error: updateError } = await supabase
       .from('patch_notes')

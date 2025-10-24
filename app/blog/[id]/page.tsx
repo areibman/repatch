@@ -72,6 +72,7 @@ export default function BlogViewPage() {
   const [videoRegenerationMessage, setVideoRegenerationMessage] = useState('');
   const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
   const [typefullyDraftUrl, setTypefullyDraftUrl] = useState<string | null>(null);
+  const [signedVideoUrl, setSignedVideoUrl] = useState<string | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -149,6 +150,28 @@ export default function BlogViewPage() {
     // Cleanup interval on unmount
     return () => clearInterval(pollInterval);
   }, [params.id, patchNote?.videoUrl]);
+
+  // Fetch signed URL when video is available
+  useEffect(() => {
+    const fetchSignedUrl = async () => {
+      if (patchNote?.videoUrl && patchNote.id) {
+        try {
+          const response = await fetch(`/api/videos/signed-url?patchNoteId=${patchNote.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            setSignedVideoUrl(data.signedUrl);
+            console.log('✅ Signed video URL fetched');
+          } else {
+            console.error('❌ Failed to fetch signed URL');
+          }
+        } catch (error) {
+          console.error('Error fetching signed URL:', error);
+        }
+      }
+    };
+
+    fetchSignedUrl();
+  }, [patchNote?.videoUrl, patchNote?.id]);
 
   useEffect(() => {
     const loadTemplates = async () => {
@@ -365,20 +388,33 @@ export default function BlogViewPage() {
   };
 
   const handleDownloadVideo = async () => {
-    if (!patchNote?.videoUrl) return;
+    if (!patchNote?.videoUrl || !patchNote.id) return;
 
     try {
+      // Always fetch a fresh signed URL to avoid expiration issues
+      console.log('📥 Fetching fresh signed URL for download...');
+      const response = await fetch(`/api/videos/signed-url?patchNoteId=${patchNote.id}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate download URL');
+      }
+
+      const data = await response.json();
+      const downloadUrl = data.signedUrl;
+
       // Create a temporary anchor element to trigger download
       const link = document.createElement('a');
-      link.href = patchNote.videoUrl;
+      link.href = downloadUrl;
       link.download = `${patchNote.repoName?.replace('/', '-') || 'patch-note'}-video.mp4`;
       link.target = '_blank';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      console.log('✅ Download initiated');
     } catch (error) {
       console.error('Error downloading video:', error);
-      alert('❌ Error downloading video. Please try opening the video URL directly.');
+      alert('❌ Error downloading video. Please try refreshing the page and trying again.');
     }
   };
 
@@ -512,7 +548,7 @@ export default function BlogViewPage() {
           {/* Hero Image/Video */}
           <div className="mb-6 rounded-lg overflow-hidden shadow-lg relative">
             <a
-              href={patchNote.videoUrl || "https://openedit-uploads.openchatui.com/basecomp.mp4"}
+              href={signedVideoUrl || patchNote.videoUrl || "https://openedit-uploads.openchatui.com/basecomp.mp4"}
               target="_blank"
               rel="noopener noreferrer"
               className="block hover:opacity-90 transition-opacity"

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
 import { formatFilterSummary } from "@/lib/filter-utils";
@@ -80,10 +81,40 @@ export async function POST(
                     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
                     'http://localhost:3000');
     
-    // Convert relative video URL to absolute URL
-    const videoUrl = (patchNote as PatchNote).video_url 
-      ? `${baseUrl}${(patchNote as PatchNote).video_url}`
-      : 'https://openedit-uploads.openchatui.com/basecomp.mp4';
+    // Generate a signed URL for the video (7 days expiration for emails)
+    let videoUrl = 'https://openedit-uploads.openchatui.com/basecomp.mp4';
+    const rawVideoUrl = (patchNote as PatchNote).video_url;
+    
+    if (rawVideoUrl) {
+      try {
+        // If it's already a full URL, use it as is (legacy)
+        if (/^https?:\/\//i.test(rawVideoUrl)) {
+          videoUrl = rawVideoUrl;
+        } else {
+          // Generate a signed URL valid for 1 year (effectively permanent for email blasts)
+          // Email blasts are effectively public once sent (can be forwarded, shared, etc.)
+          // so expiration doesn't add meaningful security, just creates bad UX
+          const serviceSupabase = createServiceClient();
+          const videoBucket = process.env.SUPABASE_VIDEO_BUCKET || 'videos';
+          
+          const { data: signedData, error: signedError } = await serviceSupabase.storage
+            .from(videoBucket)
+            .createSignedUrl(rawVideoUrl, 31536000); // 365 days in seconds
+          
+          if (signedData && !signedError) {
+            videoUrl = signedData.signedUrl;
+          } else {
+            console.error('Failed to generate signed URL for email:', signedError);
+            // Fallback to patch note URL
+            videoUrl = `${baseUrl}/blog/${id}`;
+          }
+        }
+      } catch (error) {
+        console.error('Error generating signed URL:', error);
+        // Fallback to patch note URL
+        videoUrl = `${baseUrl}/blog/${id}`;
+      }
+    }
 
     // Create styled HTML email
     const emailHtml = `
