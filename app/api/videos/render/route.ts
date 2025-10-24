@@ -15,6 +15,20 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate internal API secret to bypass Vercel Protection
+    const internalSecret = request.headers.get('x-internal-secret');
+    const expectedSecret = process.env.INTERNAL_API_SECRET || 'change-me-in-production';
+    
+    if (internalSecret !== expectedSecret) {
+      console.error('❌ Invalid or missing internal API secret');
+      return NextResponse.json(
+        { error: 'Unauthorized - invalid internal secret' },
+        { status: 401 }
+      );
+    }
+    
+    console.log('✅ Internal API secret validated');
+    
     const { patchNoteId, videoData, repoName } = await request.json();
 
     console.log('🎬 VIDEO RENDER API CALLED');

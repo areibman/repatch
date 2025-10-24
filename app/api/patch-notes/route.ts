@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { renderPatchNoteVideo } from "@/lib/video-renderer";
 import { generateVideoTopChangesFromContent } from "@/lib/ai-summarizer";
 
 // GET /api/patch-notes - Fetch all patch notes
@@ -89,54 +90,19 @@ export async function POST(request: NextRequest) {
 
     // Trigger video rendering asynchronously (don't wait for it)
     if (videoData && data.id) {
-      // In Vercel production, use VERCEL_URL; in local dev, use localhost
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
-                      'http://localhost:3000');
-      const videoRenderUrl = `${baseUrl}/api/videos/render`;
       console.log('🎬 Triggering video rendering...');
       console.log('   - Patch Note ID:', data.id);
       console.log('   - Repo:', body.repo_name);
-      console.log('   - Video API URL:', videoRenderUrl);
-      console.log('   - Has video_data:', !!body.video_data);
       
-      // Get cookies from the current request to pass to internal API call
-      const cookieHeader = request.headers.get('cookie');
-      
-      fetch(videoRenderUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Pass cookies for authentication in production
-          ...(cookieHeader ? { 'Cookie': cookieHeader } : {}),
-        },
-        body: JSON.stringify({
-          patchNoteId: data.id,
-          videoData: videoData,
-          repoName: body.repo_name,
-        }),
-      }).then(async res => {
-        console.log('✅ Video rendering request sent, status:', res.status);
-        
-        // Check if response is actually JSON before parsing
-        const contentType = res.headers.get('content-type');
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`Video render API returned ${res.status}: ${text.substring(0, 200)}`);
-        }
-        
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await res.text();
-          throw new Error(`Video render API returned non-JSON response (${contentType}): ${text.substring(0, 200)}`);
-        }
-        
-        return res.json();
-      }).then(result => {
-        console.log('✅ Video rendering response:', result);
-      }).catch((err) => {
-        console.error('❌ Background video rendering failed:', err);
-        // Don't fail the patch note creation if video rendering fails
-      });
+      // Call the render function directly - no HTTP request needed!
+      renderPatchNoteVideo(data.id, videoData, body.repo_name)
+        .then((result: { videoUrl: string }) => {
+          console.log('✅ Video rendering completed:', result);
+        })
+        .catch((err: Error) => {
+          console.error('❌ Background video rendering failed:', err);
+          // Don't fail the patch note creation if video rendering fails
+        });
     } else {
       console.log('⚠️  Video rendering NOT triggered:', {
         hasVideoData: !!videoData,
