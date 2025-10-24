@@ -530,11 +530,11 @@ export default function BlogViewPage() {
               </div>
             ) : patchNote.videoUrl ? (
               <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded shadow-md">
-                ✓ Custom Video
+                ✓ Video ready
               </div>
             ) : (
               <div className="absolute top-2 right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded shadow-md animate-pulse">
-                🎬 Checking for video...
+                🎬 Rendering video...
               </div>
             )}
           </div>

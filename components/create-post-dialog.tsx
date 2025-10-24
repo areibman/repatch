@@ -31,8 +31,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  generateVideoData,
-  generateVideoDataFromAI,
   parseGitHubUrl,
   generateBoilerplateContent,
 } from "@/lib/github";
@@ -574,28 +572,10 @@ export function CreatePostDialog() {
             stats
           );
 
-      // Generate video data - use detailed contexts if available, otherwise fallback to raw stats
-      console.log(
-        `🎬 Generating video data using ${
-          detailedContexts.length > 0 ? 'AI contexts' : 'raw GitHub stats'
-        }`
-      );
-      const videoData = detailedContexts.length > 0
-        ? generateVideoDataFromAI(
-            detailedContexts.map((ctx, idx) => ({
-              sha: `ctx-${idx}`,
-              message: ctx.message,
-              aiSummary: ctx.context,
-              additions: ctx.additions,
-              deletions: ctx.deletions,
-            })),
-            undefined
-          )
-        : await generateVideoData(
-            `${repoInfo.owner}/${repoInfo.repo}`,
-            filterPayload,
-            stats
-          );
+      // Don't generate video data during creation - we'll generate it properly after
+      // the final content is ready by calling the generate-video-top3 endpoint
+      console.log('📹 Video data will be generated from final content later');
+      const videoData = null;
 
       const descriptor =
         filterPayload.mode === 'preset' && filterPayload.preset

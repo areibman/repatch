@@ -223,7 +223,7 @@ This is for internal context, not end users.`;
     console.log(`[Step 1] Generating detailed context for commit ${commitMessage.split('\n')[0].substring(0, 50)}...`);
 
     const { text } = await generateText({
-      model: google('gemini-2.5-flash'),
+      model: google('gemini-2.5-pro'),
       prompt,
     });
 
@@ -689,7 +689,7 @@ export async function generateVideoTopChangesFromContent(
 
 CRITICAL REQUIREMENTS:
 1. TITLE: 2-4 words maximum (e.g., "Real-time Search Index", "CLI Image Editor")
-2. DESCRIPTION: 1-2 short sentences, 15-25 words total. NO adjectives, NO embellishments. Just state the facts.
+2. DESCRIPTION: 1-2 short sentences, 15-25 words total. NO adjectives, NO embellishments. Just state the facts. Write in telegraphic style.
 3. Focus on user-facing features, not internal refactors
 
 Here is the final changelog for ${repoName}:
@@ -721,7 +721,7 @@ CHANGE_3_DESC: Jobs now use event-based communication via RabbitMQ. Improves sca
     console.log(`[Video AI] Extracting top 3 from final changelog (${changelogContent.length} chars)`);
 
     const { text } = await generateText({
-      model: google('gemini-2.5-flash'),
+      model: google('gemini-2.5-pro'),
       prompt,
     });
 
@@ -857,7 +857,7 @@ CHANGE_2_DESC: Search queries run 3x faster with new indexing. Results appear in
     console.log(`[Video AI] Generating video summaries for top 3 changes`);
 
     const { text } = await generateText({
-      model: google('gemini-2.5-flash'),
+      model: google('gemini-2.5-pro'),
       prompt,
     });
 

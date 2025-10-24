@@ -897,9 +897,13 @@ ${stats.contributors.join(", ")}
 }
 
 /**
- * Generate video data using AI based on repository stats and commit messages
+ * @deprecated This function is deprecated and should not be used.
+ * Use generateVideoTopChangesFromContent from ai-summarizer.ts instead, which generates
+ * properly concise video-friendly summaries from the final changelog content.
+ * 
+ * This function incorrectly uses detailed technical contexts as video descriptions,
+ * which are too lengthy for video display.
  */
-// Generate video data from AI summaries (preferred method)
 export function generateVideoDataFromAI(
   aiSummaries: Array<{
     sha: string;
@@ -940,7 +944,11 @@ export function generateVideoDataFromAI(
   };
 }
 
-// Generate video data from raw GitHub stats (fallback if no AI summaries)
+/**
+ * @deprecated This function is deprecated and should not be used.
+ * Use generateVideoTopChangesFromContent from ai-summarizer.ts instead, which generates
+ * properly concise video-friendly summaries from the final changelog content.
+ */
 export async function generateVideoData(
   repoName: string,
   filters: PatchNoteFilters | undefined,

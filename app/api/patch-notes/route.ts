@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { generateVideoTopChangesFromContent } from "@/lib/ai-summarizer";
 
 // GET /api/patch-notes - Fetch all patch notes
 export async function GET() {
@@ -30,6 +31,32 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const body = await request.json();
 
+    // Generate video top changes from the final content
+    let videoTopChanges = null;
+    if (body.content && body.repo_name) {
+      try {
+        console.log('🎬 Generating video top 3 from final content...');
+        videoTopChanges = await generateVideoTopChangesFromContent(
+          body.content,
+          body.repo_name
+        );
+        console.log('✅ Generated', videoTopChanges?.length || 0, 'video top changes');
+      } catch (error) {
+        console.error('⚠️ Failed to generate video top changes:', error);
+        // Continue without video top changes - can be regenerated later
+      }
+    }
+
+    // Create video data structure for video rendering
+    let videoData = body.video_data;
+    if (videoTopChanges && videoTopChanges.length > 0) {
+      videoData = {
+        langCode: 'en',
+        topChanges: videoTopChanges,
+        allChanges: [], // Can be populated later if needed
+      };
+    }
+
     const { data, error } = await supabase
       .from("patch_notes")
       .insert([
@@ -42,7 +69,8 @@ export async function POST(request: NextRequest) {
           content: body.content,
           changes: body.changes,
           contributors: body.contributors,
-          video_data: body.video_data,
+          video_data: videoData,
+          video_top_changes: videoTopChanges,
           ai_summaries: body.ai_summaries || null,
           ai_overall_summary: body.ai_overall_summary || null,
           ai_detailed_contexts: body.ai_detailed_contexts || null,
@@ -60,7 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Trigger video rendering asynchronously (don't wait for it)
-    if (body.video_data && data.id) {
+    if (videoData && data.id) {
       const videoRenderUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/videos/render`;
       console.log('🎬 Triggering video rendering...');
       console.log('   - Patch Note ID:', data.id);
@@ -75,7 +103,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           patchNoteId: data.id,
-          videoData: body.video_data,
+          videoData: videoData,
           repoName: body.repo_name,
         }),
       }).then(res => {
@@ -89,7 +117,7 @@ export async function POST(request: NextRequest) {
       });
     } else {
       console.log('⚠️  Video rendering NOT triggered:', {
-        hasVideoData: !!body.video_data,
+        hasVideoData: !!videoData,
         hasId: !!data.id
       });
     }
