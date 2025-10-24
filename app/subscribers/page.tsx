@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -17,6 +18,7 @@ import {
   ExclamationTriangleIcon,
   PlusIcon,
 } from "@heroicons/react/16/solid";
+import { cn } from "@/lib/utils";
 
 interface Subscriber {
   id: string;
@@ -183,15 +185,17 @@ export default function SubscribersPage() {
                       {new Date(subscriber.created_at).toLocaleDateString()}
                     </div>
                   </div>
-                  <div
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  <Badge
+                    variant="magic"
+                    className={cn(
+                      "px-3 py-1 text-[11px] font-medium",
                       subscriber.active
-                        ? "bg-green-100 text-green-800"
-                        : "bg-orange-100 text-orange-800"
-                    }`}
+                        ? "text-emerald-600 dark:text-emerald-300"
+                        : "text-amber-600 dark:text-amber-300"
+                    )}
                   >
                     {subscriber.active ? "Active" : "Unsubscribed"}
-                  </div>
+                  </Badge>
                 </div>
               ))}
             </div>

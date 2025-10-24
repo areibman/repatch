@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { ShinyButton } from "@/components/ui/shiny-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -657,10 +658,10 @@ export function CreatePostDialog() {
     <TooltipProvider>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button size="lg">
-            <PlusIcon className="h-5 w-5 mr-2" />
+          <ShinyButton type="button" className="gap-3 px-7 py-3">
+            <PlusIcon className="h-4 w-4" />
             Create New Post
-          </Button>
+          </ShinyButton>
         </DialogTrigger>
       <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-hidden flex flex-col">
         <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden min-h-0 flex-1">
@@ -984,25 +985,31 @@ export function CreatePostDialog() {
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
-              disabled={isLoading || isFetchingBranches || (filterMode !== 'release' && !selectedBranch)}
-              className="min-w-[200px]"
+            <ShinyButton
+              type="submit"
+              disabled={
+                isLoading ||
+                isFetchingBranches ||
+                (filterMode !== "release" && !selectedBranch)
+              }
+              className="min-w-[220px]"
             >
               {isLoading ? (
                 <>
-                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
-                  <span className="text-sm">{loadingStep || 'Processing...'}</span>
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                  <span className="text-sm font-medium">
+                    {loadingStep || "Processing..."}
+                  </span>
                 </>
               ) : isFetchingBranches ? (
                 <>
-                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
-                  Loading branches...
+                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                  <span className="text-sm font-medium">Loading branches...</span>
                 </>
               ) : (
-                "Create Patch Note"
+                <span className="text-sm font-semibold">Create Patch Note</span>
               )}
-            </Button>
+            </ShinyButton>
           </DialogFooter>
         </form>
       </DialogContent>
