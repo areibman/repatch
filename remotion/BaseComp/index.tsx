@@ -38,12 +38,12 @@ loadInterFont("normal", {
 });
 
 const colorSetClasses = [
-  ["text-white", "bg-sky-500"],
-  ["text-white", "bg-teal-600"],
-  ["text-white", "bg-indigo-500"],
-  ["text-white", "bg-blue-500"],
-  ["text-white", "bg-purple-600"],
-  ["text-white", "bg-fuchsia-600"],
+  ["text-white", "bg-[#FA5D19]"],
+  ["text-white", "bg-[#FA5D19]"],
+  ["text-white", "bg-[#FA5D19]"],
+  ["text-white", "bg-[#FA5D19]"],
+  ["text-white", "bg-[#FA5D19]"],
+  ["text-white", "bg-[#FA5D19]"],
 ] satisfies [string, string][];
 
 const BaseComp = ({
@@ -66,7 +66,7 @@ const BaseComp = ({
     : repositorySlug;
 
   return (
-    <AbsoluteFill className="bg-black">
+    <AbsoluteFill className="bg-[#262626]">
       {/* Audio */}
       <FadingOutAudio />
 
@@ -78,7 +78,7 @@ const BaseComp = ({
           name="repo-name"
         >
           <SlidingDoors>
-            <First className="bg-black">
+            <First className="bg-[#262626]">
               <h1 className="text-9xl font-black">{repoName}</h1>
             </First>
           </SlidingDoors>
@@ -91,7 +91,7 @@ const BaseComp = ({
           name={"v4.0.0"}
         >
           <SlidingDoors>
-            <First className="bg-blue-500">
+            <First className="bg-[#FA5D19]">
               <h1 className="text-9xl font-black">{releaseTag}</h1>
             </First>
           </SlidingDoors>
@@ -100,11 +100,11 @@ const BaseComp = ({
         <Series.Sequence
           durationInFrames={fps * 3}
           offset={-20}
-          className="text-black"
+          className="text-[#262626]"
           name={"repo-name | Latest Update"}
         >
           <SlidingDoors>
-            <First className="bg-white text-center">
+            <First className="bg-[#F9F9F9] text-center">
               <div className="flex items-center justify-center gap-10 flex-col">
                 <h1 className="text-9xl font-black">{repoName}</h1>
                 <h1 className="text-5xl font-bold">{releaseTag}</h1>
@@ -120,7 +120,7 @@ const BaseComp = ({
           name={"Here are the top changes!"}
         >
           <SlidingDoors>
-            <First className="bg-black text-center">
+            <First className="bg-[#262626] text-center">
               <Star6Sided />
               <Star4Sided />
               <h1 className="text-9xl font-black">
@@ -160,7 +160,7 @@ const BaseComp = ({
                   <Series>
                     <Series.Sequence durationInFrames={fps * 4}>
                       <TextFadeInFromBottom>
-                        <div className="flex items-center justify-center rounded-full bg-white text-black aspect-square h-[250px] w-[250px]">
+                        <div className="flex items-center justify-center rounded-full bg-[#F9F9F9] text-[#262626] aspect-square h-[250px] w-[250px]">
                           <h1 className="text-9xl font-black leading-[100%]">
                             {i + 1}
                           </h1>
@@ -207,7 +207,7 @@ const BaseComp = ({
           name="Checkout the latest release"
         >
           <SlidingDoors>
-            <First className="bg-blue-500 text-white flex flex-col items-center justify-center text-center">
+            <First className="bg-[#FA5D19] text-white flex flex-col items-center justify-center text-center">
               <h1 className="text-9xl font-black">
                 {translations.CHECK_OUT_THE_LATEST_RELEASE[
                   effectiveLangCode as keyof typeof translations.CHECK_OUT_THE_LATEST_RELEASE
@@ -225,12 +225,12 @@ const BaseComp = ({
         <Series.Sequence
           durationInFrames={fps * 3}
           offset={-20}
-          className="text-black"
+          className="text-[#262626]"
           name={"repo-name | Latest Update"}
         >
           <FadeOutExit>
             <SlidingDoors>
-              <First className="bg-white text-center">
+              <First className="bg-[#F9F9F9] text-center">
                 <div className="flex items-center justify-center gap-10 flex-col">
                   <h1 className="text-9xl font-black">{repoName}</h1>
                   <h1 className="text-5xl font-bold">{releaseTag}</h1>

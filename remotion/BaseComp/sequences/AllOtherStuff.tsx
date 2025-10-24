@@ -13,7 +13,7 @@ export default function AllThingsWeAddedSequence({
   const { fps } = useVideoConfig();
 
   return (
-    <AbsoluteFill className="text-7xl text-center items-center justify-start font-black bg-black text-white flex gap-10 !flex-row px-16">
+    <AbsoluteFill className="text-7xl text-center items-center justify-start font-black bg-[#262626] text-white flex gap-10 !flex-row px-16">
       <div className="flex-1">
         {/* <Sequence from={fps * -0.5}> */}
         <WordLevelOpacityReveal>
