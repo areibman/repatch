@@ -4,7 +4,9 @@ import { renderMedia, selectComposition } from '@remotion/renderer';
 import { webpackOverride } from '@/remotion-webpack-override';
 import path from 'path';
 import fs from 'fs/promises';
+import { tmpdir } from 'os';
 import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/service';
 import { generateVideoTopChangesFromContent, generateVideoTopChanges } from '@/lib/ai-summarizer';
 
 export async function POST(request: NextRequest) {
@@ -204,13 +206,9 @@ export async function POST(request: NextRequest) {
 
     console.log('Composition selected:', composition.id);
 
-    // Create output directory
-    const outputDir = path.resolve(process.cwd(), 'public', 'videos');
-    await fs.mkdir(outputDir, { recursive: true });
-
     // Generate unique filename
     const filename = `patch-note-${patchNoteId}-${Date.now()}.mp4`;
-    const outputPath = path.join(outputDir, filename);
+    const outputPath = path.join(tmpdir(), filename);
 
     console.log('🎬 Rendering video to:', outputPath);
 
@@ -230,8 +228,49 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Video rendered successfully to:', outputPath);
 
-    // The video URL will be accessible at /videos/filename
-    const videoUrl = `/videos/${filename}`;
+    const serviceSupabase = createServiceClient();
+    const videoBucket = process.env.SUPABASE_VIDEO_BUCKET || 'videos';
+    const storagePath = `${patchNoteId}/${filename}`;
+
+    console.log('☁️  Uploading video to Supabase Storage bucket:', videoBucket);
+
+    let videoUrl: string | null = null;
+
+    try {
+      const fileBuffer = await fs.readFile(outputPath);
+
+      const { error: uploadError } = await serviceSupabase.storage
+        .from(videoBucket)
+        .upload(storagePath, fileBuffer, {
+          contentType: 'video/mp4',
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('❌ Failed to upload video to Supabase Storage:', uploadError);
+        throw new Error('Failed to upload video to storage');
+      }
+
+      const {
+        data: { publicUrl },
+      } = serviceSupabase.storage.from(videoBucket).getPublicUrl(storagePath);
+
+      if (!publicUrl) {
+        throw new Error('Failed to generate public URL for uploaded video');
+      }
+
+      videoUrl = publicUrl;
+    } finally {
+      await fs.unlink(outputPath).catch(err => {
+        console.warn('⚠️  Failed to clean up temporary video file:', err);
+      });
+    }
+
+    if (!videoUrl) {
+      throw new Error('Video URL missing after upload');
+    }
+
     console.log('📝 Updating database with video URL:', videoUrl);
 
     // Update the patch note with the video URL (reuse existing supabase client)

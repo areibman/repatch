@@ -80,8 +80,11 @@ export async function POST(
                     'http://localhost:3000');
     
     // Convert relative video URL to absolute URL
-    const videoUrl = (patchNote as PatchNote).video_url 
-      ? `${baseUrl}${(patchNote as PatchNote).video_url}`
+    const rawVideoUrl = (patchNote as PatchNote).video_url;
+    const videoUrl = rawVideoUrl
+      ? /^https?:\/\//i.test(rawVideoUrl)
+        ? rawVideoUrl
+        : `${baseUrl}${rawVideoUrl}`
       : 'https://openedit-uploads.openchatui.com/basecomp.mp4';
 
     // Create styled HTML email

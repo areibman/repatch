@@ -31,6 +31,8 @@ Create a `.env.local` file with the following:
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SUPABASE_VIDEO_BUCKET=videos
 
 # Resend (for sending emails)
 RESEND_API_KEY=your_resend_api_key
@@ -124,7 +126,7 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 Repatch automatically generates custom videos for each patch note using Remotion! Videos are:
 - Generated in the background after creating a patch note
-- Stored locally in `/public/videos/`
+- Uploaded to Supabase Storage for durable hosting
 - Displayed in blog posts and email newsletters
 - Resolution: 2160x1080 (2K) at 30 FPS
 

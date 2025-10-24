@@ -56,9 +56,22 @@ Your `.env.local` file has been created with the following variables:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://jgwkfpdzmehyldevhcna.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=[your-anon-key]
+SUPABASE_SERVICE_ROLE_KEY=[your-service-role-key]
+SUPABASE_VIDEO_BUCKET=videos
 ```
 
-### 2. Run Database Migration
+Add the `SUPABASE_SERVICE_ROLE_KEY` from your Supabase project settings (**Project Settings → API → Service Role Key**). This key
+is required so the backend can upload rendered videos to Supabase Storage.
+
+### 2. Create a Storage Bucket for Videos
+
+1. In the Supabase dashboard, go to **Storage → Buckets**.
+2. Click **New bucket** and name it `videos` (or another name that matches `SUPABASE_VIDEO_BUCKET`).
+3. Enable **Public bucket** so generated videos can be shared without signed URLs.
+4. Click **Create bucket**.
+5. (Optional) Add a storage policy limiting write access to service role if you make the bucket private later.
+
+### 3. Run Database Migration
 
 You have two options to run the migration:
 
@@ -83,7 +96,7 @@ supabase link --project-ref jgwkfpdzmehyldevhcna
 supabase db push
 ```
 
-### 3. Verify Setup
+### 4. Verify Setup
 After running the migration, verify the tables were created:
 1. Go to **Table Editor** in Supabase dashboard
 2. You should see `patch_notes` and `email_subscribers` tables
