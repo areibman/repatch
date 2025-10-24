@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { ShinyButton } from "@/components/magicui/shiny-button";
 import {
   Select,
   SelectContent,
@@ -677,10 +678,10 @@ export function CreatePostDialog() {
     <TooltipProvider>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button size="lg">
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Create New Post
-          </Button>
+          <ShinyButton type="button" className="rounded-full px-6 py-2.5">
+            <PlusIcon className="h-5 w-5" />
+            <span>Create New Post</span>
+          </ShinyButton>
         </DialogTrigger>
       <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-hidden flex flex-col">
         <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden min-h-0 flex-1">
@@ -1004,10 +1005,14 @@ export function CreatePostDialog() {
             >
               Cancel
             </Button>
-            <Button 
-              type="submit" 
-              disabled={isLoading || isFetchingBranches || (filterMode !== 'release' && !selectedBranch)}
+            <ShinyButton
+              type="submit"
               className="min-w-[200px]"
+              disabled={
+                isLoading ||
+                isFetchingBranches ||
+                (filterMode !== "release" && !selectedBranch)
+              }
             >
               {isLoading ? (
                 <>
@@ -1022,7 +1027,7 @@ export function CreatePostDialog() {
               ) : (
                 "Create Patch Note"
               )}
-            </Button>
+            </ShinyButton>
           </DialogFooter>
         </form>
       </DialogContent>
