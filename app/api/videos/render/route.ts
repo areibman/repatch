@@ -4,6 +4,7 @@ import { renderMedia, selectComposition } from '@remotion/renderer';
 import { webpackOverride } from '@/remotion-webpack-override';
 import path from 'path';
 import fs from 'fs/promises';
+import os from 'os';
 import { createClient } from '@/lib/supabase/server';
 import { generateVideoTopChangesFromContent, generateVideoTopChanges } from '@/lib/ai-summarizer';
 
@@ -204,56 +205,90 @@ export async function POST(request: NextRequest) {
 
     console.log('Composition selected:', composition.id);
 
-    // Create output directory
-    const outputDir = path.resolve(process.cwd(), 'public', 'videos');
-    await fs.mkdir(outputDir, { recursive: true });
+    // Create a temporary directory for rendering output
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'repatch-render-'));
 
     // Generate unique filename
     const filename = `patch-note-${patchNoteId}-${Date.now()}.mp4`;
-    const outputPath = path.join(outputDir, filename);
+    const outputPath = path.join(tempDir, filename);
+    const bucket = process.env.SUPABASE_VIDEOS_BUCKET || 'videos';
+    const storagePath = `${patchNoteId}/${filename}`;
 
     console.log('🎬 Rendering video to:', outputPath);
 
-    // Render the video
-    await renderMedia({
-      composition,
-      serveUrl: bundleLocation,
-      codec: 'h264',
-      outputLocation: outputPath,
-      inputProps: {
-        repositorySlug: patchNote.repo_name || repoName || 'repository',
-        releaseTag: 'Latest Update',
-        openaiGeneration: finalVideoData,
-        ...finalVideoData,
-      },
-    });
+    try {
+      // Render the video
+      await renderMedia({
+        composition,
+        serveUrl: bundleLocation,
+        codec: 'h264',
+        outputLocation: outputPath,
+        inputProps: {
+          repositorySlug: patchNote.repo_name || repoName || 'repository',
+          releaseTag: 'Latest Update',
+          openaiGeneration: finalVideoData,
+          ...finalVideoData,
+        },
+      });
 
-    console.log('✅ Video rendered successfully to:', outputPath);
+      console.log('✅ Video rendered successfully to:', outputPath);
 
-    // The video URL will be accessible at /videos/filename
-    const videoUrl = `/videos/${filename}`;
-    console.log('📝 Updating database with video URL:', videoUrl);
+      console.log('📤 Uploading video to Supabase Storage bucket:', bucket);
 
-    // Update the patch note with the video URL (reuse existing supabase client)
-    const { data: updateData, error: updateError } = await supabase
-      .from('patch_notes')
-      .update({ video_url: videoUrl })
-      .eq('id', patchNoteId)
-      .select();
+      const fileBuffer = await fs.readFile(outputPath);
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(storagePath, fileBuffer, {
+          contentType: 'video/mp4',
+          upsert: true,
+        });
 
-    if (updateError) {
-      console.error('❌ Failed to update patch note with video URL:', updateError);
-      console.error('   Error details:', JSON.stringify(updateError, null, 2));
-    } else {
-      console.log('✅ Database updated successfully!');
-      console.log('   Updated rows:', updateData);
+      if (uploadError) {
+        console.error('❌ Failed to upload video to Supabase Storage:', uploadError);
+        throw new Error('Failed to upload video to storage');
+      }
+
+      const { data: publicUrlData, error: publicUrlError } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(storagePath);
+
+      if (publicUrlError) {
+        console.error('❌ Failed to fetch public URL from Supabase Storage:', publicUrlError);
+        throw new Error('Failed to generate video URL');
+      }
+
+      const videoUrl = publicUrlData.publicUrl;
+
+      if (!videoUrl) {
+        console.error('❌ Failed to generate public URL for uploaded video');
+        throw new Error('Failed to generate video URL');
+      }
+
+      console.log('📝 Updating database with video URL:', videoUrl);
+
+      // Update the patch note with the video URL (reuse existing supabase client)
+      const { data: updateData, error: updateError } = await supabase
+        .from('patch_notes')
+        .update({ video_url: videoUrl })
+        .eq('id', patchNoteId)
+        .select();
+
+      if (updateError) {
+        console.error('❌ Failed to update patch note with video URL:', updateError);
+        console.error('   Error details:', JSON.stringify(updateError, null, 2));
+      } else {
+        console.log('✅ Database updated successfully!');
+        console.log('   Updated rows:', updateData);
+      }
+
+      return NextResponse.json({
+        success: true,
+        videoUrl,
+        message: 'Video rendered successfully',
+      });
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
     }
-
-    return NextResponse.json({
-      success: true,
-      videoUrl,
-      message: 'Video rendered successfully',
-    });
   } catch (error) {
     console.error('Error rendering video:', error);
     return NextResponse.json(
