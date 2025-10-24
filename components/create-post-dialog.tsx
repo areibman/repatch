@@ -965,7 +965,7 @@ export function CreatePostDialog() {
                     {selectedTemplate?.name || 'System Default'}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {selectedTemplate?.content.length || 0} chars
+                    {selectedTemplate?.content?.length || 0} chars
                   </span>
                 </div>
                 <div className="max-h-48 overflow-y-auto prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">

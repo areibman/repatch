@@ -78,7 +78,7 @@ export default function TemplatesSettingsPage() {
     setFormState({
       id: template.id,
       name: template.name,
-      content: template.content,
+      content: template.content || "",
     });
     setIsDialogOpen(true);
   };

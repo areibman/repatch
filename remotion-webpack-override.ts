@@ -22,7 +22,7 @@ export const webpackOverride: WebpackOverrideFn = (currentConfiguration) =>
         )
           // @ts-ignore all
           .filter((rule) => {
-            if (rule === "...") {
+            if (!rule || rule === "...") {
               return false;
             }
             if (rule.test?.toString().includes(".css")) {

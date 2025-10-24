@@ -70,7 +70,6 @@ export async function PUT(
 
     const { data, error } = await supabase
       .from("patch_notes")
-      // @ts-expect-error - Supabase type inference issue with partial updates
       .update(updateData)
       .eq("id", id)
       .select()

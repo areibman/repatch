@@ -48,6 +48,10 @@ export default function Home() {
             changes: { added: number; modified: number; removed: number };
             contributors: string[];
             video_url?: string | null;
+            repo_branch?: string | null;
+            ai_summaries?: any;
+            ai_overall_summary?: string | null;
+            ai_template_id?: string | null;
             filter_metadata?: any;
           }) => ({
             id: note.id,

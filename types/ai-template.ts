@@ -1,7 +1,7 @@
 export interface AiTemplate {
   id: string;
   name: string;
-  content: string;
+  content: string | null;
   createdAt: string;
   updatedAt: string;
 }

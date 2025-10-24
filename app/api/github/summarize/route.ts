@@ -59,6 +59,12 @@ export async function POST(request: NextRequest) {
       }
 
       const mapped = mapTemplateRow(data);
+      if (!mapped.content) {
+        return NextResponse.json(
+          { error: 'Template has no content' },
+          { status: 400 }
+        );
+      }
       template = {
         id: mapped.id,
         name: mapped.name,

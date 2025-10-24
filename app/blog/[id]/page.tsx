@@ -875,7 +875,7 @@ export default function BlogViewPage() {
                   {/* Template Preview */}
                   <details className="group">
                     <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
-                      Preview Template ({selectedTemplate?.content.length || 0} chars)
+                      Preview Template ({selectedTemplate?.content?.length || 0} chars)
                     </summary>
                     <div className="mt-3 rounded-md border bg-background p-3">
                       <div className="max-h-48 overflow-y-auto prose prose-sm max-w-none whitespace-pre-wrap text-xs text-muted-foreground">
@@ -1193,7 +1193,7 @@ export default function BlogViewPage() {
                 {editedVideoTop3.length === 0 && (
                   <div className="text-center py-12 text-muted-foreground">
                     <p>No video top 3 changes configured.</p>
-                    <p className="text-sm mt-2">Click "Generate Top 3" to automatically extract from your final changelog.</p>
+                    <p className="text-sm mt-2">{'Click "Generate Top 3" to automatically extract from your final changelog.'}</p>
                   </div>
                 )}
               </div>

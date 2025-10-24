@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { marked } from "marked";
 import { Database } from "@/lib/supabase/database.types";
 import { formatFilterSummary } from "@/lib/filter-utils";
+import type { PatchNoteFilters } from "@/types/patch-note";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
 
@@ -319,7 +320,7 @@ export async function POST(
       <div class="metadata">
         <span class="badge">${(patchNote as PatchNote).repo_name}</span>
         <span class="badge">${formatFilterSummary(
-          (patchNote as PatchNote).filter_metadata,
+          (patchNote as PatchNote).filter_metadata as PatchNoteFilters | null,
           (patchNote as PatchNote).time_period
         )}</span>
         <span>${new Date(
@@ -336,14 +337,14 @@ export async function POST(
       <div class="stat">
         <div class="stat-label">Added</div>
         <div class="stat-value added">+${(
-          patchNote as PatchNote
-        ).changes.added.toLocaleString()}</div>
+          (patchNote as PatchNote).changes as { added: number; modified: number; removed: number }
+        ).added.toLocaleString()}</div>
       </div>
       <div class="stat">
         <div class="stat-label">Removed</div>
         <div class="stat-value removed">-${(
-          patchNote as PatchNote
-        ).changes.removed.toLocaleString()}</div>
+          (patchNote as PatchNote).changes as { added: number; modified: number; removed: number }
+        ).removed.toLocaleString()}</div>
       </div>
       <div class="stat">
         <div class="stat-label">Contributors</div>
