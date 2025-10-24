@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CommitSummary, PatchNote } from "@/types/patch-note";
 import { formatFilterSummary } from "@/lib/filter-utils";
+import { cn } from "@/lib/utils";
 import { CreatePostDialog } from "@/components/create-post-dialog";
 import {
   CodeBracketIcon,
@@ -85,17 +86,17 @@ export default function Home() {
   const getTimePeriodColor = (period: string) => {
     switch (period) {
       case "1day":
-        return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";
+        return "text-blue-600 dark:text-blue-300";
       case "1week":
-        return "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20";
+        return "text-emerald-600 dark:text-emerald-300";
       case "1month":
-        return "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20";
+        return "text-violet-600 dark:text-violet-300";
       case "custom":
-        return "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20";
+        return "text-amber-600 dark:text-amber-300";
       case "release":
-        return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20";
+        return "text-indigo-600 dark:text-indigo-300";
       default:
-        return "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20";
+        return "text-muted-foreground";
     }
   };
 
@@ -199,8 +200,11 @@ export default function Home() {
                 <CardHeader>
                   <div className="flex items-center justify-between mb-2">
                     <Badge
-                      variant="outline"
-                      className={getTimePeriodColor(note.timePeriod)}
+                      variant="magic"
+                      className={cn(
+                        "px-3 py-1 text-[11px] font-semibold uppercase tracking-wide",
+                        getTimePeriodColor(note.timePeriod)
+                      )}
                     >
                       {getFilterLabel(note)}
                     </Badge>
