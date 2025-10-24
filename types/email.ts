@@ -16,6 +16,7 @@ export type CustomerIoRegion = "us" | "eu";
 export interface CustomerIoSettings extends BaseProviderSettings {
   appApiKey: string | null;
   region?: CustomerIoRegion | null;
+  broadcastId?: string | null; // API-triggered broadcast ID from Customer.io UI
 }
 
 export type ProviderSettingsMap = {
@@ -44,10 +45,12 @@ export interface EmailSubscriber {
 export interface SendEmailOptions {
   fromName: string;
   fromEmail: string;
-  to: string[];
+  to: string[]; // For Resend: list of emails. For Customer.io: can be empty if using broadcastId
   subject: string;
   html: string;
   text: string;
+  broadcastId?: string; // For Customer.io: trigger an API-triggered broadcast
+  broadcastData?: Record<string, any>; // Data to pass to the broadcast template
 }
 
 export interface SendEmailResult {

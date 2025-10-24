@@ -374,16 +374,6 @@ export async function POST(
 
     const provider = createEmailProviderAdapter(integration);
 
-    const subscribers = await provider.listSubscribers();
-    const activeEmails = subscribers.filter((subscriber) => subscriber.active);
-
-    if (activeEmails.length === 0) {
-      return NextResponse.json(
-        { error: "No active subscribers found" },
-        { status: 400 }
-      );
-    }
-
     const textBody = emailHtml
       .replace(/<style[\s\S]*?<\/style>/gi, " ")
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -395,25 +385,52 @@ export async function POST(
     let fromEmail = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
     let fromName = process.env.RESEND_FROM_NAME ?? "Repatch";
 
-    if (integration.provider === "resend") {
-      const settings = integration.settings as ResendSettings;
-      fromEmail = settings.fromEmail ?? fromEmail;
-      fromName = settings.fromName ?? fromName;
-    } else if (integration.provider === "customerio") {
-      const settings = integration.settings as CustomerIoSettings;
-      fromEmail = settings.fromEmail ?? fromEmail;
-      fromName = settings.fromName ?? fromName;
+    // For Customer.io, check if we should trigger an API-triggered broadcast
+    const isCustomerIo = integration.provider === "customerio";
+    const customerIoSettings = isCustomerIo ? (integration.settings as CustomerIoSettings) : null;
+    const broadcastId = customerIoSettings?.broadcastId ?? process.env.CUSTOMERIO_BROADCAST_ID;
+
+    let emailsToSend: string[] = [];
+
+    if (isCustomerIo && broadcastId) {
+      // Customer.io: Trigger API-triggered broadcast
+      fromEmail = customerIoSettings?.fromEmail ?? fromEmail;
+      fromName = customerIoSettings?.fromName ?? fromName;
+      // Leave emailsToSend empty - we'll use broadcastId instead
+    } else {
+      // Resend or Customer.io without broadcast: Send to individual subscribers
+      const subscribers = await provider.listSubscribers();
+      const activeEmails = subscribers.filter((subscriber) => subscriber.active);
+
+      if (activeEmails.length === 0) {
+        return NextResponse.json(
+          { error: "No active subscribers found" },
+          { status: 400 }
+        );
+      }
+
+      emailsToSend = activeEmails.map((subscriber) => subscriber.email);
+
+      if (integration.provider === "resend") {
+        const settings = integration.settings as ResendSettings;
+        fromEmail = settings.fromEmail ?? fromEmail;
+        fromName = settings.fromName ?? fromName;
+      } else if (integration.provider === "customerio") {
+        fromEmail = customerIoSettings?.fromEmail ?? fromEmail;
+        fromName = customerIoSettings?.fromName ?? fromName;
+      }
     }
 
     const sendResult = await provider.sendEmail({
       fromEmail,
       fromName,
-      to: activeEmails.map((subscriber) => subscriber.email),
+      to: emailsToSend,
       subject: `${(patchNote as PatchNote).title} - ${
         (patchNote as PatchNote).repo_name
       }`,
       html: emailHtml,
       text: textBody,
+      broadcastId: broadcastId ?? undefined,
     });
 
     return NextResponse.json({

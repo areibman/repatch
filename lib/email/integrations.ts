@@ -30,6 +30,7 @@ function createDefaultSettings(): ProviderSettingsMap {
       region: null,
       fromEmail: null,
       fromName: null,
+      broadcastId: null,
     },
   };
 }
@@ -72,6 +73,8 @@ function mapCustomerIoSettings(settings: SettingsRecord): CustomerIoSettings {
       (settings.fromEmail as string | null | undefined) ?? defaults.fromEmail,
     fromName:
       (settings.fromName as string | null | undefined) ?? defaults.fromName,
+    broadcastId:
+      (settings.broadcastId as string | null | undefined) ?? defaults.broadcastId,
   };
 }
 
@@ -125,8 +128,9 @@ function envCustomerIoConfig(): EmailIntegrationConfig | null {
   const region = process.env.CUSTOMERIO_REGION ?? null;
   const fromEmail = process.env.CUSTOMERIO_FROM_EMAIL ?? null;
   const fromName = process.env.CUSTOMERIO_FROM_NAME ?? null;
+  const broadcastId = process.env.CUSTOMERIO_BROADCAST_ID ?? null;
 
-  if (!apiKey && !region && !fromEmail && !fromName) {
+  if (!apiKey && !region && !fromEmail && !fromName && !broadcastId) {
     return null;
   }
 
@@ -138,6 +142,7 @@ function envCustomerIoConfig(): EmailIntegrationConfig | null {
       region: region === "eu" ? "eu" : region === "us" ? "us" : null,
       fromEmail,
       fromName,
+      broadcastId,
     } satisfies CustomerIoSettings,
     source: "environment",
   };

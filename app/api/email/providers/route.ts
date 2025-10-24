@@ -91,6 +91,11 @@ function normalizeSettings(
     result.fromName = value || null;
   }
 
+  if (incoming.broadcastId !== undefined) {
+    const value = incoming.broadcastId?.toString().trim();
+    result.broadcastId = value || null;
+  }
+
   return result;
 }
 

@@ -41,6 +41,7 @@ export function createCustomerIoAdapter(settings: CustomerIoSettings): EmailProv
     process.env.RESEND_FROM_EMAIL ??
     "updates@customer.io";
   const fromName = settings.fromName ?? process.env.CUSTOMERIO_FROM_NAME ?? "Repatch";
+  const broadcastId = settings.broadcastId ?? process.env.CUSTOMERIO_BROADCAST_ID;
 
   async function request(path: string, init: RequestInit = {}) {
     const response = await fetch(`${baseUrl}${path}`, {
@@ -92,14 +93,29 @@ export function createCustomerIoAdapter(settings: CustomerIoSettings): EmailProv
     label: "Customer.io",
     managementUrl: region === "eu" ? "https://app-eu.customer.io" : "https://app.customer.io",
     async listSubscribers() {
-      const data = await request("/v1/api/customers?limit=500", {
-        method: "GET",
-      });
-
-      const customers = (data?.customers ?? []) as any[];
-      return customers
-        .filter((customer) => (customer.email ?? customer.attributes?.email) != null)
-        .map(normalizeSubscriber);
+      // Customer.io works with API-triggered broadcasts, not individual subscriber lists
+      // Return a mock subscriber entry representing the configured broadcast
+      // Actual validation happens when sending emails
+      
+      if (broadcastId) {
+        // Return a mock subscriber representing the API-triggered broadcast
+        return [{
+          id: `broadcast-${broadcastId}`,
+          email: `Customer.io Broadcast ${broadcastId} (API-triggered broadcast configured)`,
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }];
+      } else {
+        // No broadcast configured - will use transactional email mode
+        return [{
+          id: "customerio-transactional",
+          email: "Customer.io (No broadcast ID - will use transactional email mode)",
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }];
+      }
     },
     async createSubscriber({ email, firstName = "", lastName = "" }) {
       const body = {
@@ -150,31 +166,62 @@ export function createCustomerIoAdapter(settings: CustomerIoSettings): EmailProv
       });
     },
     async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
-      const payload = {
-        to: options.to.map((email) => ({ email })),
-        message: {
-          subject: options.subject,
-          from: {
-            email: fromEmail,
-            name: fromName,
+      // Customer.io supports two modes:
+      // 1. API-triggered broadcast (recommended for newsletters)
+      // 2. Transactional email to specific recipients
+      
+      const useBroadcastId = options.broadcastId ?? broadcastId;
+      
+      if (useBroadcastId) {
+        // Trigger an API-triggered broadcast
+        // The broadcast must be created in Customer.io UI first
+        const payload = {
+          data: {
+            subject: options.subject,
+            body: options.html,
+            plaintext_body: options.text || htmlToPlaintext(options.html),
+            ...(options.broadcastData ?? {}),
           },
-          body: {
-            html: options.html,
-            plaintext: options.text || htmlToPlaintext(options.html),
+        };
+
+        const response = await request(`/v1/campaigns/${useBroadcastId}/triggers`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+
+        return {
+          id: response?.id ?? response?.campaign_id ?? undefined,
+          provider: "customerio",
+          deliveredTo: -1, // Broadcast size determined by segment in Customer.io
+        };
+      } else {
+        // Send transactional email to individual recipients
+        const payload = {
+          to: options.to.map((email) => ({ email })),
+          message: {
+            subject: options.subject,
+            from: {
+              email: fromEmail,
+              name: fromName,
+            },
+            body: {
+              html: options.html,
+              plaintext: options.text || htmlToPlaintext(options.html),
+            },
           },
-        },
-      };
+        };
 
-      const response = await request("/v1/send/email", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+        const response = await request("/v1/send/email", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
 
-      return {
-        id: response?.delivery_id ?? response?.id ?? undefined,
-        provider: "customerio",
-        deliveredTo: options.to.length,
-      };
+        return {
+          id: response?.delivery_id ?? response?.id ?? undefined,
+          provider: "customerio",
+          deliveredTo: options.to.length,
+        };
+      }
     },
   };
 }
