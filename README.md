@@ -50,6 +50,10 @@ GOOGLE_API_KEY=your_google_api_key
 
 # Optional: App URL for video rendering callbacks
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Internal API secret (for production video rendering)
+# Generate with: openssl rand -base64 32
+INTERNAL_API_SECRET=change-me-in-production
 ```
 
 **⚠️ Important**: Without a GitHub token, you'll hit rate limits (60 requests/hour). With a token, you get 5,000 requests/hour.
