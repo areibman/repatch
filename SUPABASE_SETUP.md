@@ -56,7 +56,11 @@ Your `.env.local` file has been created with the following variables:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://jgwkfpdzmehyldevhcna.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=[your-anon-key]
+SUPABASE_SERVICE_ROLE_KEY=[your-service-role-key]
+SUPABASE_VIDEOS_BUCKET=videos
 ```
+
+The `SUPABASE_SERVICE_ROLE_KEY` is required for uploading rendered videos to Supabase Storage. Create (or reuse) a storage bucket named `videos`, or change `SUPABASE_VIDEOS_BUCKET` to match your preferred bucket name.
 
 ### 2. Run Database Migration
 

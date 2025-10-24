@@ -3,11 +3,15 @@ import { bundle } from '@remotion/bundler';
 import { renderMedia, selectComposition } from '@remotion/renderer';
 import { webpackOverride } from '@/remotion-webpack-override';
 import path from 'path';
+import os from 'os';
 import fs from 'fs/promises';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { generateVideoTopChangesFromContent, generateVideoTopChanges } from '@/lib/ai-summarizer';
 
 export async function POST(request: NextRequest) {
+  let tempDir: string | null = null;
+
   try {
     const { patchNoteId, videoData, repoName } = await request.json();
 
@@ -204,13 +208,10 @@ export async function POST(request: NextRequest) {
 
     console.log('Composition selected:', composition.id);
 
-    // Create output directory
-    const outputDir = path.resolve(process.cwd(), 'public', 'videos');
-    await fs.mkdir(outputDir, { recursive: true });
-
     // Generate unique filename
     const filename = `patch-note-${patchNoteId}-${Date.now()}.mp4`;
-    const outputPath = path.join(outputDir, filename);
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'repatch-video-'));
+    const outputPath = path.join(tempDir, filename);
 
     console.log('🎬 Rendering video to:', outputPath);
 
@@ -230,8 +231,36 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Video rendered successfully to:', outputPath);
 
-    // The video URL will be accessible at /videos/filename
-    const videoUrl = `/videos/${filename}`;
+    const fileBuffer = await fs.readFile(outputPath);
+
+    const bucketName = process.env.SUPABASE_VIDEOS_BUCKET || 'videos';
+    const storagePath = `${patchNoteId}/${filename}`;
+
+    const supabaseAdmin = createAdminClient();
+
+    console.log('☁️ Uploading video to Supabase Storage bucket:', bucketName);
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(bucketName)
+      .upload(storagePath, fileBuffer, {
+        contentType: 'video/mp4',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('❌ Failed to upload video to Supabase Storage:', uploadError);
+      throw new Error('Failed to upload video to storage');
+    }
+
+    const { data: publicUrlData } = supabaseAdmin.storage
+      .from(bucketName)
+      .getPublicUrl(storagePath);
+
+    if (!publicUrlData.publicUrl) {
+      throw new Error('Failed to generate public URL for uploaded video');
+    }
+
+    const videoUrl = publicUrlData.publicUrl;
+
     console.log('📝 Updating database with video URL:', videoUrl);
 
     // Update the patch note with the video URL (reuse existing supabase client)
@@ -256,12 +285,19 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error rendering video:', error);
+    if (error instanceof Error && error.message.includes('Supabase')) {
+      console.error('   Ensure SUPABASE_SERVICE_ROLE_KEY and storage bucket are configured.');
+    }
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Failed to render video',
       },
       { status: 500 }
     );
+  } finally {
+    if (tempDir) {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
   }
 }
 
