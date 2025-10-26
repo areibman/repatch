@@ -133,6 +133,37 @@ export default function BlogViewPage() {
     fetchPatchNote();
   }, [params.id]);
 
+  // Poll for video completion if video is still rendering
+  useEffect(() => {
+    if (!patchNote || patchNote.videoUrl) {
+      // No need to poll if no patch note loaded yet or video is already ready
+      return;
+    }
+
+    console.log('🎬 Video is rendering, starting polling...');
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/patch-notes/${params.id}`);
+        if (response.ok) {
+          const data = await response.json();
+
+          if (data.video_url) {
+            console.log('✅ Video is ready!');
+            setPatchNote(prev => prev ? { ...prev, videoUrl: data.video_url } : null);
+          }
+        }
+      } catch (error) {
+        console.error('Error polling for video:', error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => {
+      console.log('🛑 Stopping video polling');
+      clearInterval(pollInterval);
+    };
+  }, [patchNote?.videoUrl, params.id]);
+
   // Video URLs are now public paths after Lambda migration - no signed URL needed
 
   useEffect(() => {
