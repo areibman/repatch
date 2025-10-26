@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { renderPatchNoteVideo } from "@/lib/video-renderer";
+import { renderPatchNoteVideoOnLambda } from "@/lib/remotion-lambda-renderer";
 import { generateVideoTopChangesFromContent } from "@/lib/ai-summarizer";
 
 // GET /api/patch-notes - Fetch all patch notes
@@ -90,17 +90,17 @@ export async function POST(request: NextRequest) {
 
     // Trigger video rendering asynchronously (don't wait for it)
     if (videoData && data.id) {
-      console.log('🎬 Triggering video rendering...');
+      console.log('🎬 Triggering Lambda video rendering...');
       console.log('   - Patch Note ID:', data.id);
       console.log('   - Repo:', body.repo_name);
-      
-      // Call the render function directly - no HTTP request needed!
-      renderPatchNoteVideo(data.id, videoData, body.repo_name)
+
+      // Call the Lambda render function directly - no HTTP request needed!
+      renderPatchNoteVideoOnLambda(data.id, videoData, body.repo_name)
         .then((result: { videoUrl: string }) => {
-          console.log('✅ Video rendering completed:', result);
+          console.log('✅ Lambda video rendering completed:', result);
         })
         .catch((err: Error) => {
-          console.error('❌ Background video rendering failed:', err);
+          console.error('❌ Background Lambda video rendering failed:', err);
           // Don't fail the patch note creation if video rendering fails
         });
     } else {

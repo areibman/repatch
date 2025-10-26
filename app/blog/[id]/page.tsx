@@ -34,7 +34,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@heroicons/react/16/solid";
-import { Loader2Icon, TwitterIcon, DownloadIcon } from "lucide-react";
+import { Loader2Icon, TwitterIcon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
@@ -72,7 +72,6 @@ export default function BlogViewPage() {
   const [videoRegenerationMessage, setVideoRegenerationMessage] = useState('');
   const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
   const [typefullyDraftUrl, setTypefullyDraftUrl] = useState<string | null>(null);
-  const [signedVideoUrl, setSignedVideoUrl] = useState<string | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -132,46 +131,9 @@ export default function BlogViewPage() {
     };
 
     fetchPatchNote();
+  }, [params.id]);
 
-    // Poll for video status every 5 seconds if no video exists yet
-    const pollInterval = setInterval(async () => {
-      if (!patchNote?.videoUrl) {
-        const statusResponse = await fetch(`/api/videos/status/${params.id}`);
-        if (statusResponse.ok) {
-          const status = await statusResponse.json();
-          if (status.hasVideo && status.videoUrl) {
-            console.log('Video is ready! Refreshing...');
-            fetchPatchNote(); // Refresh the patch note data
-          }
-        }
-      }
-    }, 5000);
-
-    // Cleanup interval on unmount
-    return () => clearInterval(pollInterval);
-  }, [params.id, patchNote?.videoUrl]);
-
-  // Fetch signed URL when video is available
-  useEffect(() => {
-    const fetchSignedUrl = async () => {
-      if (patchNote?.videoUrl && patchNote.id) {
-        try {
-          const response = await fetch(`/api/videos/signed-url?patchNoteId=${patchNote.id}`);
-          if (response.ok) {
-            const data = await response.json();
-            setSignedVideoUrl(data.signedUrl);
-            console.log('✅ Signed video URL fetched');
-          } else {
-            console.error('❌ Failed to fetch signed URL');
-          }
-        } catch (error) {
-          console.error('Error fetching signed URL:', error);
-        }
-      }
-    };
-
-    fetchSignedUrl();
-  }, [patchNote?.videoUrl, patchNote?.id]);
+  // Video URLs are now public paths after Lambda migration - no signed URL needed
 
   useEffect(() => {
     const loadTemplates = async () => {
@@ -351,13 +313,13 @@ export default function BlogViewPage() {
 
     setIsGeneratingVideo(true);
     try {
-      const response = await fetch('/api/videos/render', {
+      // Call remotion-lambda-renderer directly through the updated PATCH route
+      const response = await fetch(`/api/patch-notes/${patchNote.id}/regenerate-video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          patchNoteId: patchNote.id,
           videoData: patchNote.videoData,
           repoName: patchNote.repoName,
         }),
@@ -387,36 +349,6 @@ export default function BlogViewPage() {
     }
   };
 
-  const handleDownloadVideo = async () => {
-    if (!patchNote?.videoUrl || !patchNote.id) return;
-
-    try {
-      // Always fetch a fresh signed URL to avoid expiration issues
-      console.log('📥 Fetching fresh signed URL for download...');
-      const response = await fetch(`/api/videos/signed-url?patchNoteId=${patchNote.id}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate download URL');
-      }
-
-      const data = await response.json();
-      const downloadUrl = data.signedUrl;
-
-      // Create a temporary anchor element to trigger download
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `${patchNote.repoName?.replace('/', '-') || 'patch-note'}-video.mp4`;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      console.log('✅ Download initiated');
-    } catch (error) {
-      console.error('Error downloading video:', error);
-      alert('❌ Error downloading video. Please try refreshing the page and trying again.');
-    }
-  };
 
   const handleRegenerateSummary = async () => {
     if (!patchNote || isRegenerating) {
@@ -547,9 +479,9 @@ export default function BlogViewPage() {
 
           {/* Hero Image/Video */}
           <div className="mb-6 rounded-lg overflow-hidden shadow-lg relative">
-            {signedVideoUrl || patchNote.videoUrl ? (
+            {patchNote.videoUrl ? (
               <a
-                href={signedVideoUrl || patchNote.videoUrl || undefined}
+                href={patchNote.videoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block hover:opacity-90 transition-opacity"
@@ -657,7 +589,7 @@ export default function BlogViewPage() {
                     <PencilIcon className="h-4 w-4 mr-2" />
                     Edit
                   </Button>
-                  {!patchNote.videoUrl ? (
+                  {!patchNote.videoUrl && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -674,15 +606,6 @@ export default function BlogViewPage() {
                           🎬 Generate Video
                         </>
                       )}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDownloadVideo}
-                    >
-                      <DownloadIcon className="h-4 w-4 mr-2" />
-                      Download Video
                     </Button>
                   )}
                   <Button
@@ -1077,11 +1000,10 @@ export default function BlogViewPage() {
                               setVideoRegenerationMessage('Regenerating video with new changes...');
                               setIsRegeneratingVideo(true);
                               
-                              const videoResponse = await fetch('/api/videos/render', {
+                              const videoResponse = await fetch(`/api/patch-notes/${patchNote.id}/regenerate-video`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                  patchNoteId: patchNote.id,
                                   videoData: {
                                     langCode: 'en',
                                     topChanges: editedVideoTop3,
