@@ -53,7 +53,6 @@ export default function RootLayout({
             </SidebarHeader>
             <SidebarContent>
               <SidebarGroup>
-                <SidebarGroupLabel>Navigation</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
@@ -92,7 +91,6 @@ export default function RootLayout({
             <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
               <div className="flex h-12 items-center gap-2 px-4">
                 <SidebarTrigger />
-                <span className="font-semibold">Repatch</span>
               </div>
             </div>
             {children}
