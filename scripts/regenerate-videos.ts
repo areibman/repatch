@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { renderPatchNoteVideoOnLambda } from '../lib/remotion-lambda-renderer';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -31,27 +31,14 @@ async function regenerateVideos() {
     console.log(`\n🎬 Regenerating video for: ${note.repo_name}`);
     console.log(`   ID: ${note.id}`);
     console.log(`   AI Summaries: ${note.ai_summaries.length}`);
-    
+
     try {
-      const response = await fetch(`${appUrl}/api/videos/render`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          patchNoteId: note.id,
-          videoData: null, // Will be generated from AI summaries
-          repoName: note.repo_name,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.error(`   ❌ Failed:`, error.error);
-        continue;
-      }
-
-      const result = await response.json();
+      // Call Lambda renderer directly instead of HTTP endpoint
+      const result = await renderPatchNoteVideoOnLambda(
+        note.id,
+        null, // Will be generated from AI summaries
+        note.repo_name
+      );
       console.log(`   ✅ Success! Video URL: ${result.videoUrl}`);
     } catch (error) {
       console.error(`   ❌ Error:`, error);

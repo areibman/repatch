@@ -12,7 +12,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CommitSummary, PatchNote } from "@/types/patch-note";
+import { Loader2Icon } from "lucide-react";
 import { formatFilterSummary } from "@/lib/filter-utils";
 import { CreatePostDialog } from "@/components/create-post-dialog";
 import {
@@ -53,6 +55,9 @@ export default function Home() {
             ai_overall_summary?: string | null;
             ai_template_id?: string | null;
             filter_metadata?: any;
+            processing_status?: string;
+            processing_stage?: string | null;
+            processing_error?: string | null;
           }) => ({
             id: note.id,
             repoName: note.repo_name,
@@ -69,6 +74,9 @@ export default function Home() {
             aiOverallSummary: note.ai_overall_summary,
             aiTemplateId: note.ai_template_id,
             filterMetadata: note.filter_metadata ?? null,
+            processingStatus: note.processing_status as any,
+            processingStage: note.processing_stage,
+            processingError: note.processing_error,
           })
         );
 
@@ -82,6 +90,51 @@ export default function Home() {
 
     fetchPatchNotes();
   }, []);
+
+  // Poll for updates if there are any pending/processing notes
+  useEffect(() => {
+    const hasPendingNotes = patchNotes.some(
+      (note) => note.processingStatus && 
+        note.processingStatus !== 'completed' && 
+        note.processingStatus !== 'failed'
+    );
+
+    if (!hasPendingNotes) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch("/api/patch-notes");
+        if (response.ok) {
+          const data = await response.json();
+          const transformedData = data.map((note: any) => ({
+            id: note.id,
+            repoName: note.repo_name,
+            repoUrl: note.repo_url,
+            timePeriod: note.time_period,
+            generatedAt: new Date(note.generated_at),
+            title: note.title,
+            content: note.content,
+            changes: note.changes,
+            contributors: note.contributors,
+            videoUrl: note.video_url,
+            repoBranch: note.repo_branch,
+            aiSummaries: note.ai_summaries as CommitSummary[] | null,
+            aiOverallSummary: note.ai_overall_summary,
+            aiTemplateId: note.ai_template_id,
+            filterMetadata: note.filter_metadata ?? null,
+            processingStatus: note.processing_status as any,
+            processingStage: note.processing_stage,
+            processingError: note.processing_error,
+          }));
+          setPatchNotes(transformedData);
+        }
+      } catch (error) {
+        console.error('Error polling for updates:', error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [patchNotes]);
 
   const getFilterLabel = (note: PatchNote) =>
     formatFilterSummary(note.filterMetadata, note.timePeriod);
@@ -197,75 +250,111 @@ export default function Home() {
 
         {/* Patch Notes Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {patchNotes.map((note) => (
-            <Link key={note.id} href={`/blog/${note.id}`}>
-              <Card className="h-full hover:shadow-lg transition-all duration-200 hover:scale-[1.02] cursor-pointer group">
-                <CardHeader>
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge
-                      variant="outline"
-                      className={getTimePeriodColor(note.timePeriod)}
-                    >
-                      {getFilterLabel(note)}
-                    </Badge>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <CalendarIcon className="h-3 w-3" />
-                      {new Date(note.generatedAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </div>
-                  </div>
+          {patchNotes.map((note) => {
+            const isProcessing = note.processingStatus && 
+              note.processingStatus !== 'completed' && 
+              note.processingStatus !== 'failed';
 
-                  <CardTitle className="line-clamp-2 group-hover:text-primary transition-colors">
-                    {note.title}
-                  </CardTitle>
-
-                  <CardDescription className="flex items-center gap-1 mt-2">
-                    <CodeBracketIcon className="h-3 w-3" />
-                    {note.repoName}
-                  </CardDescription>
-                </CardHeader>
-
-                <CardContent>
-                  <p className="text-sm text-muted-foreground line-clamp-3 mb-4">
-                    {note.content}
-                  </p>
-
-                  {/* Change Stats */}
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-green-500/10 rounded-md p-2 text-center">
-                      <div className="font-semibold text-green-700 dark:text-green-400">
-                        +{note.changes.added.toLocaleString()}
-                      </div>
-                      <div className="text-muted-foreground text-[10px]">
-                        added
+            return (
+              <Link key={note.id} href={`/blog/${note.id}`}>
+                <Card className="h-full hover:shadow-lg transition-all duration-200 hover:scale-[1.02] cursor-pointer group">
+                  <CardHeader>
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge
+                        variant="outline"
+                        className={getTimePeriodColor(note.timePeriod)}
+                      >
+                        {getFilterLabel(note)}
+                      </Badge>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <CalendarIcon className="h-3 w-3" />
+                        {new Date(note.generatedAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
                       </div>
                     </div>
-                    <div className="bg-red-500/10 rounded-md p-2 text-center">
-                      <div className="font-semibold text-red-700 dark:text-red-400">
-                        -{note.changes.removed.toLocaleString()}
+
+                    {/* Processing badge */}
+                    {isProcessing && (
+                      <div className="flex items-center gap-1.5 mb-2 text-xs text-blue-600 dark:text-blue-400">
+                        <Loader2Icon className="h-3 w-3 animate-spin" />
+                        <span>Processing...</span>
                       </div>
-                      <div className="text-muted-foreground text-[10px]">
-                        removed
+                    )}
+
+                    <CardTitle className="line-clamp-2 group-hover:text-primary transition-colors leading-tight pb-1">
+                      {note.title}
+                    </CardTitle>
+
+                    <CardDescription className="flex items-center gap-1 mt-2">
+                      <CodeBracketIcon className="h-3 w-3" />
+                      {note.repoName}
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent>
+                    {isProcessing && note.content === '...' ? (
+                      <div className="space-y-2 mb-4">
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-[90%]" />
+                        <Skeleton className="h-3 w-[80%]" />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground line-clamp-3 mb-4">
+                        {note.content}
+                      </p>
+                    )}
+
+                    {/* Change Stats */}
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-green-500/10 rounded-md p-2 text-center">
+                        {isProcessing && note.changes.added === 0 ? (
+                          <Skeleton className="h-5 w-12 mx-auto mb-1" />
+                        ) : (
+                          <div className="font-semibold text-green-700 dark:text-green-400">
+                            +{note.changes.added.toLocaleString()}
+                          </div>
+                        )}
+                        <div className="text-muted-foreground text-[10px]">
+                          added
+                        </div>
+                      </div>
+                      <div className="bg-red-500/10 rounded-md p-2 text-center">
+                        {isProcessing && note.changes.removed === 0 ? (
+                          <Skeleton className="h-5 w-12 mx-auto mb-1" />
+                        ) : (
+                          <div className="font-semibold text-red-700 dark:text-red-400">
+                            -{note.changes.removed.toLocaleString()}
+                          </div>
+                        )}
+                        <div className="text-muted-foreground text-[10px]">
+                          removed
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
+                  </CardContent>
 
-                <CardFooter className="flex items-center justify-between text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <UsersIcon className="h-3 w-3" />
-                    {note.contributors.length} contributor
-                    {note.contributors.length !== 1 ? "s" : ""}
-                  </div>
-                  <div className="text-primary font-medium group-hover:underline">
-                    Read more →
-                  </div>
-                </CardFooter>
-              </Card>
-            </Link>
-          ))}
+                  <CardFooter className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <UsersIcon className="h-3 w-3" />
+                      {isProcessing && note.contributors.length === 0 ? (
+                        <Skeleton className="h-3 w-20" />
+                      ) : (
+                        <>
+                          {note.contributors.length} contributor
+                          {note.contributors.length !== 1 ? "s" : ""}
+                        </>
+                      )}
+                    </div>
+                    <div className="text-primary font-medium group-hover:underline">
+                      Read more →
+                    </div>
+                  </CardFooter>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
 
         {/* Empty State (shown when no posts) */}

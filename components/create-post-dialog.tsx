@@ -418,6 +418,7 @@ export function CreatePostDialog() {
     }
 
     setIsLoading(true);
+    setLoadingStep('Creating patch note...');
 
     try {
       let filterPayload: PatchNoteFilters;
@@ -501,82 +502,6 @@ export function CreatePostDialog() {
         filterPayload.excludeTags = sanitizedExcludeTags;
       }
 
-      const filterSummary = formatFilterSummary(
-        filterPayload,
-        filterPayload.mode === 'release'
-          ? 'release'
-          : filterPayload.mode === 'custom'
-          ? 'custom'
-          : filterPayload.preset ?? '1week'
-      );
-
-      // Fetch real GitHub statistics via API route (server-side with token)
-      setLoadingStep('📊 Fetching repository statistics...');
-      const statsResponse = await fetch('/api/github/stats', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          owner: repoInfo.owner,
-          repo: repoInfo.repo,
-          branch: selectedBranch,
-          filters: filterPayload,
-        }),
-      });
-
-      if (!statsResponse.ok) {
-        const error = await statsResponse.json();
-        throw new Error(error.error || 'Failed to fetch repository stats');
-      }
-
-      const stats = await statsResponse.json();
-
-      // Generate AI summaries for commits
-      setLoadingStep('Analyzing commits (30-60s)...');
-      console.log('Fetching AI summaries for filters:', filterSummary);
-      const summariesResponse = await fetch('/api/github/summarize', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          owner: repoInfo.owner,
-          repo: repoInfo.repo,
-          filters: filterPayload,
-          branch: selectedBranch,
-          templateId: selectedTemplateId || undefined,
-          generateCommitTitles: !includeCommitMessages,
-        }),
-      });
-
-      let aiGeneratedContent: string | null = null;
-      let detailedContexts: any[] = [];
-
-      if (summariesResponse.ok) {
-        const summaryData = await summariesResponse.json();
-        aiGeneratedContent = summaryData.content || null;
-        detailedContexts = summaryData.detailedContexts || [];
-        console.log('AI changelog generated from', detailedContexts.length, 'commits');
-      } else {
-        console.warn('Failed to generate AI changelog, continuing without it');
-      }
-
-      // Use AI-generated content, or fallback to boilerplate
-      setLoadingStep('✍️ Generating patch note content...');
-      const content = aiGeneratedContent
-        ? aiGeneratedContent
-        : generateBoilerplateContent(
-            `${repoInfo.owner}/${repoInfo.repo}`,
-            filterPayload,
-            stats
-          );
-
-      // Don't generate video data during creation - we'll generate it properly after
-      // the final content is ready by calling the generate-video-top3 endpoint
-      console.log('📹 Video data will be generated from final content later');
-      const videoData = null;
-
       const descriptor =
         filterPayload.mode === 'preset' && filterPayload.preset
           ? getPresetLabel(filterPayload.preset)
@@ -584,8 +509,7 @@ export function CreatePostDialog() {
           ? 'Release Selection'
           : 'Custom Range';
 
-      // Create the patch note with real data and AI summaries
-      setLoadingStep('💾 Saving patch note...');
+      // Create a pending patch note immediately
       const response = await fetch('/api/patch-notes', {
         method: 'POST',
         headers: {
@@ -597,18 +521,18 @@ export function CreatePostDialog() {
           repo_branch: selectedBranch,
           time_period: deriveTimePeriodValue(filterPayload),
           title: `${descriptor} Update - ${repoInfo.repo}`,
-          content,
+          content: '...', // Placeholder content
           changes: {
-            added: stats.additions,
-            modified: 0, // GitHub API doesn't distinguish modified from additions
-            removed: stats.deletions,
+            added: 0,
+            modified: 0,
+            removed: 0,
           },
-          contributors: stats.contributors,
-          video_data: videoData,
-          ai_detailed_contexts: detailedContexts,
+          contributors: [],
           ai_template_id: selectedTemplateId,
           filter_metadata: filterPayload,
           generated_at: new Date().toISOString(),
+          processing_status: 'pending',
+          processing_stage: 'Queued for processing...',
         }),
       });
 
@@ -622,32 +546,55 @@ export function CreatePostDialog() {
       // Save to recent repos
       saveRecentRepo(repoUrl, repoInfo.owner, repoInfo.repo);
 
-      // Close modal and redirect to the new post
+      // Immediately close modal and navigate to the post
       setOpen(false);
-      setRepoUrl('');
-      setBranches([]);
-      setSelectedBranch('');
-      setFilterMode('preset');
-      setTimePreset('1week');
-      setCustomStart('');
-      setCustomEnd('');
-      setAvailableLabels([]);
-      setAvailableTags([]);
-      setAvailableReleases([]);
-      setSelectedReleases([]);
-      setIncludeLabels([]);
-      setExcludeLabels([]);
-      setIncludeTags([]);
-      setExcludeTags([]);
-      setLoadingStep('');
       router.push(`/blog/${data.id}`);
       router.refresh();
+
+      // Trigger background processing (don't await)
+      fetch(`/api/patch-notes/${data.id}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          owner: repoInfo.owner,
+          repo: repoInfo.repo,
+          repoUrl,
+          branch: selectedBranch,
+          filters: filterPayload,
+          templateId: selectedTemplateId,
+          generateCommitTitles: includeCommitMessages,
+        }),
+      }).catch((error) => {
+        console.error('Background processing failed:', error);
+      });
+
+      // Reset form state after navigation
+      setTimeout(() => {
+        setRepoUrl('');
+        setBranches([]);
+        setSelectedBranch('');
+        setFilterMode('preset');
+        setTimePreset('1week');
+        setCustomStart('');
+        setCustomEnd('');
+        setAvailableLabels([]);
+        setAvailableTags([]);
+        setAvailableReleases([]);
+        setSelectedReleases([]);
+        setIncludeLabels([]);
+        setExcludeLabels([]);
+        setIncludeTags([]);
+        setExcludeTags([]);
+        setLoadingStep('');
+        setIsLoading(false);
+      }, 100);
     } catch (error) {
       console.error("Error creating patch note:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Failed to create patch note";
       alert(`Error: ${errorMessage}`);
-    } finally {
       setIsLoading(false);
       setLoadingStep('');
     }
@@ -662,16 +609,16 @@ export function CreatePostDialog() {
             Create New Post
           </Button>
         </DialogTrigger>
-      <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-hidden flex flex-col">
-        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden min-h-0 flex-1">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Create Patch Note</DialogTitle>
-            <DialogDescription>
-              Generate AI-powered patch notes from a GitHub repository.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-hidden flex flex-col">
+          <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden min-h-0 flex-1">
+            <DialogHeader>
+              <DialogTitle>Create Patch Note</DialogTitle>
+              <DialogDescription>
+                Generate AI-powered patch notes from a GitHub repository.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="grid gap-4 py-4 overflow-y-auto flex-1 min-h-0">
+            <div className="grid gap-4 overflow-y-auto flex-1 min-h-0">
             <div className="grid gap-2">
               <Label htmlFor="repo-url">Repository URL</Label>
               <Input
@@ -682,19 +629,27 @@ export function CreatePostDialog() {
                 required
                 disabled={isLoading}
               />
-              {recentRepos.length > 0 && !repoUrl && (
+              {recentRepos.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Recent repositories:</p>
-                  <div className="flex flex-wrap gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    {repoUrl ? 'Recent repositories (click to switch):' : 'Recent repositories:'}
+                  </p>
+                  <div className="flex flex-wrap gap-2 min-h-[32px]">
                     {recentRepos.map((recent) => (
                       <button
                         key={recent.url}
                         type="button"
                         onClick={() => handleRepoUrlChange(recent.url)}
                         disabled={isLoading}
-                        className="text-xs px-3 py-1.5 rounded-md border border-border bg-muted hover:bg-muted/80 hover:border-foreground/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`text-xs px-3 py-1.5 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                          repoUrl === recent.url
+                            ? 'border-primary bg-primary/10 font-medium'
+                            : 'border-border bg-muted hover:bg-muted/80 hover:border-foreground/20'
+                        }`}
                       >
-                        <span className="font-medium">{recent.owner}/{recent.repo}</span>
+                        <span className={repoUrl === recent.url ? 'font-semibold' : 'font-medium'}>
+                          {recent.owner}/{recent.repo}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -709,7 +664,7 @@ export function CreatePostDialog() {
               </p>
             </div>
 
-            {branches.length > 0 && filterMode !== 'release' && (
+            {filterMode !== 'release' && (
               <div className="grid gap-2">
                 <Label htmlFor="branch">
                   Branch
@@ -717,10 +672,16 @@ export function CreatePostDialog() {
                 <Select
                   value={selectedBranch}
                   onValueChange={setSelectedBranch}
-                  disabled={isLoading || isFetchingBranches}
+                  disabled={isLoading || isFetchingBranches || branches.length === 0}
                 >
                   <SelectTrigger id="branch">
-                    <SelectValue placeholder="Select branch" />
+                    <SelectValue placeholder={
+                      isFetchingBranches 
+                        ? "Loading branches..." 
+                        : branches.length === 0 
+                        ? "Enter repository URL first" 
+                        : "Select branch"
+                    } />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px] overflow-y-auto">
                     {branches.map((branch) => (
@@ -732,8 +693,11 @@ export function CreatePostDialog() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {branches.length > 0 && `${branches.length} branch${branches.length !== 1 ? 'es' : ''} found. `}
-                  Select which branch to analyze
+                  {isFetchingBranches 
+                    ? 'Fetching branches...'
+                    : branches.length > 0 
+                    ? `${branches.length} branch${branches.length !== 1 ? 'es' : ''} found. Select which branch to analyze`
+                    : 'Branch selection will be available after entering a valid repository URL'}
                 </p>
               </div>
             )}
@@ -973,39 +937,39 @@ export function CreatePostDialog() {
                 When unchecked, AI will generate cleaner, more descriptive headers for each change instead of showing raw commit messages.
               </p>
             </div>
-          </div>
+            </div>
 
-          <DialogFooter className="flex-shrink-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={isLoading || isFetchingBranches}
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={isLoading || isFetchingBranches || (filterMode !== 'release' && !selectedBranch)}
-              className="min-w-[200px]"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
-                  <span className="text-sm">{loadingStep || 'Processing...'}</span>
-                </>
-              ) : isFetchingBranches ? (
-                <>
-                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
-                  Loading branches...
-                </>
-              ) : (
-                "Create Patch Note"
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+            <DialogFooter className="pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                disabled={isLoading || isFetchingBranches}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isLoading || isFetchingBranches || (filterMode !== 'release' && !selectedBranch)}
+                className="min-w-[200px]"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                    <span className="text-sm">{loadingStep || 'Processing...'}</span>
+                  </>
+                ) : isFetchingBranches ? (
+                  <>
+                    <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                    Loading branches...
+                  </>
+                ) : (
+                  "Create Patch Note"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
       </Dialog>
     </TooltipProvider>
   );

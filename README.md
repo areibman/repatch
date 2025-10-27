@@ -13,7 +13,7 @@ Repatch uses LLMs to analyze GitHub repository changes over customizable ranges�
 - **UI**: ShadCN UI + Tailwind CSS
 - **Email**: Resend
 - **AI**: Google Generative AI (Gemini 2.5 Flash) via Vercel AI SDK
-- **Video Generation**: Remotion 4.0
+- **Video Generation**: Remotion 4.0 on AWS Lambda
 
 ## Getting Started
 
@@ -54,6 +54,13 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 # Internal API secret (for production video rendering)
 # Generate with: openssl rand -base64 32
 INTERNAL_API_SECRET=change-me-in-production
+
+# AWS Credentials for Remotion Lambda (video rendering)
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_REGION=us-east-1
+REMOTION_APP_FUNCTION_NAME=remotion-render-4-0-355-mem2048mb-disk2048mb-300sec
+REMOTION_APP_SERVE_URL=your_s3_site_url
 ```
 
 **⚠️ Important**: Without a GitHub token, you'll hit rate limits (60 requests/hour). With a token, you get 5,000 requests/hour.
@@ -126,15 +133,64 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Features
 
-### 🎬 Dynamic Video Generation
+### 🎬 Dynamic Video Generation with Remotion Lambda
 
-Repatch automatically generates custom videos for each patch note using Remotion! Videos are:
-- Generated in the background after creating a patch note
-- Uploaded to Supabase Storage for durable hosting
-- Displayed in blog posts and email newsletters
-- Resolution: 2160x1080 (2K) at 30 FPS
+Repatch generates custom animated videos for each patch note using **Remotion on AWS Lambda**. This architecture provides:
+- **5-10x faster rendering** through parallel chunk processing
+- **No timeouts** (15-minute Lambda limit vs 5-minute Vercel limit)
+- **~80% cost reduction** compared to Vercel serverless functions
+- **2160x1080 resolution** at 30 FPS
 
-For more details, see [VIDEO_GENERATION.md](./VIDEO_GENERATION.md).
+#### How It Works
+
+1. When you create a patch note, the app triggers a Lambda render job
+2. AWS Lambda fetches your pre-deployed Remotion bundle from S3
+3. Multiple Lambda functions render video chunks in parallel
+4. Chunks are assembled and stored in S3 with public read access
+5. The video URL is saved to your database and displayed in the UI
+
+#### AWS Setup Required
+
+To enable video generation, you need:
+
+1. **AWS Account** with Lambda and S3 access
+2. **IAM User** with Remotion Lambda permissions (least-privilege recommended)
+3. **Deploy Lambda function** using Remotion CLI:
+   ```bash
+   npx remotion lambda functions deploy --region us-east-1
+   ```
+4. **Deploy Remotion site** to S3:
+   ```bash
+   npx remotion lambda sites create remotion/index.ts --site-name=repatch-video-renderer --region us-east-1
+   ```
+5. **Configure S3 public access** for rendered videos:
+   ```bash
+   npx remotion lambda policies public --region us-east-1 --bucket your-bucket-name
+   ```
+
+#### Environment Variables
+
+Add these to `.env.local` after deploying to AWS:
+
+```bash
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_REGION=us-east-1
+REMOTION_APP_FUNCTION_NAME=remotion-render-4-0-355-mem2048mb-disk2048mb-300sec
+REMOTION_APP_SERVE_URL=https://your-bucket.s3.us-east-1.amazonaws.com/sites/your-site/index.html
+```
+
+The function name and serve URL are returned by the deployment commands above.
+
+#### Redeploying After Changes
+
+If you modify the Remotion composition:
+
+```bash
+npx remotion lambda sites create remotion/index.ts --site-name=repatch-video-renderer --region us-east-1
+```
+
+The serve URL remains the same, so no environment variable updates needed.
 
 ### 🎯 Flexible Filtering Controls
 

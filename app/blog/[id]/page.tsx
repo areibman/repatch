@@ -13,7 +13,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
 import {
   Select,
   SelectContent,
@@ -34,7 +36,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from "@heroicons/react/16/solid";
-import { Loader2Icon, TwitterIcon, DownloadIcon } from "lucide-react";
+import { Loader2Icon, TwitterIcon } from "lucide-react";
 import { Player } from "@remotion/player";
 import { getDuration } from "@/remotion/Root";
 import { ParsedPropsSchema } from "@/remotion/BaseComp";
@@ -72,7 +74,6 @@ export default function BlogViewPage() {
   const [videoRegenerationMessage, setVideoRegenerationMessage] = useState('');
   const [isTemplateCardCollapsed, setIsTemplateCardCollapsed] = useState(true);
   const [typefullyDraftUrl, setTypefullyDraftUrl] = useState<string | null>(null);
-  const [signedVideoUrl, setSignedVideoUrl] = useState<string | null>(null);
 
   // Calculate duration from patch note's video data
   const videoDuration = useMemo(() => {
@@ -108,7 +109,7 @@ export default function BlogViewPage() {
           timePeriod: data.time_period,
           generatedAt: new Date(data.generated_at),
           title: data.title,
-          content: data.content,
+          content: data.content || '...',
           changes: data.changes,
           contributors: data.contributors,
           videoUrl: data.video_url,
@@ -119,6 +120,10 @@ export default function BlogViewPage() {
           aiTemplateId: data.ai_template_id,
           filterMetadata: data.filter_metadata ?? null,
           videoTopChanges: data.video_top_changes ?? null,
+          processingStatus: data.processing_status,
+          processingStage: data.processing_stage,
+          processingError: data.processing_error,
+          processingProgress: data.processing_progress,
         };
 
         setPatchNote(transformedNote);
@@ -132,46 +137,88 @@ export default function BlogViewPage() {
     };
 
     fetchPatchNote();
+  }, [params.id]);
 
-    // Poll for video status every 5 seconds if no video exists yet
-    const pollInterval = setInterval(async () => {
-      if (!patchNote?.videoUrl) {
-        const statusResponse = await fetch(`/api/videos/status/${params.id}`);
-        if (statusResponse.ok) {
-          const status = await statusResponse.json();
-          if (status.hasVideo && status.videoUrl) {
-            console.log('Video is ready! Refreshing...');
-            fetchPatchNote(); // Refresh the patch note data
+  // Unified polling for processing and video status
+  useEffect(() => {
+    if (!patchNote) return;
+
+    // Determine if we need to poll
+    const needsProcessingPoll = patchNote.processingStatus && 
+      patchNote.processingStatus !== 'completed' && 
+      patchNote.processingStatus !== 'failed';
+    
+    // Only poll for video if completed without errors and no video URL yet
+    const needsVideoPoll = patchNote.processingStatus === 'completed' && 
+      !patchNote.videoUrl && 
+      !patchNote.processingError;
+
+    if (!needsProcessingPoll && !needsVideoPoll) {
+      return;
+    }
+
+    console.log('🔄 Starting polling...', {
+      processing: needsProcessingPoll,
+      video: needsVideoPoll
+    });
+
+    let isMounted = true;
+
+    const poll = async () => {
+      if (!isMounted) return;
+
+      try {
+        const response = await fetch(`/api/patch-notes/${params.id}`, {
+          cache: 'no-store'
+        });
+        
+        if (!response.ok || !isMounted) return;
+
+        const data = await response.json();
+
+        if (isMounted) {
+          setPatchNote(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              content: data.content || prev.content,
+              changes: data.changes || prev.changes,
+              contributors: data.contributors || prev.contributors,
+              videoUrl: data.video_url || prev.videoUrl,
+              aiDetailedContexts: data.ai_detailed_contexts as DetailedContext[] | null,
+              videoTopChanges: data.video_top_changes ?? prev.videoTopChanges,
+              videoData: data.video_data || prev.videoData,
+              processingStatus: data.processing_status || prev.processingStatus,
+              processingStage: data.processing_stage,
+              processingError: data.processing_error,
+              processingProgress: data.processing_progress,
+            };
+          });
+
+          if (data.processing_status === 'completed' || data.processing_status === 'failed') {
+            console.log('✅ Processing completed with status:', data.processing_status);
+          }
+          if (data.video_url) {
+            console.log('✅ Video is ready!');
           }
         }
-      }
-    }, 5000);
-
-    // Cleanup interval on unmount
-    return () => clearInterval(pollInterval);
-  }, [params.id, patchNote?.videoUrl]);
-
-  // Fetch signed URL when video is available
-  useEffect(() => {
-    const fetchSignedUrl = async () => {
-      if (patchNote?.videoUrl && patchNote.id) {
-        try {
-          const response = await fetch(`/api/videos/signed-url?patchNoteId=${patchNote.id}`);
-          if (response.ok) {
-            const data = await response.json();
-            setSignedVideoUrl(data.signedUrl);
-            console.log('✅ Signed video URL fetched');
-          } else {
-            console.error('❌ Failed to fetch signed URL');
-          }
-        } catch (error) {
-          console.error('Error fetching signed URL:', error);
+      } catch (error) {
+        if (isMounted) {
+          console.error('Error polling:', error);
         }
       }
     };
 
-    fetchSignedUrl();
-  }, [patchNote?.videoUrl, patchNote?.id]);
+    const pollInterval = setInterval(poll, 5000); // Poll every 5 seconds
+
+    return () => {
+      console.log('🛑 Stopping polling');
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+  }, [patchNote?.processingStatus, patchNote?.videoUrl, patchNote?.processingError, params.id]);
+
+  // Video URLs are now public paths after Lambda migration - no signed URL needed
 
   useEffect(() => {
     const loadTemplates = async () => {
@@ -350,73 +397,65 @@ export default function BlogViewPage() {
     if (!patchNote) return;
 
     setIsGeneratingVideo(true);
+    setIsRegeneratingVideo(true);
+    setVideoRegenerationMessage('Starting video render...');
+    
+    // Reset progress to 0
+    setPatchNote({
+      ...patchNote,
+      processingProgress: 0,
+    });
+
     try {
-      const response = await fetch('/api/videos/render', {
+      // Call remotion-lambda-renderer directly (runs in background, updates progress)
+      fetch(`/api/patch-notes/${patchNote.id}/regenerate-video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          patchNoteId: patchNote.id,
           videoData: patchNote.videoData,
           repoName: patchNote.repoName,
         }),
+      }).then(async (response) => {
+        if (response.ok) {
+          const data = await response.json();
+          setPatchNote(prev => prev ? {
+            ...prev,
+            videoUrl: data.videoUrl,
+            processingProgress: 100,
+          } : null);
+          setVideoRegenerationMessage('Video completed!');
+          setTimeout(() => {
+            setIsRegeneratingVideo(false);
+            setVideoRegenerationMessage('');
+            alert('✅ Video generated successfully!');
+          }, 1500);
+        } else {
+          const error = await response.json();
+          setVideoRegenerationMessage('');
+          setIsRegeneratingVideo(false);
+          alert(`❌ Error: ${error.error || 'Failed to generate video'}`);
+        }
+      }).catch((error) => {
+        console.error('Error generating video:', error);
+        setVideoRegenerationMessage('');
+        setIsRegeneratingVideo(false);
+        alert(`❌ Error: ${error instanceof Error ? error.message : 'Failed to generate video'}`);
+      }).finally(() => {
+        setIsGeneratingVideo(false);
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate video');
-      }
-
-      const data = await response.json();
-
-      // Update the patch note with the new video URL
-      setPatchNote({
-        ...patchNote,
-        videoUrl: data.videoUrl,
-      });
-
-      alert('✅ Video generated successfully! The page will refresh.');
-      window.location.reload();
     } catch (error) {
       console.error('Error generating video:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate video';
       alert(`❌ Error: ${errorMessage}`);
-    } finally {
       setIsGeneratingVideo(false);
+      setIsRegeneratingVideo(false);
+      setVideoRegenerationMessage('');
     }
   };
 
-  const handleDownloadVideo = async () => {
-    if (!patchNote?.videoUrl || !patchNote.id) return;
-
-    try {
-      // Always fetch a fresh signed URL to avoid expiration issues
-      console.log('📥 Fetching fresh signed URL for download...');
-      const response = await fetch(`/api/videos/signed-url?patchNoteId=${patchNote.id}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate download URL');
-      }
-
-      const data = await response.json();
-      const downloadUrl = data.signedUrl;
-
-      // Create a temporary anchor element to trigger download
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `${patchNote.repoName?.replace('/', '-') || 'patch-note'}-video.mp4`;
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      console.log('✅ Download initiated');
-    } catch (error) {
-      console.error('Error downloading video:', error);
-      alert('❌ Error downloading video. Please try refreshing the page and trying again.');
-    }
-  };
 
   const handleRegenerateSummary = async () => {
     if (!patchNote || isRegenerating) {
@@ -530,9 +569,81 @@ export default function BlogViewPage() {
     );
   }
 
+  const isProcessing = patchNote?.processingStatus && 
+    patchNote.processingStatus !== 'completed' && 
+    patchNote.processingStatus !== 'failed';
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Processing Status Banner */}
+        {patchNote?.processingStatus === 'failed' && (
+          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">❌</span>
+              <div className="flex-1">
+                <p className="font-semibold text-red-900 dark:text-red-100">
+                  Processing Failed
+                </p>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                  {patchNote.processingError || 'An error occurred while processing this patch note.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Video Rendering Error Banner (completed but with error) */}
+        {patchNote?.processingStatus === 'completed' && patchNote.processingError && (
+          <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚠️</span>
+              <div className="flex-1">
+                <p className="font-semibold text-amber-900 dark:text-amber-100">
+                  Video Rendering Failed
+                </p>
+                <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                  {patchNote.processingError}
+                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                  Content was generated successfully. You can regenerate the video later using the "Generate Video" button below.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {isProcessing && (
+          <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-center gap-6">
+              {typeof patchNote.processingProgress === 'number' ? (
+                <AnimatedCircularProgressBar
+                  value={patchNote.processingProgress}
+                  min={0}
+                  max={100}
+                  gaugePrimaryColor="rgb(37 99 235)"
+                  gaugeSecondaryColor="rgba(37, 99, 235, 0.2)"
+                  className="size-16 text-sm flex-shrink-0"
+                />
+              ) : (
+                <Loader2Icon className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0" />
+              )}
+              <div className="flex-1">
+                <p className="font-semibold text-blue-900 dark:text-blue-100">
+                  {patchNote.processingStatus === 'pending' && 'Queued for Processing'}
+                  {patchNote.processingStatus === 'fetching_stats' && 'Fetching Repository Stats'}
+                  {patchNote.processingStatus === 'analyzing_commits' && 'Analyzing Commits with AI'}
+                  {patchNote.processingStatus === 'generating_content' && 'Generating Content'}
+                  {patchNote.processingStatus === 'generating_video' && 'Rendering Video'}
+                </p>
+                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                  {patchNote.processingStage || 'Processing your patch note...'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-8">
           <Button
@@ -547,9 +658,9 @@ export default function BlogViewPage() {
 
           {/* Hero Image/Video */}
           <div className="mb-6 rounded-lg overflow-hidden shadow-lg relative">
-            {signedVideoUrl || patchNote.videoUrl ? (
+            {patchNote.videoUrl ? (
               <a
-                href={signedVideoUrl || patchNote.videoUrl || undefined}
+                href={patchNote.videoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block hover:opacity-90 transition-opacity"
@@ -588,8 +699,19 @@ export default function BlogViewPage() {
           {/* Video Regeneration Status Banner */}
           {isRegeneratingVideo && (
             <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <div className="flex items-center gap-3">
-                <Loader2Icon className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0" />
+              <div className="flex items-center gap-6">
+                {typeof patchNote.processingProgress === 'number' ? (
+                  <AnimatedCircularProgressBar
+                    value={patchNote.processingProgress}
+                    min={0}
+                    max={100}
+                    gaugePrimaryColor="rgb(37 99 235)"
+                    gaugeSecondaryColor="rgba(37, 99, 235, 0.2)"
+                    className="size-16 text-sm flex-shrink-0"
+                  />
+                ) : (
+                  <Loader2Icon className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0" />
+                )}
                 <div className="flex-1">
                   <p className="font-semibold text-blue-900 dark:text-blue-100">
                     Regenerating Video
@@ -653,16 +775,16 @@ export default function BlogViewPage() {
                 </>
               ) : (
                 <>
-                  <Button variant="outline" size="sm" onClick={handleEdit}>
+                  <Button variant="outline" size="sm" onClick={handleEdit} disabled={isProcessing}>
                     <PencilIcon className="h-4 w-4 mr-2" />
                     Edit
                   </Button>
-                  {!patchNote.videoUrl ? (
+                  {!patchNote.videoUrl && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handleGenerateVideo}
-                      disabled={isGeneratingVideo || !patchNote.videoData}
+                      disabled={isGeneratingVideo || !patchNote.videoData || isProcessing}
                     >
                       {isGeneratingVideo ? (
                         <>
@@ -675,21 +797,12 @@ export default function BlogViewPage() {
                         </>
                       )}
                     </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDownloadVideo}
-                    >
-                      <DownloadIcon className="h-4 w-4 mr-2" />
-                      Download Video
-                    </Button>
                   )}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleCreateTweetThread}
-                    disabled={isCreatingThread}
+                    disabled={isCreatingThread || isProcessing}
                   >
                     {isCreatingThread ? (
                       <>
@@ -706,8 +819,14 @@ export default function BlogViewPage() {
                   <Button
                     size="sm"
                     onClick={handleSendEmail}
-                    disabled={isSending || !patchNote.videoUrl}
-                    title={!patchNote.videoUrl ? "Wait for video to finish rendering" : ""}
+                    disabled={isSending || !patchNote.videoUrl || isProcessing}
+                    title={
+                      isProcessing 
+                        ? "Wait for processing to complete" 
+                        : !patchNote.videoUrl 
+                        ? "Wait for video to finish rendering" 
+                        : ""
+                    }
                   >
                     <PaperAirplaneIcon className="h-4 w-4 mr-2" />
                     {isSending ? "Sending..." : "Send Email"}
@@ -769,30 +888,44 @@ export default function BlogViewPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardDescription>Lines Added</CardDescription>
-              <CardTitle className="text-3xl text-green-600">
-                +{patchNote.changes.added.toLocaleString()}
-              </CardTitle>
+              {isProcessing ? (
+                <Skeleton className="h-9 w-24" />
+              ) : (
+                <CardTitle className="text-3xl text-green-600">
+                  +{patchNote.changes.added.toLocaleString()}
+                </CardTitle>
+              )}
             </CardHeader>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
               <CardDescription>Lines Removed</CardDescription>
-              <CardTitle className="text-3xl text-red-600">
-                -{patchNote.changes.removed.toLocaleString()}
-              </CardTitle>
+              {isProcessing ? (
+                <Skeleton className="h-9 w-24" />
+              ) : (
+                <CardTitle className="text-3xl text-red-600">
+                  -{patchNote.changes.removed.toLocaleString()}
+                </CardTitle>
+              )}
             </CardHeader>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
               <CardDescription>Contributors</CardDescription>
-              <CardTitle className="text-3xl text-blue-600">
-                {patchNote.contributors.length}
-              </CardTitle>
-              <CardDescription>
-                contributor{patchNote.contributors.length !== 1 ? "s" : ""}
-              </CardDescription>
+              {isProcessing ? (
+                <Skeleton className="h-9 w-16" />
+              ) : (
+                <>
+                  <CardTitle className="text-3xl text-blue-600">
+                    {patchNote.contributors.length}
+                  </CardTitle>
+                  <CardDescription>
+                    contributor{patchNote.contributors.length !== 1 ? "s" : ""}
+                  </CardDescription>
+                </>
+              )}
             </CardHeader>
           </Card>
         </div>
@@ -860,7 +993,25 @@ export default function BlogViewPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {isEditing ? (
+            {isProcessing && patchNote.content === '...' ? (
+              <div className="space-y-4">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-[90%]" />
+                <Skeleton className="h-4 w-[95%]" />
+                <Skeleton className="h-4 w-[85%]" />
+                <div className="pt-4" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-[92%]" />
+                <Skeleton className="h-4 w-[88%]" />
+                <div className="pt-4" />
+                <Skeleton className="h-4 w-[94%]" />
+                <Skeleton className="h-4 w-[90%]" />
+                <Skeleton className="h-4 w-full" />
+                <p className="text-center text-sm text-muted-foreground pt-8">
+                  Generating content... This may take 30-60 seconds.
+                </p>
+              </div>
+            ) : isEditing ? (
               <Textarea
                 value={editedContent}
                 onChange={(e) => setEditedContent(e.target.value)}
@@ -1077,11 +1228,10 @@ export default function BlogViewPage() {
                               setVideoRegenerationMessage('Regenerating video with new changes...');
                               setIsRegeneratingVideo(true);
                               
-                              const videoResponse = await fetch('/api/videos/render', {
+                              const videoResponse = await fetch(`/api/patch-notes/${patchNote.id}/regenerate-video`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
-                                  patchNoteId: patchNote.id,
                                   videoData: {
                                     langCode: 'en',
                                     topChanges: editedVideoTop3,
@@ -1264,11 +1414,21 @@ export default function BlogViewPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {patchNote.contributors.map((contributor) => (
-                <Badge key={contributor} variant="secondary">
-                  {contributor}
-                </Badge>
-              ))}
+              {isProcessing && patchNote.contributors.length === 0 ? (
+                <>
+                  <Skeleton className="h-6 w-24" />
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-6 w-28" />
+                </>
+              ) : patchNote.contributors.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No contributors yet</p>
+              ) : (
+                patchNote.contributors.map((contributor) => (
+                  <Badge key={contributor} variant="secondary">
+                    {contributor}
+                  </Badge>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

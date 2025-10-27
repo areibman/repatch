@@ -7,177 +7,265 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       ai_templates: {
         Row: {
+          content: string
+          created_at: string
           id: string
           name: string
-          description: string | null
-          audience: string
-          commit_prompt: string
-          overall_prompt: string
-          examples: Json
-          content: string | null
-          created_at: string
           updated_at: string
         }
         Insert: {
+          content: string
+          created_at?: string
           id?: string
           name: string
-          description?: string | null
-          audience?: string
-          commit_prompt?: string
-          overall_prompt?: string
-          examples?: Json
-          content?: string | null
-          created_at?: string
           updated_at?: string
         }
         Update: {
+          content?: string
+          created_at?: string
           id?: string
           name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_templates_backup: {
+        Row: {
+          audience: string | null
+          commit_prompt: string | null
+          created_at: string | null
+          description: string | null
+          examples: Json | null
+          id: string | null
+          name: string | null
+          overall_prompt: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          audience?: string | null
+          commit_prompt?: string | null
+          created_at?: string | null
           description?: string | null
-          audience?: string
-          commit_prompt?: string
-          overall_prompt?: string
-          examples?: Json
-          content?: string | null
+          examples?: Json | null
+          id?: string | null
+          name?: string | null
+          overall_prompt?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          audience?: string | null
+          commit_prompt?: string | null
+          created_at?: string | null
+          description?: string | null
+          examples?: Json | null
+          id?: string | null
+          name?: string | null
+          overall_prompt?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      email_integrations: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          provider: Database["public"]["Enums"]["email_provider_type"]
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
           created_at?: string
+          id?: string
+          is_active?: boolean
+          provider: Database["public"]["Enums"]["email_provider_type"]
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          provider?: Database["public"]["Enums"]["email_provider_type"]
+          settings?: Json
           updated_at?: string
         }
         Relationships: []
       }
       email_subscribers: {
         Row: {
-          id: string
-          email: string
           active: boolean
           created_at: string
+          email: string
+          id: string
           updated_at: string
         }
         Insert: {
-          id?: string
-          email: string
           active?: boolean
           created_at?: string
+          email: string
+          id?: string
           updated_at?: string
         }
         Update: {
-          id?: string
-          email?: string
           active?: boolean
           created_at?: string
+          email?: string
+          id?: string
           updated_at?: string
         }
         Relationships: []
       }
       github_configs: {
         Row: {
-          id: string
-          repo_url: string
-          repo_owner: string | null
-          repo_name: string | null
           access_token: string
           created_at: string
+          id: string
+          repo_name: string | null
+          repo_owner: string | null
+          repo_url: string
           updated_at: string
         }
         Insert: {
-          id?: string
-          repo_url: string
-          repo_owner?: string | null
-          repo_name?: string | null
           access_token: string
           created_at?: string
+          id?: string
+          repo_name?: string | null
+          repo_owner?: string | null
+          repo_url: string
           updated_at?: string
         }
         Update: {
-          id?: string
-          repo_url?: string
-          repo_owner?: string | null
-          repo_name?: string | null
           access_token?: string
           created_at?: string
+          id?: string
+          repo_name?: string | null
+          repo_owner?: string | null
+          repo_url?: string
           updated_at?: string
         }
         Relationships: []
       }
       patch_notes: {
         Row: {
+          ai_detailed_contexts: Json | null
+          ai_overall_summary: string | null
+          ai_summaries: Json | null
+          ai_template_id: string | null
+          changes: Json
+          content: string | null
+          contributors: string[]
+          created_at: string
+          filter_metadata: Json | null
+          generated_at: string
           id: string
+          processing_error: string | null
+          processing_progress: number | null
+          processing_stage: string | null
+          processing_status:
+            | Database["public"]["Enums"]["processing_status_type"]
+            | null
+          repo_branch: string | null
           repo_name: string
           repo_url: string
           time_period: Database["public"]["Enums"]["time_period_type"]
           title: string
-          content: string
-          changes: Json
-          contributors: string[]
-          generated_at: string
-          created_at: string
           updated_at: string
           video_data: Json | null
-          ai_summaries: Json
-          ai_overall_summary: string | null
-          video_url: string | null
-          filter_metadata: Json | null
-          ai_template_id: string | null
-          repo_branch: string
-          ai_detailed_contexts: Json | null
           video_top_changes: Json | null
+          video_url: string | null
         }
         Insert: {
+          ai_detailed_contexts?: Json | null
+          ai_overall_summary?: string | null
+          ai_summaries?: Json | null
+          ai_template_id?: string | null
+          changes?: Json
+          content?: string | null
+          contributors?: string[]
+          created_at?: string
+          filter_metadata?: Json | null
+          generated_at?: string
           id?: string
+          processing_error?: string | null
+          processing_progress?: number | null
+          processing_stage?: string | null
+          processing_status?:
+            | Database["public"]["Enums"]["processing_status_type"]
+            | null
+          repo_branch?: string | null
           repo_name: string
           repo_url: string
           time_period: Database["public"]["Enums"]["time_period_type"]
           title: string
-          content: string
-          changes?: Json
-          contributors?: string[]
-          generated_at?: string
-          created_at?: string
           updated_at?: string
           video_data?: Json | null
-          ai_summaries?: Json
-          ai_overall_summary?: string | null
-          video_url?: string | null
-          filter_metadata?: Json | null
-          ai_template_id?: string | null
-          repo_branch?: string
-          ai_detailed_contexts?: Json | null
           video_top_changes?: Json | null
+          video_url?: string | null
         }
         Update: {
+          ai_detailed_contexts?: Json | null
+          ai_overall_summary?: string | null
+          ai_summaries?: Json | null
+          ai_template_id?: string | null
+          changes?: Json
+          content?: string | null
+          contributors?: string[]
+          created_at?: string
+          filter_metadata?: Json | null
+          generated_at?: string
           id?: string
+          processing_error?: string | null
+          processing_progress?: number | null
+          processing_stage?: string | null
+          processing_status?:
+            | Database["public"]["Enums"]["processing_status_type"]
+            | null
+          repo_branch?: string | null
           repo_name?: string
           repo_url?: string
           time_period?: Database["public"]["Enums"]["time_period_type"]
           title?: string
-          content?: string
-          changes?: Json
-          contributors?: string[]
-          generated_at?: string
-          created_at?: string
           updated_at?: string
           video_data?: Json | null
-          ai_summaries?: Json
-          ai_overall_summary?: string | null
-          video_url?: string | null
-          filter_metadata?: Json | null
-          ai_template_id?: string | null
-          repo_branch?: string
-          ai_detailed_contexts?: Json | null
           video_top_changes?: Json | null
+          video_url?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "patch_notes_ai_template_id_fkey"
-            columns: ["ai_template_id"]
-            isOneToOne: false
-            referencedRelation: "ai_templates"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
     }
     Views: {
@@ -187,6 +275,15 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      email_provider_type: "resend" | "customerio"
+      processing_status_type:
+        | "pending"
+        | "fetching_stats"
+        | "analyzing_commits"
+        | "generating_content"
+        | "generating_video"
+        | "completed"
+        | "failed"
       time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
     }
     CompositeTypes: {
@@ -195,85 +292,140 @@ export type Database = {
   }
 }
 
-type PublicSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
-  PublicTableNameOrOptions extends
-    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-        Database[PublicTableNameOrOptions["schema"]]["Views"])
-    : never = never
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
-      PublicSchema["Views"])
-  ? (PublicSchema["Tables"] &
-      PublicSchema["Views"])[PublicTableNameOrOptions] extends {
-      Row: infer R
-    }
-    ? R
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
     : never
-  : never
 
 export type TablesInsert<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
-    : never = never
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-  ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
-      Insert: infer I
-    }
-    ? I
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
     : never
-  : never
 
 export type TablesUpdate<
-  PublicTableNameOrOptions extends
-    | keyof PublicSchema["Tables"]
-    | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
-    : never = never
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-  ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
-      Update: infer U
-    }
-    ? U
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
     : never
-  : never
 
 export type Enums<
-  PublicEnumNameOrOptions extends
-    | keyof PublicSchema["Enums"]
-    | { schema: keyof Database },
-  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
-    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
-    : never = never
-> = PublicEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
-  ? PublicSchema["Enums"][PublicEnumNameOrOptions]
-  : never
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
 
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
+  public: {
+    Enums: {
+      email_provider_type: ["resend", "customerio"],
+      processing_status_type: [
+        "pending",
+        "fetching_stats",
+        "analyzing_commits",
+        "generating_content",
+        "generating_video",
+        "completed",
+        "failed",
+      ],
+      time_period_type: ["1day", "1week", "1month", "custom", "release"],
+    },
+  },
+} as const

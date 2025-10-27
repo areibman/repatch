@@ -31,6 +31,8 @@ export type TimePreset = "1day" | "1week" | "1month";
 
 export type FilterMode = "preset" | "custom" | "release";
 
+export type ProcessingStatus = "pending" | "fetching_stats" | "analyzing_commits" | "generating_content" | "generating_video" | "completed" | "failed";
+
 export interface PatchNoteFilters {
   mode: FilterMode;
   preset?: TimePreset;
@@ -75,4 +77,8 @@ export interface PatchNote {
   aiTemplate?: AiTemplate;
   filterMetadata?: PatchNoteFilters | null;
   videoTopChanges?: Array<{ title: string; description: string }> | null;
+  processingStatus?: ProcessingStatus;
+  processingStage?: string | null;
+  processingError?: string | null;
+  processingProgress?: number | null;
 }

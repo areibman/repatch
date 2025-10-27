@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { renderPatchNoteVideo } from "@/lib/video-renderer";
+import { renderPatchNoteVideoOnLambda } from "@/lib/remotion-lambda-renderer";
 import { generateVideoTopChangesFromContent } from "@/lib/ai-summarizer";
 
 // GET /api/patch-notes - Fetch all patch notes
@@ -78,6 +78,8 @@ export async function POST(request: NextRequest) {
           ai_template_id: body.ai_template_id || null,
           filter_metadata: body.filter_metadata || null,
           generated_at: body.generated_at || new Date().toISOString(),
+          processing_status: body.processing_status || 'completed',
+          processing_stage: body.processing_stage || null,
         },
       ])
       .select()
@@ -88,21 +90,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Trigger video rendering asynchronously (don't wait for it)
-    if (videoData && data.id) {
-      console.log('🎬 Triggering video rendering...');
+    // Only trigger video rendering if the patch note is completed (not pending)
+    if (videoData && data.id && body.processing_status !== 'pending') {
+      console.log('🎬 Triggering Lambda video rendering...');
       console.log('   - Patch Note ID:', data.id);
       console.log('   - Repo:', body.repo_name);
-      
-      // Call the render function directly - no HTTP request needed!
-      renderPatchNoteVideo(data.id, videoData, body.repo_name)
+
+      // Call the Lambda render function directly - no HTTP request needed!
+      renderPatchNoteVideoOnLambda(data.id, videoData, body.repo_name)
         .then((result: { videoUrl: string }) => {
-          console.log('✅ Video rendering completed:', result);
+          console.log('✅ Lambda video rendering completed:', result);
         })
         .catch((err: Error) => {
-          console.error('❌ Background video rendering failed:', err);
+          console.error('❌ Background Lambda video rendering failed:', err);
           // Don't fail the patch note creation if video rendering fails
         });
+    } else if (body.processing_status === 'pending') {
+      console.log('⏳ Patch note is pending - will process later');
     } else {
       console.log('⚠️  Video rendering NOT triggered:', {
         hasVideoData: !!videoData,
