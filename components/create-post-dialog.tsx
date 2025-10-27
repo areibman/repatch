@@ -418,6 +418,7 @@ export function CreatePostDialog() {
     }
 
     setIsLoading(true);
+    setLoadingStep('Creating patch note...');
 
     try {
       let filterPayload: PatchNoteFilters;
@@ -501,82 +502,6 @@ export function CreatePostDialog() {
         filterPayload.excludeTags = sanitizedExcludeTags;
       }
 
-      const filterSummary = formatFilterSummary(
-        filterPayload,
-        filterPayload.mode === 'release'
-          ? 'release'
-          : filterPayload.mode === 'custom'
-          ? 'custom'
-          : filterPayload.preset ?? '1week'
-      );
-
-      // Fetch real GitHub statistics via API route (server-side with token)
-      setLoadingStep('📊 Fetching repository statistics...');
-      const statsResponse = await fetch('/api/github/stats', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          owner: repoInfo.owner,
-          repo: repoInfo.repo,
-          branch: selectedBranch,
-          filters: filterPayload,
-        }),
-      });
-
-      if (!statsResponse.ok) {
-        const error = await statsResponse.json();
-        throw new Error(error.error || 'Failed to fetch repository stats');
-      }
-
-      const stats = await statsResponse.json();
-
-      // Generate AI summaries for commits
-      setLoadingStep('Analyzing commits (30-60s)...');
-      console.log('Fetching AI summaries for filters:', filterSummary);
-      const summariesResponse = await fetch('/api/github/summarize', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          owner: repoInfo.owner,
-          repo: repoInfo.repo,
-          filters: filterPayload,
-          branch: selectedBranch,
-          templateId: selectedTemplateId || undefined,
-          generateCommitTitles: !includeCommitMessages,
-        }),
-      });
-
-      let aiGeneratedContent: string | null = null;
-      let detailedContexts: any[] = [];
-
-      if (summariesResponse.ok) {
-        const summaryData = await summariesResponse.json();
-        aiGeneratedContent = summaryData.content || null;
-        detailedContexts = summaryData.detailedContexts || [];
-        console.log('AI changelog generated from', detailedContexts.length, 'commits');
-      } else {
-        console.warn('Failed to generate AI changelog, continuing without it');
-      }
-
-      // Use AI-generated content, or fallback to boilerplate
-      setLoadingStep('✍️ Generating patch note content...');
-      const content = aiGeneratedContent
-        ? aiGeneratedContent
-        : generateBoilerplateContent(
-            `${repoInfo.owner}/${repoInfo.repo}`,
-            filterPayload,
-            stats
-          );
-
-      // Don't generate video data during creation - we'll generate it properly after
-      // the final content is ready by calling the generate-video-top3 endpoint
-      console.log('📹 Video data will be generated from final content later');
-      const videoData = null;
-
       const descriptor =
         filterPayload.mode === 'preset' && filterPayload.preset
           ? getPresetLabel(filterPayload.preset)
@@ -584,8 +509,7 @@ export function CreatePostDialog() {
           ? 'Release Selection'
           : 'Custom Range';
 
-      // Create the patch note with real data and AI summaries
-      setLoadingStep('💾 Saving patch note...');
+      // Create a pending patch note immediately
       const response = await fetch('/api/patch-notes', {
         method: 'POST',
         headers: {
@@ -597,18 +521,18 @@ export function CreatePostDialog() {
           repo_branch: selectedBranch,
           time_period: deriveTimePeriodValue(filterPayload),
           title: `${descriptor} Update - ${repoInfo.repo}`,
-          content,
+          content: '...', // Placeholder content
           changes: {
-            added: stats.additions,
-            modified: 0, // GitHub API doesn't distinguish modified from additions
-            removed: stats.deletions,
+            added: 0,
+            modified: 0,
+            removed: 0,
           },
-          contributors: stats.contributors,
-          video_data: videoData,
-          ai_detailed_contexts: detailedContexts,
+          contributors: [],
           ai_template_id: selectedTemplateId,
           filter_metadata: filterPayload,
           generated_at: new Date().toISOString(),
+          processing_status: 'pending',
+          processing_stage: 'Queued for processing...',
         }),
       });
 
@@ -622,32 +546,55 @@ export function CreatePostDialog() {
       // Save to recent repos
       saveRecentRepo(repoUrl, repoInfo.owner, repoInfo.repo);
 
-      // Close modal and redirect to the new post
+      // Immediately close modal and navigate to the post
       setOpen(false);
-      setRepoUrl('');
-      setBranches([]);
-      setSelectedBranch('');
-      setFilterMode('preset');
-      setTimePreset('1week');
-      setCustomStart('');
-      setCustomEnd('');
-      setAvailableLabels([]);
-      setAvailableTags([]);
-      setAvailableReleases([]);
-      setSelectedReleases([]);
-      setIncludeLabels([]);
-      setExcludeLabels([]);
-      setIncludeTags([]);
-      setExcludeTags([]);
-      setLoadingStep('');
       router.push(`/blog/${data.id}`);
       router.refresh();
+
+      // Trigger background processing (don't await)
+      fetch(`/api/patch-notes/${data.id}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          owner: repoInfo.owner,
+          repo: repoInfo.repo,
+          repoUrl,
+          branch: selectedBranch,
+          filters: filterPayload,
+          templateId: selectedTemplateId,
+          generateCommitTitles: includeCommitMessages,
+        }),
+      }).catch((error) => {
+        console.error('Background processing failed:', error);
+      });
+
+      // Reset form state after navigation
+      setTimeout(() => {
+        setRepoUrl('');
+        setBranches([]);
+        setSelectedBranch('');
+        setFilterMode('preset');
+        setTimePreset('1week');
+        setCustomStart('');
+        setCustomEnd('');
+        setAvailableLabels([]);
+        setAvailableTags([]);
+        setAvailableReleases([]);
+        setSelectedReleases([]);
+        setIncludeLabels([]);
+        setExcludeLabels([]);
+        setIncludeTags([]);
+        setExcludeTags([]);
+        setLoadingStep('');
+        setIsLoading(false);
+      }, 100);
     } catch (error) {
       console.error("Error creating patch note:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Failed to create patch note";
       alert(`Error: ${errorMessage}`);
-    } finally {
       setIsLoading(false);
       setLoadingStep('');
     }
