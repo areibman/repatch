@@ -605,10 +605,16 @@ export default function BlogViewPage() {
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
-                <Badge variant="secondary">
+                <Badge
+                  variant="magic"
+                  className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide"
+                >
                   {getFilterLabel(patchNote)}
                 </Badge>
-                <Badge variant="outline">
+                <Badge
+                  variant="magic"
+                  className="px-3 py-1 text-[11px] font-medium text-muted-foreground"
+                >
                   {new Date(patchNote.generatedAt).toLocaleDateString()}
                 </Badge>
               </div>
@@ -1150,7 +1156,12 @@ export default function BlogViewPage() {
                       <Card key={index} className="border-2">
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between">
-                            <Badge variant="secondary">Change #{index + 1}</Badge>
+                            <Badge
+                              variant="magic"
+                              className="px-2.5 py-0.5 text-[11px] font-semibold uppercase"
+                            >
+                              Change #{index + 1}
+                            </Badge>
                             {isEditingVideoTop3 && (
                               <Button
                                 variant="ghost"
@@ -1265,7 +1276,11 @@ export default function BlogViewPage() {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {patchNote.contributors.map((contributor) => (
-                <Badge key={contributor} variant="secondary">
+                <Badge
+                  key={contributor}
+                  variant="magic"
+                  className="px-3 py-1 text-[11px] font-medium"
+                >
                   {contributor}
                 </Badge>
               ))}
