@@ -16,8 +16,8 @@ interface VideoData {
 export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoData?: VideoData, repoName?: string) {
   console.log('🎬 Starting Lambda video render for patch note:', patchNoteId);
 
-  // Fetch the patch note from database
-  const supabase = await createClient();
+  // Use service client for all DB operations (works in background/async contexts)
+  const supabase = createServiceClient();
   const { data: patchNote, error: fetchError } = await supabase
     .from('patch_notes')
     .select('ai_summaries, video_data, repo_name, content, ai_detailed_contexts, video_top_changes')
@@ -235,8 +235,6 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
     console.log('✅ Lambda render completed!');
     console.log('   - Output file:', progress.outputFile);
     console.log('   - Full progress object:', JSON.stringify(progress, null, 2));
-
-    const serviceSupabase = createServiceClient();
 
     // Construct the correct S3 URL
     // Check if outputFile is already a full URL or just a key

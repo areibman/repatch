@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { generateVideoTopChangesFromContent } from "@/lib/ai-summarizer";
 import { renderPatchNoteVideoOnLambda } from "@/lib/remotion-lambda-renderer";
 import { generateBoilerplateContent } from "@/lib/github";
@@ -173,24 +174,27 @@ export async function POST(
       console.log('   - Patch Note ID:', id);
       console.log('   - Repo:', `${owner}/${repo}`);
 
+      // Use service client for async operations (server client won't work in callbacks)
+      const serviceClient = createServiceClient();
+
       renderPatchNoteVideoOnLambda(id, videoData, `${owner}/${repo}`)
         .then((result: { videoUrl: string }) => {
           console.log('✅ Lambda video rendering completed:', result);
-          // Mark as completed
-          supabase
+          // Mark as completed using service client
+          return serviceClient
             .from("patch_notes")
             .update({
               processing_status: "completed",
               processing_stage: null,
               processing_progress: 100,
             })
-            .eq("id", id)
-            .then(() => console.log('✅ Patch note marked as completed'));
+            .eq("id", id);
         })
+        .then(() => console.log('✅ Patch note marked as completed'))
         .catch((err: Error) => {
           console.error('❌ Background Lambda video rendering failed:', err);
           // Mark as completed anyway (video can be regenerated later)
-          supabase
+          return serviceClient
             .from("patch_notes")
             .update({
               processing_status: "completed",
