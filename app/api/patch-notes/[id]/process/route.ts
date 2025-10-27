@@ -84,6 +84,7 @@ export async function POST(
     });
 
     let aiGeneratedContent: string | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let detailedContexts: any[] = [];
 
     if (summariesResponse.ok) {

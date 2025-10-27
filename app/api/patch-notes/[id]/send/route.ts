@@ -64,8 +64,8 @@ export async function POST(
 
     // Filter out unsubscribed contacts and extract emails
     const activeEmails = contacts.data.data
-      .filter((contact: any) => !contact.unsubscribed)
-      .map((contact: any) => contact.email);
+      .filter((contact: { unsubscribed?: boolean }) => !contact.unsubscribed)
+      .map((contact: { email: string }) => contact.email);
 
     if (activeEmails.length === 0) {
       return NextResponse.json(
@@ -87,7 +87,7 @@ export async function POST(
     await new Promise(resolve => setTimeout(resolve, 600));
 
     // Convert markdown content to HTML
-    const htmlContent = markdownToHtml((patchNote as PatchNote).content);
+    const htmlContent = markdownToHtml((patchNote as PatchNote).content || '');
 
     // Get the base URL for absolute links
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 

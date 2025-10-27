@@ -203,12 +203,21 @@ export function CreatePostDialog() {
         const releases = await releasesRes.json();
         if (Array.isArray(releases)) {
           setAvailableReleases(
-            releases.map((release: any) => ({
+            releases.map((release: { 
+              id: number; 
+              tagName?: string; 
+              tag_name?: string; 
+              name?: string | null;
+              publishedAt?: string | null;
+              published_at?: string | null;
+              targetCommitish?: string;
+              target_commitish?: string;
+            }) => ({
               id: release.id,
-              tagName: release.tagName || release.tag_name,
+              tagName: release.tagName || release.tag_name || '',
               name: release.name ?? null,
               publishedAt: release.publishedAt || release.published_at || null,
-              targetCommitish: release.targetCommitish || release.target_commitish || 'main',
+              targetCommitish: release.targetCommitish || release.target_commitish || '',
             }))
           );
         }

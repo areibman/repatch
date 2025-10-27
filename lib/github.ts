@@ -132,7 +132,7 @@ export async function fetchGitHubBranches(
       break; // No more branches
     }
     
-    allBranches.push(...branches.map((branch: any) => ({
+    allBranches.push(...branches.map((branch: { name: string; protected?: boolean }) => ({
       name: branch.name,
       protected: branch.protected || false,
     })));
@@ -195,7 +195,7 @@ export async function fetchGitHubTags(
       break;
     }
 
-    data.forEach((tag: any) => {
+    data.forEach((tag: { name?: string; commit?: { sha?: string } }) => {
       if (tag?.name && tag?.commit?.sha) {
         tags.push({ name: tag.name, commitSha: tag.commit.sha });
       }
@@ -252,7 +252,13 @@ export async function fetchGitHubReleases(
       break;
     }
 
-    data.forEach((release: any) => {
+    data.forEach((release: { 
+      id: number; 
+      tag_name: string; 
+      name: string | null; 
+      published_at: string; 
+      target_commitish: string 
+    }) => {
       releases.push({
         id: release.id,
         tagName: release.tag_name,
@@ -305,7 +311,7 @@ export async function fetchGitHubLabels(
       break;
     }
 
-    data.forEach((label: any) => {
+    data.forEach((label: { name?: string }) => {
       if (label?.name) {
         labels.push(label.name);
       }
@@ -431,7 +437,7 @@ export async function fetchPullRequestDetails(
     let comments: Array<{ author: string; body: string }> = [];
     if (commentsResponse.ok) {
       const commentsData = await commentsResponse.json();
-      comments = commentsData.map((comment: any) => ({
+      comments = commentsData.map((comment: { user?: { login?: string }; body?: string }) => ({
         author: comment.user?.login || 'unknown',
         body: comment.body || '',
       }));
@@ -629,9 +635,9 @@ async function fetchCommitLabels(
     const data = await response.json();
     const labelSet = new Set<string>();
     if (Array.isArray(data)) {
-      data.forEach((pull: any) => {
+      data.forEach((pull: { labels?: Array<{ name?: string }> }) => {
         if (Array.isArray(pull?.labels)) {
-          pull.labels.forEach((label: any) => {
+          pull.labels.forEach((label: { name?: string }) => {
             if (label?.name) {
               labelSet.add(label.name);
             }

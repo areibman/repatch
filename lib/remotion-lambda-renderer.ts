@@ -1,4 +1,4 @@
-import { renderMediaOnLambda, getRenderProgress } from '@remotion/lambda/client';
+import { renderMediaOnLambda, getRenderProgress, AwsRegion } from '@remotion/lambda/client';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/service';
 import { generateVideoTopChangesFromContent, generateVideoTopChanges } from '@/lib/ai-summarizer';
@@ -7,7 +7,13 @@ const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 const REMOTION_APP_FUNCTION_NAME = process.env.REMOTION_APP_FUNCTION_NAME || 'remotion-render-4-0-355-mem2048mb-disk2048mb-300sec';
 const REMOTION_APP_SERVE_URL = process.env.REMOTION_APP_SERVE_URL || 'https://remotionlambda-useast1-slzcsqmp1p.s3.us-east-1.amazonaws.com/sites/repatch-video-renderer/index.html';
 
-export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoData?: any, repoName?: string) {
+interface VideoData {
+  langCode: string;
+  topChanges: Array<{ title: string; description: string }>;
+  allChanges: string[];
+}
+
+export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoData?: VideoData, repoName?: string) {
   console.log('🎬 Starting Lambda video render for patch note:', patchNoteId);
 
   // Fetch the patch note from database
@@ -35,6 +41,7 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
     console.log('✨ Using MANUALLY EDITED video top changes!');
     console.log('   - Found', patchNote.video_top_changes.length, 'edited changes');
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const topChanges = patchNote.video_top_changes.map((change: any) => ({
       title: change.title || '',
       description: change.description || '',
@@ -45,12 +52,14 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
 
     if (patchNote.ai_detailed_contexts && Array.isArray(patchNote.ai_detailed_contexts) && patchNote.ai_detailed_contexts.length > 0) {
       console.log('📝 Using detailed contexts for scrolling section');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       allChanges = patchNote.ai_detailed_contexts.map((ctx: any) => {
         const commitTitle = ctx.message?.split("\n")[0] || 'Change';
         return `${commitTitle}\n${ctx.context || ctx.message}`;
       });
     } else if (patchNote.ai_summaries && Array.isArray(patchNote.ai_summaries)) {
       console.log('📝 Using ai_summaries for scrolling section');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       allChanges = patchNote.ai_summaries.map((summary: any) => {
         const commitTitle = summary.message.split("\n")[0];
         return `${commitTitle}\n${summary.aiSummary || summary.message}`;
@@ -82,12 +91,14 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
 
       if (patchNote.ai_detailed_contexts && Array.isArray(patchNote.ai_detailed_contexts) && patchNote.ai_detailed_contexts.length > 0) {
         console.log('📝 Using detailed contexts for scrolling section');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         allChanges = patchNote.ai_detailed_contexts.map((ctx: any) => {
           const commitTitle = ctx.message?.split("\n")[0] || 'Change';
           return `${commitTitle}\n${ctx.context || ctx.message}`;
         });
       } else if (patchNote.ai_summaries && Array.isArray(patchNote.ai_summaries)) {
         console.log('📝 Using ai_summaries for scrolling section');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         allChanges = patchNote.ai_summaries.map((summary: any) => {
           const commitTitle = summary.message.split("\n")[0];
           return `${commitTitle}\n${summary.aiSummary || summary.message}`;
@@ -121,6 +132,7 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
     let allChanges: string[] = [];
 
     if (patchNote.ai_detailed_contexts && Array.isArray(patchNote.ai_detailed_contexts) && patchNote.ai_detailed_contexts.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       allChanges = patchNote.ai_detailed_contexts.map((ctx: any) => {
         const commitTitle = ctx.message?.split("\n")[0] || 'Change';
         return `${commitTitle}\n${ctx.context || ctx.message}`;
@@ -140,8 +152,8 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
   }
 
   console.log('📹 Final video data structure:');
-  console.log('   - Top changes:', finalVideoData.topChanges?.length || 0);
-  console.log('   - All changes:', finalVideoData.allChanges?.length || 0);
+  console.log('   - Top changes:', finalVideoData?.topChanges?.length || 0);
+  console.log('   - All changes:', finalVideoData?.allChanges?.length || 0);
 
   console.log('☁️  Rendering video on Lambda...');
   console.log('   - Region:', AWS_REGION);
@@ -161,7 +173,7 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
   try {
     // Render on Lambda
     const renderResponse = await renderMediaOnLambda({
-      region: AWS_REGION as any,
+      region: AWS_REGION as AwsRegion,
       functionName: REMOTION_APP_FUNCTION_NAME,
       serveUrl: REMOTION_APP_SERVE_URL,
       composition: 'basecomp',
@@ -184,7 +196,7 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
     // Wait for render to complete and get the output URL
     console.log('⏳ Waiting for render to complete...');
     let progress = await getRenderProgress({
-      region: AWS_REGION as any,
+      region: AWS_REGION as AwsRegion,
       functionName: REMOTION_APP_FUNCTION_NAME,
       bucketName: renderResponse.bucketName,
       renderId: renderResponse.renderId,
@@ -193,7 +205,7 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
     while (!progress.done && !progress.fatalErrorEncountered) {
       await new Promise(resolve => setTimeout(resolve, 3000));
       progress = await getRenderProgress({
-        region: AWS_REGION as any,
+        region: AWS_REGION as AwsRegion,
         functionName: REMOTION_APP_FUNCTION_NAME,
         bucketName: renderResponse.bucketName,
         renderId: renderResponse.renderId,

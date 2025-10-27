@@ -51,10 +51,10 @@ export default function Home() {
             contributors: string[];
             video_url?: string | null;
             repo_branch?: string | null;
-            ai_summaries?: any;
+            ai_summaries?: CommitSummary[] | null;
             ai_overall_summary?: string | null;
             ai_template_id?: string | null;
-            filter_metadata?: any;
+            filter_metadata?: Record<string, unknown> | null;
             processing_status?: string;
             processing_stage?: string | null;
             processing_error?: string | null;
@@ -70,11 +70,11 @@ export default function Home() {
             contributors: note.contributors,
             videoUrl: note.video_url,
             repoBranch: note.repo_branch,
-            aiSummaries: note.ai_summaries as CommitSummary[] | null,
+            aiSummaries: note.ai_summaries,
             aiOverallSummary: note.ai_overall_summary,
             aiTemplateId: note.ai_template_id,
-            filterMetadata: note.filter_metadata ?? null,
-            processingStatus: note.processing_status as any,
+            filterMetadata: note.filter_metadata,
+            processingStatus: note.processing_status as 'pending' | 'processing' | 'completed' | 'failed' | undefined,
             processingStage: note.processing_stage,
             processingError: note.processing_error,
           })
@@ -106,7 +106,26 @@ export default function Home() {
         const response = await fetch("/api/patch-notes");
         if (response.ok) {
           const data = await response.json();
-          const transformedData = data.map((note: any) => ({
+          const transformedData = data.map((note: {
+            id: string;
+            repo_name: string;
+            repo_url: string;
+            time_period: string;
+            generated_at: string;
+            title: string;
+            content: string;
+            changes: { added: number; modified: number; removed: number };
+            contributors: string[];
+            video_url?: string | null;
+            repo_branch?: string | null;
+            ai_summaries?: CommitSummary[] | null;
+            ai_overall_summary?: string | null;
+            ai_template_id?: string | null;
+            filter_metadata?: Record<string, unknown> | null;
+            processing_status?: string;
+            processing_stage?: string | null;
+            processing_error?: string | null;
+          }) => ({
             id: note.id,
             repoName: note.repo_name,
             repoUrl: note.repo_url,
@@ -118,11 +137,11 @@ export default function Home() {
             contributors: note.contributors,
             videoUrl: note.video_url,
             repoBranch: note.repo_branch,
-            aiSummaries: note.ai_summaries as CommitSummary[] | null,
+            aiSummaries: note.ai_summaries,
             aiOverallSummary: note.ai_overall_summary,
             aiTemplateId: note.ai_template_id,
-            filterMetadata: note.filter_metadata ?? null,
-            processingStatus: note.processing_status as any,
+            filterMetadata: note.filter_metadata,
+            processingStatus: note.processing_status as 'pending' | 'processing' | 'completed' | 'failed' | undefined,
             processingStage: note.processing_stage,
             processingError: note.processing_error,
           }));

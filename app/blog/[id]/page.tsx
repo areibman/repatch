@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
@@ -216,7 +217,7 @@ export default function BlogViewPage() {
       isMounted = false;
       clearInterval(pollInterval);
     };
-  }, [patchNote?.processingStatus, patchNote?.videoUrl, patchNote?.processingError, params.id]);
+  }, [patchNote?.processingStatus, patchNote?.videoUrl, patchNote?.processingError, patchNote, params.id]);
 
   // Video URLs are now public paths after Lambda migration - no signed URL needed
 
@@ -606,7 +607,7 @@ export default function BlogViewPage() {
                   {patchNote.processingError}
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                  Content was generated successfully. You can regenerate the video later using the "Generate Video" button below.
+                  Content was generated successfully. You can regenerate the video later using the &quot;Generate Video&quot; button below.
                 </p>
               </div>
             </div>
@@ -665,17 +666,21 @@ export default function BlogViewPage() {
                 rel="noopener noreferrer"
                 className="block hover:opacity-90 transition-opacity"
               >
-                <img
+                <Image
                   src="/preview.png"
                   alt="Watch Patch Note Video"
+                  width={1200}
+                  height={630}
                   className="w-full h-auto"
                 />
               </a>
             ) : (
               <div className="block cursor-not-allowed">
-                <img
+                <Image
                   src="/preview.png"
                   alt="Video is rendering"
+                  width={1200}
+                  height={630}
                   className="w-full h-auto opacity-60"
                 />
               </div>
@@ -860,7 +865,7 @@ export default function BlogViewPage() {
         {/* Remotion Player */}
         <div className="mb-8">
           <Player
-            component={BaseComp as any}
+            component={BaseComp as React.ComponentType<unknown>}
             durationInFrames={videoDuration}
             fps={30}
             compositionHeight={1080}

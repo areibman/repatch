@@ -23,6 +23,7 @@ export async function GET() {
     }
 
     // Transform Resend contacts to match the expected format
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const subscribers = contacts.data.data.map((contact: any) => ({
       id: contact.id,
       email: contact.email,
@@ -84,11 +85,12 @@ export async function POST(request: NextRequest) {
     };
 
     return NextResponse.json(subscriber, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle duplicate email error from Resend
+    const errorMessage = error instanceof Error ? error.message : '';
     if (
-      error.message?.includes("already exists") ||
-      error.message?.includes("duplicate")
+      errorMessage?.includes("already exists") ||
+      errorMessage?.includes("duplicate")
     ) {
       return NextResponse.json(
         { error: "Email already subscribed" },
@@ -123,7 +125,7 @@ export async function DELETE(request: NextRequest) {
     // Remove contact from Resend audience
     const resend = getResendClient();
     const result = await resend.contacts.remove({
-      ...(id ? { id } : { email: email! }),
+      ...(id ? { id } : { email: email || '' }),
       audienceId: audienceId,
     });
 

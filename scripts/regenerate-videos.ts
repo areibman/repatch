@@ -36,7 +36,7 @@ async function regenerateVideos() {
       // Call Lambda renderer directly instead of HTTP endpoint
       const result = await renderPatchNoteVideoOnLambda(
         note.id,
-        null, // Will be generated from AI summaries
+        undefined, // Will be generated from AI summaries
         note.repo_name
       );
       console.log(`   ✅ Success! Video URL: ${result.videoUrl}`);
