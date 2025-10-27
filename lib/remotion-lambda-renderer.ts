@@ -15,9 +15,26 @@ interface VideoData {
 
 export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoData?: VideoData, repoName?: string) {
   console.log('🎬 Starting Lambda video render for patch note:', patchNoteId);
+  console.log('📋 Environment check:');
+  console.log('   - AWS_REGION:', AWS_REGION || 'NOT SET');
+  console.log('   - AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? '✓ SET' : '❌ NOT SET');
+  console.log('   - AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? '✓ SET' : '❌ NOT SET');
+  console.log('   - REMOTION_APP_FUNCTION_NAME:', REMOTION_APP_FUNCTION_NAME || 'NOT SET');
+  console.log('   - REMOTION_APP_SERVE_URL:', REMOTION_APP_SERVE_URL || 'NOT SET');
+  console.log('   - Node Environment:', process.env.NODE_ENV);
+  console.log('   - Vercel Environment:', process.env.VERCEL_ENV || 'not Vercel');
 
   // Use service client for all DB operations (works in background/async contexts)
   const supabase = createServiceClient();
+  
+  // Write to DB immediately to prove we're executing (since logs may not appear)
+  await supabase
+    .from('patch_notes')
+    .update({ 
+      processing_stage: 'Video renderer function started...',
+      processing_progress: 92
+    })
+    .eq('id', patchNoteId);
   const { data: patchNote, error: fetchError } = await supabase
     .from('patch_notes')
     .select('ai_summaries, video_data, repo_name, content, ai_detailed_contexts, video_top_changes')
@@ -171,6 +188,46 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
   }
 
   try {
+    // Validate environment variables before attempting render
+    const missingVars: string[] = [];
+    if (!AWS_REGION) missingVars.push('AWS_REGION');
+    if (!process.env.AWS_ACCESS_KEY_ID) missingVars.push('AWS_ACCESS_KEY_ID');
+    if (!process.env.AWS_SECRET_ACCESS_KEY) missingVars.push('AWS_SECRET_ACCESS_KEY');
+    if (!REMOTION_APP_FUNCTION_NAME) missingVars.push('REMOTION_APP_FUNCTION_NAME');
+    if (!REMOTION_APP_SERVE_URL) missingVars.push('REMOTION_APP_SERVE_URL');
+    
+    if (missingVars.length > 0) {
+      const errorMsg = `Missing required environment variables in ${process.env.VERCEL_ENV || 'local'}: ${missingVars.join(', ')}`;
+      console.error('❌', errorMsg);
+      
+      // Write error to DB
+      await supabase
+        .from('patch_notes')
+        .update({ 
+          processing_stage: `Missing env vars: ${missingVars.join(', ')}`,
+          processing_progress: 95,
+          processing_error: errorMsg
+        })
+        .eq('id', patchNoteId);
+      
+      throw new Error(errorMsg);
+    }
+
+    // Update DB to show we passed env check
+    await supabase
+      .from('patch_notes')
+      .update({ 
+        processing_stage: 'Environment validated, calling Lambda...',
+        processing_progress: 93
+      })
+      .eq('id', patchNoteId);
+
+    console.log('✅ All environment variables present');
+    console.log('🎬 Calling renderMediaOnLambda...');
+    console.log('   - Composition: basecomp');
+    console.log('   - Region:', AWS_REGION);
+    console.log('   - Function:', REMOTION_APP_FUNCTION_NAME);
+    
     // Render on Lambda
     const renderResponse = await renderMediaOnLambda({
       region: AWS_REGION as AwsRegion,
@@ -189,9 +246,10 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
       privacy: 'public',
     });
 
-    console.log('✅ Lambda render initiated!');
+    console.log('✅ Lambda render initiated successfully!');
     console.log('   - Render ID:', renderResponse.renderId);
     console.log('   - Bucket:', renderResponse.bucketName);
+    console.log('   - Started at:', new Date().toISOString());
 
     // Wait for render to complete and get the output URL
     console.log('⏳ Waiting for render to complete...');
@@ -284,7 +342,35 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
 
     return { videoUrl, renderId: renderResponse.renderId };
   } catch (error) {
-    console.error('❌ Lambda render failed:', error);
+    console.error('❌ Lambda render failed at:', new Date().toISOString());
+    console.error('   Error type:', error?.constructor?.name || typeof error);
+    if (error instanceof Error) {
+      console.error('   Error message:', error.message);
+      console.error('   Error stack:', error.stack);
+      
+      // Check for specific AWS/Remotion errors
+      if (error.message.includes('credentials')) {
+        console.error('   ⚠️  This looks like an AWS credentials issue');
+      } else if (error.message.includes('Function not found')) {
+        console.error('   ⚠️  Lambda function not found - check REMOTION_APP_FUNCTION_NAME');
+      } else if (error.message.includes('AccessDenied')) {
+        console.error('   ⚠️  AWS IAM permissions issue - check Lambda invoke permissions');
+      }
+    } else {
+      console.error('   Raw error:', JSON.stringify(error, null, 2));
+    }
+    // Try to mark patch note with error
+    try {
+      await supabase
+        .from('patch_notes')
+        .update({ 
+          processing_progress: 100,
+          processing_error: error instanceof Error ? error.message : 'Unknown video rendering error'
+        })
+        .eq('id', patchNoteId);
+    } catch (dbError) {
+      console.error('❌ Failed to update DB with video error:', dbError);
+    }
     throw error;
   }
 }
