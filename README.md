@@ -182,6 +182,38 @@ Send beautiful HTML emails to subscribers with:
 - [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
 
+## End-to-End Testing
+
+We ship Playwright tests that exercise the most important user journeys: the home dashboard, the blog management tools, the GitHub-ingestion workflow, and the subscriber overview. To run them locally:
+
+1. Install dependencies and browsers (first run only):
+
+   ```bash
+   npm install
+   npx playwright install chromium --with-deps
+   ```
+
+2. Execute the test suite:
+
+   ```bash
+   npm run test:e2e
+   ```
+
+3. Generate a coverage report (outputs HTML to `playwright-coverage/`):
+
+   ```bash
+   npm run test:e2e:coverage
+   ```
+
+### Current Coverage
+
+| Feature area | What is verified |
+| --- | --- |
+| Home dashboard | Patch-note cards render with accurate stats and navigation works. |
+| Blog view | Editing, saving, and newsletter dispatch (including confirmation prompts). |
+| Patch note creation | Full GitHub-driven generation flow with mocked API responses and redirect to the new post. |
+| Subscribers page | Audience metrics and subscriber list rendering. |
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
