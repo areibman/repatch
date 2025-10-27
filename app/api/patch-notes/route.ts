@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { renderPatchNoteVideoOnLambda } from "@/lib/remotion-lambda-renderer";
-import { generateVideoTopChangesFromContent } from "@/lib/ai-summarizer";
+
+// No longer needs extended timeout since we moved AI processing to background
+// export const maxDuration = 90; // 90 seconds
 
 // GET /api/patch-notes - Fetch all patch notes
 export async function GET() {
@@ -32,31 +34,9 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const body = await request.json();
 
-    // Generate video top changes from the final content
-    let videoTopChanges = null;
-    if (body.content && body.repo_name) {
-      try {
-        console.log('🎬 Generating video top 3 from final content...');
-        videoTopChanges = await generateVideoTopChangesFromContent(
-          body.content,
-          body.repo_name
-        );
-        console.log('✅ Generated', videoTopChanges?.length || 0, 'video top changes');
-      } catch (error) {
-        console.error('⚠️ Failed to generate video top changes:', error);
-        // Continue without video top changes - can be regenerated later
-      }
-    }
-
-    // Create video data structure for video rendering
-    let videoData = body.video_data;
-    if (videoTopChanges && videoTopChanges.length > 0) {
-      videoData = {
-        langCode: 'en',
-        topChanges: videoTopChanges,
-        allChanges: [], // Can be populated later if needed
-      };
-    }
+    // Don't generate video top changes here - let the background process handle it
+    // This ensures the modal closes immediately
+    const videoData = body.video_data;
 
     const { data, error } = await supabase
       .from("patch_notes")
@@ -71,7 +51,7 @@ export async function POST(request: NextRequest) {
           changes: body.changes,
           contributors: body.contributors,
           video_data: videoData,
-          video_top_changes: videoTopChanges,
+          video_top_changes: null, // Will be generated during background processing
           ai_summaries: body.ai_summaries || null,
           ai_overall_summary: body.ai_overall_summary || null,
           ai_detailed_contexts: body.ai_detailed_contexts || null,

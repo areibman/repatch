@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateVideoTopChangesFromContent } from '@/lib/ai-summarizer';
 
+// Configure maximum duration for this route (AI can take 30-60s)
+export const maxDuration = 90; // 90 seconds
+
 export async function POST(request: NextRequest) {
   try {
     const { content, repoName } = await request.json();

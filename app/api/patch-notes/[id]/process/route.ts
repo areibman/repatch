@@ -4,6 +4,10 @@ import { generateVideoTopChangesFromContent } from "@/lib/ai-summarizer";
 import { renderPatchNoteVideoOnLambda } from "@/lib/remotion-lambda-renderer";
 import { generateBoilerplateContent } from "@/lib/github";
 
+// Configure maximum duration for this route (5 minutes)
+// This allows enough time for GitHub fetching + AI analysis + video generation
+export const maxDuration = 300; // 5 minutes
+
 // POST /api/patch-notes/[id]/process - Process a pending patch note
 export async function POST(
   request: NextRequest,

@@ -3,6 +3,9 @@ import { getRepoStats } from '@/lib/github';
 import { FilterValidationError } from '@/lib/filter-utils';
 import { PatchNoteFilters, TimePreset } from '@/types/patch-note';
 
+// Configure maximum duration for this route (GitHub API calls can be slow)
+export const maxDuration = 60; // 1 minute
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;

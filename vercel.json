@@ -1,9 +1,18 @@
 {
   "functions": {
+    "app/api/patch-notes/[id]/process/route.ts": {
+      "maxDuration": 300
+    },
     "app/api/patch-notes/generate-video-top3/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 90
+    },
+    "app/api/patch-notes/[id]/regenerate-video/route.ts": {
+      "maxDuration": 180
     },
     "app/api/github/summarize/route.ts": {
+      "maxDuration": 120
+    },
+    "app/api/github/stats/route.ts": {
       "maxDuration": 60
     }
   },

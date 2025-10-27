@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderPatchNoteVideoOnLambda } from "@/lib/remotion-lambda-renderer";
 
+// Configure maximum duration for this route (video rendering can take 60-120s)
+export const maxDuration = 180; // 3 minutes
+
 // POST /api/patch-notes/[id]/regenerate-video - Regenerate video for a patch note
 export async function POST(
   request: NextRequest,

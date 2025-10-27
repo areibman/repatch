@@ -10,6 +10,9 @@ import { mapTemplateRow } from '@/lib/templates';
 import { FilterValidationError } from '@/lib/filter-utils';
 import type { PatchNoteFilters } from '@/types/patch-note';
 
+// Configure maximum duration for this route (AI summarization can take 30-60s)
+export const maxDuration = 120; // 2 minutes
+
 type TemplateOverridePayload = {
   content: string;
 };

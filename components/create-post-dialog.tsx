@@ -555,12 +555,33 @@ export function CreatePostDialog() {
       // Save to recent repos
       saveRecentRepo(repoUrl, repoInfo.owner, repoInfo.repo);
 
-      // Immediately close modal and navigate to the post
+      // Reset form state immediately (before navigation to prevent any flicker)
+      setRepoUrl('');
+      setBranches([]);
+      setSelectedBranch('');
+      setFilterMode('preset');
+      setTimePreset('1week');
+      setCustomStart('');
+      setCustomEnd('');
+      setAvailableLabels([]);
+      setAvailableTags([]);
+      setAvailableReleases([]);
+      setSelectedReleases([]);
+      setIncludeLabels([]);
+      setExcludeLabels([]);
+      setIncludeTags([]);
+      setExcludeTags([]);
+      setLoadingStep('');
+      setIsLoading(false);
+
+      // Close modal
       setOpen(false);
+
+      // Navigate to the post page
       router.push(`/blog/${data.id}`);
       router.refresh();
 
-      // Trigger background processing (don't await)
+      // Trigger background processing (don't await, handle errors silently)
       fetch(`/api/patch-notes/${data.id}/process`, {
         method: 'POST',
         headers: {
@@ -575,30 +596,19 @@ export function CreatePostDialog() {
           templateId: selectedTemplateId,
           generateCommitTitles: includeCommitMessages,
         }),
-      }).catch((error) => {
-        console.error('Background processing failed:', error);
-      });
-
-      // Reset form state after navigation
-      setTimeout(() => {
-        setRepoUrl('');
-        setBranches([]);
-        setSelectedBranch('');
-        setFilterMode('preset');
-        setTimePreset('1week');
-        setCustomStart('');
-        setCustomEnd('');
-        setAvailableLabels([]);
-        setAvailableTags([]);
-        setAvailableReleases([]);
-        setSelectedReleases([]);
-        setIncludeLabels([]);
-        setExcludeLabels([]);
-        setIncludeTags([]);
-        setExcludeTags([]);
-        setLoadingStep('');
-        setIsLoading(false);
-      }, 100);
+      })
+        .then((response) => {
+          if (!response.ok) {
+            console.error('Background processing returned error status:', response.status);
+          } else {
+            console.log('Background processing initiated successfully');
+          }
+        })
+        .catch((error) => {
+          // This will catch network errors, timeouts, etc.
+          // The processing might still be running on the server, so we don't show an error to user
+          console.error('Background processing request failed (may still be processing on server):', error);
+        });
     } catch (error) {
       console.error("Error creating patch note:", error);
       const errorMessage =
