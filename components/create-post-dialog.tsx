@@ -662,16 +662,16 @@ export function CreatePostDialog() {
             Create New Post
           </Button>
         </DialogTrigger>
-      <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-hidden flex flex-col">
-        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden min-h-0 flex-1">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Create Patch Note</DialogTitle>
-            <DialogDescription>
-              Generate AI-powered patch notes from a GitHub repository.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-[525px] max-h-[85vh] overflow-hidden flex flex-col">
+          <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden min-h-0 flex-1">
+            <DialogHeader>
+              <DialogTitle>Create Patch Note</DialogTitle>
+              <DialogDescription>
+                Generate AI-powered patch notes from a GitHub repository.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="grid gap-4 py-4 overflow-y-auto flex-1 min-h-0">
+            <div className="grid gap-4 overflow-y-auto flex-1 min-h-0">
             <div className="grid gap-2">
               <Label htmlFor="repo-url">Repository URL</Label>
               <Input
@@ -682,19 +682,27 @@ export function CreatePostDialog() {
                 required
                 disabled={isLoading}
               />
-              {recentRepos.length > 0 && !repoUrl && (
+              {recentRepos.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Recent repositories:</p>
-                  <div className="flex flex-wrap gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    {repoUrl ? 'Recent repositories (click to switch):' : 'Recent repositories:'}
+                  </p>
+                  <div className="flex flex-wrap gap-2 min-h-[32px]">
                     {recentRepos.map((recent) => (
                       <button
                         key={recent.url}
                         type="button"
                         onClick={() => handleRepoUrlChange(recent.url)}
                         disabled={isLoading}
-                        className="text-xs px-3 py-1.5 rounded-md border border-border bg-muted hover:bg-muted/80 hover:border-foreground/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`text-xs px-3 py-1.5 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                          repoUrl === recent.url
+                            ? 'border-primary bg-primary/10 font-medium'
+                            : 'border-border bg-muted hover:bg-muted/80 hover:border-foreground/20'
+                        }`}
                       >
-                        <span className="font-medium">{recent.owner}/{recent.repo}</span>
+                        <span className={repoUrl === recent.url ? 'font-semibold' : 'font-medium'}>
+                          {recent.owner}/{recent.repo}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -709,7 +717,7 @@ export function CreatePostDialog() {
               </p>
             </div>
 
-            {branches.length > 0 && filterMode !== 'release' && (
+            {filterMode !== 'release' && (
               <div className="grid gap-2">
                 <Label htmlFor="branch">
                   Branch
@@ -717,10 +725,16 @@ export function CreatePostDialog() {
                 <Select
                   value={selectedBranch}
                   onValueChange={setSelectedBranch}
-                  disabled={isLoading || isFetchingBranches}
+                  disabled={isLoading || isFetchingBranches || branches.length === 0}
                 >
                   <SelectTrigger id="branch">
-                    <SelectValue placeholder="Select branch" />
+                    <SelectValue placeholder={
+                      isFetchingBranches 
+                        ? "Loading branches..." 
+                        : branches.length === 0 
+                        ? "Enter repository URL first" 
+                        : "Select branch"
+                    } />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px] overflow-y-auto">
                     {branches.map((branch) => (
@@ -732,8 +746,11 @@ export function CreatePostDialog() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {branches.length > 0 && `${branches.length} branch${branches.length !== 1 ? 'es' : ''} found. `}
-                  Select which branch to analyze
+                  {isFetchingBranches 
+                    ? 'Fetching branches...'
+                    : branches.length > 0 
+                    ? `${branches.length} branch${branches.length !== 1 ? 'es' : ''} found. Select which branch to analyze`
+                    : 'Branch selection will be available after entering a valid repository URL'}
                 </p>
               </div>
             )}
@@ -973,39 +990,39 @@ export function CreatePostDialog() {
                 When unchecked, AI will generate cleaner, more descriptive headers for each change instead of showing raw commit messages.
               </p>
             </div>
-          </div>
+            </div>
 
-          <DialogFooter className="flex-shrink-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={isLoading || isFetchingBranches}
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={isLoading || isFetchingBranches || (filterMode !== 'release' && !selectedBranch)}
-              className="min-w-[200px]"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
-                  <span className="text-sm">{loadingStep || 'Processing...'}</span>
-                </>
-              ) : isFetchingBranches ? (
-                <>
-                  <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
-                  Loading branches...
-                </>
-              ) : (
-                "Create Patch Note"
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
+            <DialogFooter className="pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                disabled={isLoading || isFetchingBranches}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isLoading || isFetchingBranches || (filterMode !== 'release' && !selectedBranch)}
+                className="min-w-[200px]"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                    <span className="text-sm">{loadingStep || 'Processing...'}</span>
+                  </>
+                ) : isFetchingBranches ? (
+                  <>
+                    <Loader2Icon className="h-4 w-4 mr-2 animate-spin" />
+                    Loading branches...
+                  </>
+                ) : (
+                  "Create Patch Note"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
       </Dialog>
     </TooltipProvider>
   );
