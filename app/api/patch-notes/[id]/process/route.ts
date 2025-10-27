@@ -32,6 +32,7 @@ export async function POST(
       .update({
         processing_status: "fetching_stats",
         processing_stage: "Fetching repository statistics...",
+        processing_progress: 10,
       })
       .eq("id", id);
 
@@ -62,6 +63,7 @@ export async function POST(
       .update({
         processing_status: "analyzing_commits",
         processing_stage: "Analyzing commits with AI (30-60s)...",
+        processing_progress: 30,
       })
       .eq("id", id);
 
@@ -99,6 +101,7 @@ export async function POST(
       .update({
         processing_status: "generating_content",
         processing_stage: "Generating patch note content...",
+        processing_progress: 70,
       })
       .eq("id", id);
 
@@ -151,6 +154,7 @@ export async function POST(
         video_top_changes: videoTopChanges,
         processing_status: "generating_video",
         processing_stage: "Rendering video...",
+        processing_progress: 90,
       })
       .eq("id", id);
 
@@ -173,6 +177,7 @@ export async function POST(
             .update({
               processing_status: "completed",
               processing_stage: null,
+              processing_progress: 100,
             })
             .eq("id", id)
             .then(() => console.log('✅ Patch note marked as completed'));
@@ -186,6 +191,7 @@ export async function POST(
               processing_status: "completed",
               processing_stage: null,
               processing_error: err.message,
+              processing_progress: 100,
             })
             .eq("id", id)
             .then(() => console.log('⚠️ Patch note marked as completed (video failed)'));
@@ -197,6 +203,7 @@ export async function POST(
         .update({
           processing_status: "completed",
           processing_stage: null,
+          processing_progress: 100,
         })
         .eq("id", id);
     }

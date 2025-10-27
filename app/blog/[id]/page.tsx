@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
 import {
   Select,
   SelectContent,
@@ -122,6 +123,7 @@ export default function BlogViewPage() {
           processingStatus: data.processing_status,
           processingStage: data.processing_stage,
           processingError: data.processing_error,
+          processingProgress: data.processing_progress,
         };
 
         setPatchNote(transformedNote);
@@ -189,6 +191,7 @@ export default function BlogViewPage() {
               processingStatus: data.processing_status || prev.processingStatus,
               processingStage: data.processing_stage,
               processingError: data.processing_error,
+              processingProgress: data.processing_progress,
             };
           });
 
@@ -394,9 +397,18 @@ export default function BlogViewPage() {
     if (!patchNote) return;
 
     setIsGeneratingVideo(true);
+    setIsRegeneratingVideo(true);
+    setVideoRegenerationMessage('Starting video render...');
+    
+    // Reset progress to 0
+    setPatchNote({
+      ...patchNote,
+      processingProgress: 0,
+    });
+
     try {
-      // Call remotion-lambda-renderer directly through the updated PATCH route
-      const response = await fetch(`/api/patch-notes/${patchNote.id}/regenerate-video`, {
+      // Call remotion-lambda-renderer directly (runs in background, updates progress)
+      fetch(`/api/patch-notes/${patchNote.id}/regenerate-video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -405,29 +417,42 @@ export default function BlogViewPage() {
           videoData: patchNote.videoData,
           repoName: patchNote.repoName,
         }),
+      }).then(async (response) => {
+        if (response.ok) {
+          const data = await response.json();
+          setPatchNote(prev => prev ? {
+            ...prev,
+            videoUrl: data.videoUrl,
+            processingProgress: 100,
+          } : null);
+          setVideoRegenerationMessage('Video completed!');
+          setTimeout(() => {
+            setIsRegeneratingVideo(false);
+            setVideoRegenerationMessage('');
+            alert('✅ Video generated successfully!');
+          }, 1500);
+        } else {
+          const error = await response.json();
+          setVideoRegenerationMessage('');
+          setIsRegeneratingVideo(false);
+          alert(`❌ Error: ${error.error || 'Failed to generate video'}`);
+        }
+      }).catch((error) => {
+        console.error('Error generating video:', error);
+        setVideoRegenerationMessage('');
+        setIsRegeneratingVideo(false);
+        alert(`❌ Error: ${error instanceof Error ? error.message : 'Failed to generate video'}`);
+      }).finally(() => {
+        setIsGeneratingVideo(false);
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate video');
-      }
-
-      const data = await response.json();
-
-      // Update the patch note with the new video URL
-      setPatchNote({
-        ...patchNote,
-        videoUrl: data.videoUrl,
-      });
-
-      alert('✅ Video generated successfully! The page will refresh.');
-      window.location.reload();
     } catch (error) {
       console.error('Error generating video:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate video';
       alert(`❌ Error: ${errorMessage}`);
-    } finally {
       setIsGeneratingVideo(false);
+      setIsRegeneratingVideo(false);
+      setVideoRegenerationMessage('');
     }
   };
 
@@ -590,8 +615,19 @@ export default function BlogViewPage() {
         
         {isProcessing && (
           <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <Loader2Icon className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0" />
+            <div className="flex items-center gap-6">
+              {typeof patchNote.processingProgress === 'number' ? (
+                <AnimatedCircularProgressBar
+                  value={patchNote.processingProgress}
+                  min={0}
+                  max={100}
+                  gaugePrimaryColor="rgb(37 99 235)"
+                  gaugeSecondaryColor="rgba(37, 99, 235, 0.2)"
+                  className="size-16 text-sm flex-shrink-0"
+                />
+              ) : (
+                <Loader2Icon className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0" />
+              )}
               <div className="flex-1">
                 <p className="font-semibold text-blue-900 dark:text-blue-100">
                   {patchNote.processingStatus === 'pending' && 'Queued for Processing'}
@@ -663,8 +699,19 @@ export default function BlogViewPage() {
           {/* Video Regeneration Status Banner */}
           {isRegeneratingVideo && (
             <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <div className="flex items-center gap-3">
-                <Loader2Icon className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0" />
+              <div className="flex items-center gap-6">
+                {typeof patchNote.processingProgress === 'number' ? (
+                  <AnimatedCircularProgressBar
+                    value={patchNote.processingProgress}
+                    min={0}
+                    max={100}
+                    gaugePrimaryColor="rgb(37 99 235)"
+                    gaugeSecondaryColor="rgba(37, 99, 235, 0.2)"
+                    className="size-16 text-sm flex-shrink-0"
+                  />
+                ) : (
+                  <Loader2Icon className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin flex-shrink-0" />
+                )}
                 <div className="flex-1">
                   <p className="font-semibold text-blue-900 dark:text-blue-100">
                     Regenerating Video

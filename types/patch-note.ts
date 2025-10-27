@@ -80,4 +80,5 @@ export interface PatchNote {
   processingStatus?: ProcessingStatus;
   processingStage?: string | null;
   processingError?: string | null;
+  processingProgress?: number | null;
 }

@@ -148,6 +148,16 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
   console.log('   - Function:', REMOTION_APP_FUNCTION_NAME);
   console.log('   - Serve URL:', REMOTION_APP_SERVE_URL);
 
+  // Set initial progress to 0% when starting video render
+  const { error: initProgressError } = await supabase
+    .from('patch_notes')
+    .update({ processing_progress: 0 })
+    .eq('id', patchNoteId);
+  
+  if (initProgressError) {
+    console.warn('⚠️  Failed to set initial progress:', initProgressError);
+  }
+
   try {
     // Render on Lambda
     const renderResponse = await renderMediaOnLambda({
@@ -188,7 +198,18 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
         bucketName: renderResponse.bucketName,
         renderId: renderResponse.renderId,
       });
-      console.log(`   Progress: ${Math.round((progress.overallProgress || 0) * 100)}%`);
+      const progressPercent = Math.round((progress.overallProgress || 0) * 100);
+      console.log(`   Progress: ${progressPercent}%`);
+      
+      // Update database with video rendering progress
+      const { error: progressUpdateError } = await supabase
+        .from('patch_notes')
+        .update({ processing_progress: progressPercent })
+        .eq('id', patchNoteId);
+      
+      if (progressUpdateError) {
+        console.warn('⚠️  Failed to update progress:', progressUpdateError);
+      }
     }
 
     if (progress.fatalErrorEncountered) {
@@ -235,10 +256,13 @@ export async function renderPatchNoteVideoOnLambda(patchNoteId: string, videoDat
       console.warn('⚠️  The video may exist but S3 bucket may need public read permissions');
     }
 
-    // Update the patch note with the video URL
+    // Update the patch note with the video URL and 100% progress
     const { error: updateError } = await supabase
       .from('patch_notes')
-      .update({ video_url: videoUrl })
+      .update({ 
+        video_url: videoUrl,
+        processing_progress: 100
+      })
       .eq('id', patchNoteId);
 
     if (updateError) {

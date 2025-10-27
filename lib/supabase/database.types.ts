@@ -194,6 +194,7 @@ export type Database = {
           generated_at: string
           id: string
           processing_error: string | null
+          processing_progress: number | null
           processing_stage: string | null
           processing_status:
             | Database["public"]["Enums"]["processing_status_type"]
@@ -221,6 +222,7 @@ export type Database = {
           generated_at?: string
           id?: string
           processing_error?: string | null
+          processing_progress?: number | null
           processing_stage?: string | null
           processing_status?:
             | Database["public"]["Enums"]["processing_status_type"]
@@ -248,6 +250,7 @@ export type Database = {
           generated_at?: string
           id?: string
           processing_error?: string | null
+          processing_progress?: number | null
           processing_stage?: string | null
           processing_status?:
             | Database["public"]["Enums"]["processing_status_type"]
