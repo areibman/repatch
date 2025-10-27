@@ -142,25 +142,30 @@ export default function BlogViewPage() {
 
   // Unified polling for processing and video status
   useEffect(() => {
-    if (!patchNote) return;
-
-    // Determine if we need to poll
-    const needsProcessingPoll = patchNote.processingStatus && 
+    // Determine if we need to poll based on current status
+    const needsProcessingPoll = patchNote?.processingStatus && 
       patchNote.processingStatus !== 'completed' && 
       patchNote.processingStatus !== 'failed';
     
     // Only poll for video if completed without errors and no video URL yet
-    const needsVideoPoll = patchNote.processingStatus === 'completed' && 
+    const needsVideoPoll = patchNote?.processingStatus === 'completed' && 
       !patchNote.videoUrl && 
       !patchNote.processingError;
 
     if (!needsProcessingPoll && !needsVideoPoll) {
+      console.log('✅ No polling needed', {
+        status: patchNote?.processingStatus,
+        hasVideo: !!patchNote?.videoUrl,
+        hasError: !!patchNote?.processingError
+      });
       return;
     }
 
     console.log('🔄 Starting polling...', {
       processing: needsProcessingPoll,
-      video: needsVideoPoll
+      video: needsVideoPoll,
+      status: patchNote?.processingStatus,
+      progress: patchNote?.processingProgress
     });
 
     let isMounted = true;
@@ -169,13 +174,26 @@ export default function BlogViewPage() {
       if (!isMounted) return;
 
       try {
+        console.log('📡 Polling for updates...', params.id);
         const response = await fetch(`/api/patch-notes/${params.id}`, {
           cache: 'no-store'
         });
         
-        if (!response.ok || !isMounted) return;
+        if (!response.ok) {
+          console.error(`❌ Poll failed with status: ${response.status}`);
+          return;
+        }
+        
+        if (!isMounted) return;
 
         const data = await response.json();
+        console.log('📊 Poll response:', {
+          status: data.processing_status,
+          progress: data.processing_progress,
+          stage: data.processing_stage,
+          hasVideo: !!data.video_url,
+          error: data.processing_error
+        });
 
         if (isMounted) {
           setPatchNote(prev => {
@@ -205,7 +223,7 @@ export default function BlogViewPage() {
         }
       } catch (error) {
         if (isMounted) {
-          console.error('Error polling:', error);
+          console.error('❌ Error polling:', error);
         }
       }
     };
@@ -217,7 +235,7 @@ export default function BlogViewPage() {
       isMounted = false;
       clearInterval(pollInterval);
     };
-  }, [patchNote?.processingStatus, patchNote?.videoUrl, patchNote?.processingError, patchNote, params.id]);
+  }, [patchNote?.processingStatus, patchNote?.videoUrl, patchNote?.processingError, params.id]);
 
   // Video URLs are now public paths after Lambda migration - no signed URL needed
 
@@ -574,6 +592,11 @@ export default function BlogViewPage() {
     patchNote.processingStatus !== 'completed' && 
     patchNote.processingStatus !== 'failed';
 
+  // Stats are available once we've fetched them (after fetching_stats stage)
+  const hasStats = patchNote?.processingStatus && 
+    !['pending', 'fetching_stats'].includes(patchNote.processingStatus) &&
+    patchNote.changes.added !== undefined;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -893,7 +916,7 @@ export default function BlogViewPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardDescription>Lines Added</CardDescription>
-              {isProcessing ? (
+              {!hasStats ? (
                 <Skeleton className="h-9 w-24" />
               ) : (
                 <CardTitle className="text-3xl text-green-600">
@@ -906,7 +929,7 @@ export default function BlogViewPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardDescription>Lines Removed</CardDescription>
-              {isProcessing ? (
+              {!hasStats ? (
                 <Skeleton className="h-9 w-24" />
               ) : (
                 <CardTitle className="text-3xl text-red-600">
@@ -919,7 +942,7 @@ export default function BlogViewPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardDescription>Contributors</CardDescription>
-              {isProcessing ? (
+              {!hasStats ? (
                 <Skeleton className="h-9 w-16" />
               ) : (
                 <>
@@ -998,7 +1021,7 @@ export default function BlogViewPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {isProcessing && patchNote.content === '...' ? (
+            {patchNote.content === '...' ? (
               <div className="space-y-4">
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-[90%]" />
@@ -1419,7 +1442,7 @@ export default function BlogViewPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {isProcessing && patchNote.contributors.length === 0 ? (
+              {!hasStats && patchNote.contributors.length === 0 ? (
                 <>
                   <Skeleton className="h-6 w-24" />
                   <Skeleton className="h-6 w-32" />

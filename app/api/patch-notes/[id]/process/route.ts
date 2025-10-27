@@ -14,6 +14,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  console.log('📥 Received process request');
   try {
     const supabase = await createClient();
     const body = await request.json();
@@ -30,6 +31,9 @@ export async function POST(
     } = body;
 
     console.log('🚀 Starting async processing for patch note:', id);
+    console.log('   - Owner/Repo:', `${owner}/${repo}`);
+    console.log('   - Branch:', branch);
+    console.log('   - Filters:', JSON.stringify(filters));
 
     // Update status to fetching_stats
     await supabase

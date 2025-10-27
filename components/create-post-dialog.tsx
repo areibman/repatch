@@ -582,6 +582,7 @@ export function CreatePostDialog() {
       router.refresh();
 
       // Trigger background processing (don't await, handle errors silently)
+      console.log(`🚀 Triggering background processing for patch note: ${data.id}`);
       fetch(`/api/patch-notes/${data.id}/process`, {
         method: 'POST',
         headers: {
@@ -597,17 +598,19 @@ export function CreatePostDialog() {
           generateCommitTitles: includeCommitMessages,
         }),
       })
-        .then((response) => {
+        .then(async (response) => {
           if (!response.ok) {
-            console.error('Background processing returned error status:', response.status);
+            const errorText = await response.text();
+            console.error(`❌ Background processing returned error status: ${response.status}`, errorText);
           } else {
-            console.log('Background processing initiated successfully');
+            const result = await response.json();
+            console.log('✅ Background processing initiated successfully:', result);
           }
         })
         .catch((error) => {
           // This will catch network errors, timeouts, etc.
           // The processing might still be running on the server, so we don't show an error to user
-          console.error('Background processing request failed (may still be processing on server):', error);
+          console.error('❌ Background processing request failed (may still be processing on server):', error);
         });
     } catch (error) {
       console.error("Error creating patch note:", error);
