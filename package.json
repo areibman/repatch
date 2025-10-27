@@ -9,9 +9,6 @@
     "lint": "eslint",
     "preview": "remotion preview remotion/index.ts",
     "db:seed": "dotenv -e .env.local -- tsx scripts/add-sample-data.ts",
-    "fix-videos": "dotenv -e .env.local -- tsx scripts/fix-video-urls.ts",
-    "check-db": "dotenv -e .env.local -- tsx scripts/check-video-column.ts",
-    "check-video-data": "dotenv -e .env.local -- tsx scripts/check-video-data.ts",
     "regenerate-videos": "dotenv -e .env.local -- tsx scripts/regenerate-videos.ts"
   },
   "dependencies": {

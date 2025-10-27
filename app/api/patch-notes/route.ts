@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { renderPatchNoteVideoOnLambda } from "@/lib/remotion-lambda-renderer";
 
 // No longer needs extended timeout since we moved AI processing to background
 // export const maxDuration = 90; // 90 seconds
@@ -72,19 +71,20 @@ export async function POST(request: NextRequest) {
 
     // Only trigger video rendering if the patch note is completed (not pending)
     if (videoData && data.id && body.processing_status !== 'pending') {
-      console.log('🎬 Triggering Lambda video rendering...');
+      console.log('🎬 Triggering video render via endpoint...');
       console.log('   - Patch Note ID:', data.id);
       console.log('   - Repo:', body.repo_name);
 
-      // Call the Lambda render function directly - no HTTP request needed!
-      renderPatchNoteVideoOnLambda(data.id, videoData, body.repo_name)
-        .then((result: { videoUrl: string }) => {
-          console.log('✅ Lambda video rendering completed:', result);
-        })
-        .catch((err: Error) => {
-          console.error('❌ Background Lambda video rendering failed:', err);
-          // Don't fail the patch note creation if video rendering fails
-        });
+      // Trigger video rendering via the render-video endpoint
+      fetch(`${request.nextUrl.origin}/api/patch-notes/${data.id}/render-video`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }).catch((err: Error) => {
+        console.error('❌ Failed to trigger video render:', err);
+        // Don't fail the patch note creation if video rendering fails
+      });
     } else if (body.processing_status === 'pending') {
       console.log('⏳ Patch note is pending - will process later');
     } else {

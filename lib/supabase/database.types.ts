@@ -205,7 +205,9 @@ export type Database = {
           time_period: Database["public"]["Enums"]["time_period_type"]
           title: string
           updated_at: string
+          video_bucket_name: string | null
           video_data: Json | null
+          video_render_id: string | null
           video_top_changes: Json | null
           video_url: string | null
         }
@@ -233,7 +235,9 @@ export type Database = {
           time_period: Database["public"]["Enums"]["time_period_type"]
           title: string
           updated_at?: string
+          video_bucket_name?: string | null
           video_data?: Json | null
+          video_render_id?: string | null
           video_top_changes?: Json | null
           video_url?: string | null
         }
@@ -261,7 +265,9 @@ export type Database = {
           time_period?: Database["public"]["Enums"]["time_period_type"]
           title?: string
           updated_at?: string
+          video_bucket_name?: string | null
           video_data?: Json | null
+          video_render_id?: string | null
           video_top_changes?: Json | null
           video_url?: string | null
         }

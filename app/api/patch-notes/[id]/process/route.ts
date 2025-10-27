@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { generateVideoTopChangesFromContent } from "@/lib/ai-summarizer";
-import { renderPatchNoteVideoOnLambda } from "@/lib/remotion-lambda-renderer";
 import { generateBoilerplateContent } from "@/lib/github";
 
 // Configure maximum duration for this route (5 minutes)
@@ -41,7 +39,6 @@ export async function POST(
       .update({
         processing_status: "fetching_stats",
         processing_stage: "Fetching repository statistics...",
-        processing_progress: 10,
       })
       .eq("id", id);
 
@@ -72,7 +69,6 @@ export async function POST(
       .update({
         processing_status: "analyzing_commits",
         processing_stage: "Analyzing commits with AI (30-60s)...",
-        processing_progress: 30,
       })
       .eq("id", id);
 
@@ -111,7 +107,6 @@ export async function POST(
       .update({
         processing_status: "generating_content",
         processing_stage: "Generating patch note content...",
-        processing_progress: 70,
       })
       .eq("id", id);
 
@@ -162,9 +157,8 @@ export async function POST(
         ai_detailed_contexts: detailedContexts,
         video_data: videoData,
         video_top_changes: videoTopChanges,
-        processing_status: "generating_video",
-        processing_stage: "Rendering video...",
-        processing_progress: 90,
+        processing_status: videoData ? "generating_video" : "completed",
+        processing_stage: videoData ? "Preparing video render..." : null,
       })
       .eq("id", id);
 
@@ -172,90 +166,18 @@ export async function POST(
       throw new Error(updateError.message);
     }
 
-    // Trigger video rendering asynchronously (don't wait for it)
+    // Frontend will trigger video rendering via /render-video endpoint
+    // This ensures reliable execution and better separation of concerns
+    console.log('✅ Content generation complete');
     if (videoData) {
-      console.log('🎬 Triggering Lambda video rendering...');
-      console.log('   - Patch Note ID:', id);
-      console.log('   - Repo:', `${owner}/${repo}`);
-      console.log('   - Video data has', videoData.topChanges?.length || 0, 'top changes');
-
-      // Use service client for async operations (server client won't work in callbacks)
-      const serviceClient = createServiceClient();
-
-      // Add a timeout safeguard - if video takes too long, mark as completed with error
-      const videoTimeout = setTimeout(async () => {
-        console.error('⏰ Video rendering timeout (5 minutes) - marking as completed');
-        try {
-          await serviceClient
-            .from("patch_notes")
-            .update({
-              processing_status: "completed",
-              processing_stage: null,
-              processing_error: "Video rendering timed out after 5 minutes. You can regenerate the video manually.",
-              processing_progress: 100,
-            })
-            .eq("id", id);
-          console.log('⚠️ Patch note marked as completed (timeout)');
-        } catch (err) {
-          console.error('Failed to mark timeout in DB:', err);
-        }
-      }, 5 * 60 * 1000); // 5 minutes
-
-      console.log('🚀 About to call renderPatchNoteVideoOnLambda...');
-      
-      // Immediately invoke the function (don't wait for promise to resolve)
-      renderPatchNoteVideoOnLambda(id, videoData, `${owner}/${repo}`)
-        .then((result) => {
-          if (!result) {
-            console.error('❌ Video rendering returned null result');
-            return;
-          }
-          clearTimeout(videoTimeout);
-          console.log('✅ Lambda video rendering completed:', result);
-          // Mark as completed using service client
-          return serviceClient
-            .from("patch_notes")
-            .update({
-              processing_status: "completed",
-              processing_stage: null,
-              processing_progress: 100,
-            })
-            .eq("id", id);
-        })
-        .then(() => console.log('✅ Patch note marked as completed'))
-        .catch(async (err: Error) => {
-          clearTimeout(videoTimeout);
-          console.error('❌ Background Lambda video rendering failed:', err);
-          console.error('   Error stack:', err.stack);
-          // Mark as completed anyway (video can be regenerated later)
-          try {
-            await serviceClient
-              .from("patch_notes")
-              .update({
-                processing_status: "completed",
-                processing_stage: null,
-                processing_error: `Video rendering failed: ${err.message}`,
-                processing_progress: 100,
-              })
-              .eq("id", id);
-            console.log('⚠️ Patch note marked as completed (video failed)');
-          } catch (dbErr) {
-            console.error('❌ Failed to update DB with error:', dbErr);
-          }
-        });
-    } else {
-      // No video to render, mark as completed
-      await supabase
-        .from("patch_notes")
-        .update({
-          processing_status: "completed",
-          processing_stage: null,
-          processing_progress: 100,
-        })
-        .eq("id", id);
+      console.log('   - Video data ready with', videoData.topChanges?.length || 0, 'top changes');
+      console.log('   - Frontend should call /render-video endpoint');
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true,
+      hasVideoData: !!videoData 
+    });
   } catch (error) {
     console.error("❌ Processing error:", error);
     
@@ -278,4 +200,3 @@ export async function POST(
     );
   }
 }
-

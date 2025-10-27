@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { renderPatchNoteVideoOnLambda } from "@/lib/remotion-lambda-renderer";
+import { startVideoRender } from "@/lib/remotion-lambda-renderer";
+import { createClient } from "@/lib/supabase/server";
 
-// Configure maximum duration for this route (video rendering can take 60-120s)
-export const maxDuration = 180; // 3 minutes
+// Configure maximum duration for this route
+// Just needs time to initiate Lambda render (not wait for completion)
+export const maxDuration = 60;
 
 // POST /api/patch-notes/[id]/regenerate-video - Regenerate video for a patch note
 export async function POST(
@@ -11,35 +13,40 @@ export async function POST(
 ) {
   try {
     const { id } = await context.params;
-    const body = await request.json();
 
-    const { videoData, repoName } = body;
+    console.log('🎬 Regenerating video for patch note:', id);
 
-    if (!videoData || !repoName) {
-      return NextResponse.json(
-        { error: "Missing required fields: videoData, repoName" },
-        { status: 400 }
-      );
-    }
+    // Update status to generating_video
+    const supabase = await createClient();
+    await supabase
+      .from("patch_notes")
+      .update({
+        processing_status: "generating_video",
+        processing_stage: "Preparing video render...",
+        processing_error: null,
+        video_url: null, // Clear old video
+        video_render_id: null,
+        video_bucket_name: null,
+      })
+      .eq("id", id);
 
-    console.log('🎬 Regenerating video on Lambda...');
-    console.log('   - Patch Note ID:', id);
-    console.log('   - Repo:', repoName);
+    // Start the render (returns immediately, doesn't wait)
+    const result = await startVideoRender(id);
 
-    // Call the Lambda render function
-    const result = await renderPatchNoteVideoOnLambda(id, videoData, repoName);
+    console.log('✅ Video render job initiated:', result);
 
-    console.log('✅ Lambda video regeneration completed:', result);
-
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: true,
+      renderId: result.renderId,
+      bucketName: result.bucketName,
+      message: "Video render started. Poll /video-status endpoint for progress."
+    });
   } catch (error) {
     console.error("Error regenerating video:", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to regenerate video",
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to regenerate video"
       },
       { status: 500 }
     );

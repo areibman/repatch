@@ -112,10 +112,11 @@ export default function BlogViewPage() {
           title: data.title,
           content: data.content || '...',
           changes: data.changes,
-          contributors: data.contributors,
-          videoUrl: data.video_url,
-          repoBranch: data.repo_branch,
-          aiSummaries: data.ai_summaries as CommitSummary[] | null,
+        contributors: data.contributors,
+        videoUrl: data.video_url,
+        videoData: data.video_data || undefined,
+        repoBranch: data.repo_branch,
+        aiSummaries: data.ai_summaries as CommitSummary[] | null,
           aiOverallSummary: data.ai_overall_summary,
           aiDetailedContexts: data.ai_detailed_contexts as DetailedContext[] | null,
           aiTemplateId: data.ai_template_id,
@@ -164,8 +165,7 @@ export default function BlogViewPage() {
     console.log('🔄 Starting polling...', {
       processing: needsProcessingPoll,
       video: needsVideoPoll,
-      status: patchNote?.processingStatus,
-      progress: patchNote?.processingProgress
+      status: patchNote?.processingStatus
     });
 
     let isMounted = true;
@@ -174,51 +174,96 @@ export default function BlogViewPage() {
       if (!isMounted) return;
 
       try {
-        console.log('📡 Polling for updates...', params.id);
-        const response = await fetch(`/api/patch-notes/${params.id}`, {
-          cache: 'no-store'
-        });
-        
-        if (!response.ok) {
-          console.error(`❌ Poll failed with status: ${response.status}`);
-          return;
-        }
-        
-        if (!isMounted) return;
+        // If generating video, poll the video-status endpoint for real-time progress
+        if (patchNote?.processingStatus === 'generating_video') {
+          console.log('📡 Polling video status...', params.id);
+          const response = await fetch(`/api/patch-notes/${params.id}/video-status`, {
+            cache: 'no-store'
+          });
+          
+          if (!response.ok) {
+            console.error(`❌ Video status poll failed with status: ${response.status}`);
+            return;
+          }
+          
+          if (!isMounted) return;
 
-        const data = await response.json();
-        console.log('📊 Poll response:', {
-          status: data.processing_status,
-          progress: data.processing_progress,
-          stage: data.processing_stage,
-          hasVideo: !!data.video_url,
-          error: data.processing_error
-        });
+          const videoStatus = await response.json();
+          console.log('🎬 Video status:', videoStatus);
 
-        if (isMounted) {
-          setPatchNote(prev => {
-            if (!prev) return null;
-            return {
-              ...prev,
-              content: data.content || prev.content,
-              changes: data.changes || prev.changes,
-              contributors: data.contributors || prev.contributors,
-              videoUrl: data.video_url || prev.videoUrl,
-              aiDetailedContexts: data.ai_detailed_contexts as DetailedContext[] | null,
-              videoTopChanges: data.video_top_changes ?? prev.videoTopChanges,
-              videoData: data.video_data || prev.videoData,
-              processingStatus: data.processing_status || prev.processingStatus,
-              processingStage: data.processing_stage,
-              processingError: data.processing_error,
-              processingProgress: data.processing_progress,
-            };
+          if (isMounted) {
+            setPatchNote(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                processingProgress: videoStatus.progress,
+                processingStage: videoStatus.status === 'rendering' 
+                  ? `Rendering video... ${videoStatus.progress}%`
+                  : videoStatus.status === 'completed'
+                  ? 'Video completed!'
+                  : videoStatus.status === 'failed'
+                  ? 'Video rendering failed'
+                  : prev.processingStage,
+                videoUrl: videoStatus.videoUrl || prev.videoUrl,
+                processingStatus: videoStatus.status === 'completed' ? 'completed' : prev.processingStatus,
+                processingError: videoStatus.error || prev.processingError,
+              };
+            });
+
+            if (videoStatus.status === 'completed') {
+              console.log('✅ Video render completed!');
+            } else if (videoStatus.status === 'failed') {
+              console.error('❌ Video render failed:', videoStatus.error);
+            }
+          }
+        } else {
+          // For other statuses, poll the main patch note endpoint
+          console.log('📡 Polling for updates...', params.id);
+          const response = await fetch(`/api/patch-notes/${params.id}`, {
+            cache: 'no-store'
+          });
+          
+          if (!response.ok) {
+            console.error(`❌ Poll failed with status: ${response.status}`);
+            return;
+          }
+          
+          if (!isMounted) return;
+
+          const data = await response.json();
+          console.log('📊 Poll response:', {
+            status: data.processing_status,
+            progress: data.processing_progress,
+            stage: data.processing_stage,
+            hasVideo: !!data.video_url,
+            error: data.processing_error
           });
 
-          if (data.processing_status === 'completed' || data.processing_status === 'failed') {
-            console.log('✅ Processing completed with status:', data.processing_status);
-          }
-          if (data.video_url) {
-            console.log('✅ Video is ready!');
+          if (isMounted) {
+            setPatchNote(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                content: data.content || prev.content,
+                changes: data.changes || prev.changes,
+                contributors: data.contributors || prev.contributors,
+                videoUrl: data.video_url || prev.videoUrl,
+                aiDetailedContexts: data.ai_detailed_contexts as DetailedContext[] | null,
+                videoTopChanges: data.video_top_changes ?? prev.videoTopChanges,
+                videoData: data.video_data || prev.videoData,
+                processingStatus: data.processing_status || prev.processingStatus,
+                processingStage: data.processing_stage,
+                processingError: data.processing_error,
+                processingProgress: data.processing_progress,
+              };
+            });
+
+            if (data.processing_status === 'completed' || data.processing_status === 'failed') {
+              console.log('✅ Processing completed with status:', data.processing_status);
+            }
+            if (data.video_url) {
+              console.log('✅ Video is ready!');
+            }
           }
         }
       } catch (error) {
@@ -227,6 +272,9 @@ export default function BlogViewPage() {
         }
       }
     };
+
+    // Kick off an immediate poll so the UI reflects the latest state ASAP
+    poll();
 
     const pollInterval = setInterval(poll, 5000); // Poll every 5 seconds
 

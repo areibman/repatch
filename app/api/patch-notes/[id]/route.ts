@@ -4,6 +4,10 @@ import { Database } from "@/lib/supabase/database.types";
 
 type PatchNoteUpdate = Database["public"]["Tables"]["patch_notes"]["Update"];
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 // GET /api/patch-notes/[id] - Fetch a single patch note
 export async function GET(
   request: NextRequest,
@@ -23,7 +27,11 @@ export async function GET(
       return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    });
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to fetch patch note" },

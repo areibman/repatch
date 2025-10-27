@@ -605,6 +605,26 @@ export function CreatePostDialog() {
           } else {
             const result = await response.json();
             console.log('✅ Background processing initiated successfully:', result);
+            
+            // If content generation completed and has video data, trigger video rendering
+            if (result.hasVideoData) {
+              console.log('🎬 Triggering video render...');
+              fetch(`/api/patch-notes/${data.id}/render-video`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+              })
+                .then(async (videoResponse) => {
+                  if (videoResponse.ok) {
+                    const videoResult = await videoResponse.json();
+                    console.log('✅ Video render started:', videoResult);
+                  } else {
+                    console.error('❌ Video render failed to start');
+                  }
+                })
+                .catch((err) => {
+                  console.error('❌ Video render request failed:', err);
+                });
+            }
           }
         })
         .catch((error) => {

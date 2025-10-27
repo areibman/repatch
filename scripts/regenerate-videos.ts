@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { renderPatchNoteVideoOnLambda } from '../lib/remotion-lambda-renderer';
+import { startVideoRender, getVideoRenderStatus } from '../lib/remotion-lambda-renderer';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -33,13 +33,25 @@ async function regenerateVideos() {
     console.log(`   AI Summaries: ${note.ai_summaries.length}`);
 
     try {
-      // Call Lambda renderer directly instead of HTTP endpoint
-      const result = await renderPatchNoteVideoOnLambda(
-        note.id,
-        undefined, // Will be generated from AI summaries
-        note.repo_name
-      );
-      console.log(`   ✅ Success! Video URL: ${result.videoUrl}`);
+      // Start the video render (returns immediately)
+      const result = await startVideoRender(note.id);
+      console.log(`   ✅ Render started! Render ID: ${result.renderId}`);
+      
+      // Poll for completion
+      console.log(`   ⏳ Waiting for render to complete...`);
+      let status = await getVideoRenderStatus(note.id);
+      
+      while (status.status === 'rendering' || status.status === 'pending') {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5 seconds
+        status = await getVideoRenderStatus(note.id);
+        console.log(`   📊 Progress: ${status.progress}%`);
+      }
+      
+      if (status.status === 'completed') {
+        console.log(`   ✅ Success! Video URL: ${status.videoUrl}`);
+      } else {
+        console.error(`   ❌ Failed: ${status.error}`);
+      }
     } catch (error) {
       console.error(`   ❌ Error:`, error);
     }
