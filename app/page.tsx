@@ -91,19 +91,44 @@ export default function Home() {
     fetchPatchNotes();
   }, []);
 
-  // Poll for updates if there are any pending/processing notes
+  // Poll for updates with exponential backoff if there are any pending/processing notes
   useEffect(() => {
-    const hasPendingNotes = patchNotes.some(
-      (note) => note.processingStatus && 
+    const pendingNoteIds = patchNotes
+      .filter((note) => 
+        note.processingStatus && 
         note.processingStatus !== 'completed' && 
         note.processingStatus !== 'failed'
-    );
+      )
+      .map((note) => note.id);
 
-    if (!hasPendingNotes) return;
+    if (pendingNoteIds.length === 0) {
+      return; // No pending notes, stop polling
+    }
 
-    const pollInterval = setInterval(async () => {
+    console.log(`🔄 Polling ${pendingNoteIds.length} pending patch note(s)...`);
+
+    let isMounted = true;
+    let pollTimeout: NodeJS.Timeout | null = null;
+    let pollDelay = 5000; // Start with 5 seconds
+    const maxDelay = 30000; // Cap at 30 seconds
+    const backoffMultiplier = 1.5;
+
+    const scheduleNextPoll = () => {
+      if (!isMounted) return;
+      
+      pollTimeout = setTimeout(() => {
+        poll();
+      }, pollDelay);
+      
+      // Exponential backoff: increase delay for next poll
+      pollDelay = Math.min(pollDelay * backoffMultiplier, maxDelay);
+    };
+
+    const poll = async () => {
+      if (!isMounted) return;
+
       try {
-        const response = await fetch("/api/patch-notes");
+        const response = await fetch("/api/patch-notes", { cache: 'no-store' });
         if (response.ok) {
           const data = await response.json();
           const transformedData = data.map((note: {
@@ -145,14 +170,50 @@ export default function Home() {
             processingStage: note.processing_stage,
             processingError: note.processing_error,
           }));
-          setPatchNotes(transformedData);
+          
+          if (isMounted) {
+            setPatchNotes(transformedData);
+            
+            // Check if any notes are still pending
+            const stillPending = transformedData.some(
+              (note) => 
+                pendingNoteIds.includes(note.id) &&
+                note.processingStatus && 
+                note.processingStatus !== 'completed' && 
+                note.processingStatus !== 'failed'
+            );
+            
+            if (!stillPending) {
+              console.log('✅ All pending notes completed, stopping polling');
+              return; // Stop polling - all done
+            }
+            
+            // Reset delay on successful poll (we're making progress)
+            pollDelay = 5000;
+            scheduleNextPoll();
+          }
+        } else {
+          console.error('❌ Poll failed with status:', response.status);
+          scheduleNextPoll();
         }
       } catch (error) {
-        console.error('Error polling for updates:', error);
+        if (isMounted) {
+          console.error('❌ Error polling for updates:', error);
+          // On error, use exponential backoff
+          scheduleNextPoll();
+        }
       }
-    }, 5000); // Poll every 5 seconds
+    };
 
-    return () => clearInterval(pollInterval);
+    // Start polling immediately
+    poll();
+
+    return () => {
+      isMounted = false;
+      if (pollTimeout) {
+        clearTimeout(pollTimeout);
+      }
+    };
   }, [patchNotes]);
 
   const getFilterLabel = (note: PatchNote) =>

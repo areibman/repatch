@@ -141,7 +141,7 @@ export default function BlogViewPage() {
     fetchPatchNote();
   }, [params.id]);
 
-  // Unified polling for processing and video status
+  // Unified polling with exponential backoff for processing and video status
   useEffect(() => {
     // Determine if we need to poll based on current status
     const needsProcessingPoll = patchNote?.processingStatus && 
@@ -162,13 +162,28 @@ export default function BlogViewPage() {
       return;
     }
 
-    console.log('🔄 Starting polling...', {
+    console.log('🔄 Starting polling with exponential backoff...', {
       processing: needsProcessingPoll,
       video: needsVideoPoll,
       status: patchNote?.processingStatus
     });
 
     let isMounted = true;
+    let pollTimeout: NodeJS.Timeout | null = null;
+    let pollDelay = 2000; // Start with 2 seconds
+    const maxDelay = 30000; // Cap at 30 seconds
+    const backoffMultiplier = 1.5;
+
+    const scheduleNextPoll = () => {
+      if (!isMounted) return;
+      
+      pollTimeout = setTimeout(() => {
+        poll();
+      }, pollDelay);
+      
+      // Exponential backoff: increase delay for next poll
+      pollDelay = Math.min(pollDelay * backoffMultiplier, maxDelay);
+    };
 
     const poll = async () => {
       if (!isMounted) return;
@@ -183,6 +198,7 @@ export default function BlogViewPage() {
           
           if (!response.ok) {
             console.error(`❌ Video status poll failed with status: ${response.status}`);
+            scheduleNextPoll();
             return;
           }
           
@@ -212,12 +228,16 @@ export default function BlogViewPage() {
 
             if (videoStatus.status === 'completed') {
               console.log('✅ Video render completed!');
+              // Stop polling - completed
+              return;
             } else if (videoStatus.status === 'failed') {
               console.error('❌ Video render failed:', videoStatus.error);
+              // Stop polling - failed
+              return;
             }
           }
         } else {
-          // For other statuses, poll the main patch note endpoint
+          // For other statuses, poll the main patch note endpoint (single ID only!)
           console.log('📡 Polling for updates...', params.id);
           const response = await fetch(`/api/patch-notes/${params.id}`, {
             cache: 'no-store'
@@ -225,6 +245,7 @@ export default function BlogViewPage() {
           
           if (!response.ok) {
             console.error(`❌ Poll failed with status: ${response.status}`);
+            scheduleNextPoll();
             return;
           }
           
@@ -260,15 +281,25 @@ export default function BlogViewPage() {
 
             if (data.processing_status === 'completed' || data.processing_status === 'failed') {
               console.log('✅ Processing completed with status:', data.processing_status);
+              // Stop polling - completed or failed
+              return;
             }
             if (data.video_url) {
               console.log('✅ Video is ready!');
+              // Stop polling - video ready
+              return;
             }
           }
         }
+        
+        // Reset delay on successful poll (we're making progress)
+        pollDelay = 2000;
+        scheduleNextPoll();
       } catch (error) {
         if (isMounted) {
           console.error('❌ Error polling:', error);
+          // On error, use exponential backoff
+          scheduleNextPoll();
         }
       }
     };
@@ -276,12 +307,12 @@ export default function BlogViewPage() {
     // Kick off an immediate poll so the UI reflects the latest state ASAP
     poll();
 
-    const pollInterval = setInterval(poll, 5000); // Poll every 5 seconds
-
     return () => {
       console.log('🛑 Stopping polling');
       isMounted = false;
-      clearInterval(pollInterval);
+      if (pollTimeout) {
+        clearTimeout(pollTimeout);
+      }
     };
   }, [patchNote?.processingStatus, patchNote?.videoUrl, patchNote?.processingError, params.id]);
 

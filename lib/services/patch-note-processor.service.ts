@@ -13,6 +13,7 @@ import {
   type SummarizeCommitsInput,
   type SummarizationResult,
 } from './github-summarize.service';
+import { renderVideo } from './video-render.service';
 import type { ServiceResult } from './github-stats.service';
 import type { PatchNoteFilters } from '@/types/patch-note';
 
@@ -61,6 +62,7 @@ interface VideoData {
  */
 export interface ProcessingResult {
   readonly hasVideoData: boolean;
+  readonly videoRenderStarted: boolean;
 }
 
 /**
@@ -256,14 +258,48 @@ export async function processPatchNote(
     await updatePatchNoteStatus(input.patchNoteId, finalUpdate, input.cookieStore);
 
     console.log('✅ Content generation complete');
+    
+    // Automatically trigger video rendering if video data is ready
+    // This ensures video rendering happens reliably without frontend coordination
+    let videoRenderStarted = false;
     if (videoData) {
       console.log('   - Video data ready with', videoData.topChanges.length, 'top changes');
-      console.log('   - Frontend should call /render-video endpoint');
+      console.log('   - Automatically triggering video render...');
+      
+      // Start video rendering (fire-and-forget, don't block completion)
+      // Errors are handled by the render service and stored in processing_error
+      renderVideo({ patchNoteId: input.patchNoteId })
+        .then((renderResult) => {
+          if (renderResult.success) {
+            console.log('✅ Video render started successfully:', renderResult.data);
+          } else {
+            console.error('❌ Video render failed to start:', renderResult.error);
+            // Error already stored in database by renderVideo service
+          }
+        })
+        .catch((error) => {
+          console.error('❌ Unexpected error starting video render:', error);
+          // Update status to reflect video render failure
+          updatePatchNoteStatus(
+            input.patchNoteId,
+            {
+              processing_error: `Video render failed to start: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            },
+            input.cookieStore
+          ).catch((updateError) => {
+            console.error('Failed to update error status:', updateError);
+          });
+        });
+      
+      videoRenderStarted = true;
     }
 
     return {
       success: true,
-      data: { hasVideoData: !!videoData },
+      data: { 
+        hasVideoData: !!videoData,
+        videoRenderStarted,
+      },
     };
   } catch (error) {
     const errorMessage = error instanceof Error
