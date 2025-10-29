@@ -46,9 +46,10 @@ function getSupabaseConfig(): SupabaseConfig {
     );
   }
 
+  // TypeScript now knows these are defined (we checked above)
   return {
-    url: url!,
-    anonKey: anonKey!,
+    url: url as string,
+    anonKey: anonKey as string,
     serviceRoleKey,
   };
 }
