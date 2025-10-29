@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, type Database } from "@/lib/supabase";
+import { cookies } from "next/headers";
 import { mapTemplateRow } from "@/lib/templates";
-import { Database } from "@/lib/supabase/database.types";
 import type { AiTemplatePayload } from "@/types/ai-template";
 
 type TemplateUpdate = Database["public"]["Tables"]["ai_templates"]["Update"];
@@ -27,7 +27,8 @@ export async function PUT(request: NextRequest, { params }: Params) {
       );
     }
 
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
     const update: TemplateUpdate = {
       name: payload.name.trim(),
       content: payload.content.trim(),
@@ -60,7 +61,8 @@ export async function PUT(request: NextRequest, { params }: Params) {
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
 
     const { error } = await supabase
       .from("ai_templates")

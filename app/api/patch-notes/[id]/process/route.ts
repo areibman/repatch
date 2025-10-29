@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase";
+import { cookies } from "next/headers";
 import { generateVideoTopChangesFromContent } from "@/lib/ai-summarizer";
 import { generateBoilerplateContent } from "@/lib/github";
 
@@ -14,7 +15,8 @@ export async function POST(
 ) {
   console.log('📥 Received process request');
   try {
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
     const body = await request.json();
     const { id } = await params;
 
@@ -182,7 +184,8 @@ export async function POST(
     console.error("❌ Processing error:", error);
     
     // Update patch note with error status
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
     const { id } = await params;
     await supabase
       .from("patch_notes")

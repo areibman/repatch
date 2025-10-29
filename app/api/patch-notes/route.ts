@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase";
+import { cookies } from "next/headers";
 
 // No longer needs extended timeout since we moved AI processing to background
 // export const maxDuration = 90; // 90 seconds
@@ -7,7 +8,8 @@ import { createClient } from "@/lib/supabase/server";
 // GET /api/patch-notes - Fetch all patch notes
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
 
     const { data, error } = await supabase
       .from("patch_notes")
@@ -30,7 +32,8 @@ export async function GET() {
 // POST /api/patch-notes - Create a new patch note
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
     const body = await request.json();
 
     // Don't generate video top changes here - let the background process handle it

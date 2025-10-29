@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
-import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
+import { createServerSupabaseClient, createServiceSupabaseClient, type Database } from "@/lib/supabase";
+import { cookies } from "next/headers";
 import { marked } from "marked";
-import { Database } from "@/lib/supabase/database.types";
 import { formatFilterSummary } from "@/lib/filter-utils";
 import type { PatchNoteFilters } from "@/types/patch-note";
 
@@ -32,7 +31,8 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
 
     // Fetch the patch note
     const { data: patchNote, error: patchNoteError } = await supabase
@@ -105,7 +105,7 @@ export async function POST(
         // Generate a signed URL valid for 1 year (effectively permanent for email blasts)
         // Email blasts are effectively public once sent (can be forwarded, shared, etc.)
         // so expiration doesn't add meaningful security, just creates bad UX
-        const serviceSupabase = createServiceClient();
+        const serviceSupabase = createServiceSupabaseClient();
         const videoBucket = process.env.SUPABASE_VIDEO_BUCKET || 'videos';
         
         const { data: signedData, error: signedError } = await serviceSupabase.storage

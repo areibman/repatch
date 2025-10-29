@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase";
+import { cookies } from "next/headers";
 import { mapTemplateRow } from "@/lib/templates";
 import type { AiTemplatePayload } from "@/types/ai-template";
 
 export async function GET() {
   try {
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
     const { data, error } = await supabase
       .from("ai_templates")
       .select("*")
@@ -43,7 +45,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
     const { data, error } = await supabase
       .from("ai_templates")
       .insert({
