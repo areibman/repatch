@@ -15,6 +15,7 @@ import {
 } from './github-summarize.service';
 import type { ServiceResult } from './github-stats.service';
 import type { PatchNoteFilters } from '@/types/patch-note';
+import { transitionVideoRenderStatus, type VideoRenderStatus } from './video-render-state-machine';
 
 /**
  * Input for processing a patch note
@@ -133,6 +134,7 @@ async function generateVideoData(
 
 /**
  * Create final database update with all processed data
+ * Note: Video render status transitions are handled separately by the state machine
  */
 function createFinalUpdate(
   content: string,
@@ -163,6 +165,7 @@ function createFinalUpdate(
     ai_detailed_contexts: detailedContexts,
     video_data: videoData,
     video_top_changes: videoTopChanges,
+    // Status will be updated by state machine if video rendering is triggered
     processing_status: videoData ? 'generating_video' : 'completed',
     processing_stage: videoData ? 'Preparing video render...' : null,
   };

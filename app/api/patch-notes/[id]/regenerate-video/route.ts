@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startVideoRender } from "@/lib/remotion-lambda-renderer";
-import { createServerSupabaseClient } from "@/lib/supabase";
+import { resetVideoRender } from "@/lib/services/video-render-state-machine";
 import { cookies } from "next/headers";
 
 // Configure maximum duration for this route
@@ -17,22 +17,11 @@ export async function POST(
 
     console.log('🎬 Regenerating video for patch note:', id);
 
-    // Update status to generating_video
-    const cookieStore = await cookies();
-    const supabase = createServerSupabaseClient(cookieStore);
-    await supabase
-      .from("patch_notes")
-      .update({
-        processing_status: "generating_video",
-        processing_stage: "Preparing video render...",
-        processing_error: null,
-        video_url: null, // Clear old video
-        video_render_id: null,
-        video_bucket_name: null,
-      })
-      .eq("id", id);
+    // Reset video render state using state machine
+    await resetVideoRender(id);
 
     // Start the render (returns immediately, doesn't wait)
+    // This will transition to generating_video state
     const result = await startVideoRender(id);
 
     console.log('✅ Video render job initiated:', result);
