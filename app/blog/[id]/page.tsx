@@ -141,7 +141,7 @@ export default function BlogViewPage() {
     fetchPatchNote();
   }, [params.id]);
 
-  // Unified polling for processing and video status
+  // Unified polling for processing and video status with exponential backoff
   useEffect(() => {
     // Determine if we need to poll based on current status
     const needsProcessingPoll = patchNote?.processingStatus && 
@@ -162,27 +162,39 @@ export default function BlogViewPage() {
       return;
     }
 
-    console.log('🔄 Starting polling...', {
+    console.log('🔄 Starting polling with exponential backoff...', {
       processing: needsProcessingPoll,
       video: needsVideoPoll,
       status: patchNote?.processingStatus
     });
 
     let isMounted = true;
+    let pollCount = 0;
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    // Exponential backoff: starts at 2s, doubles up to 30s max
+    const getPollDelay = (count: number): number => {
+      const delay = Math.min(2000 * Math.pow(2, count), 30000);
+      return delay;
+    };
 
     const poll = async () => {
       if (!isMounted) return;
 
       try {
+        let shouldContinuePolling = true;
+
         // If generating video, poll the video-status endpoint for real-time progress
         if (patchNote?.processingStatus === 'generating_video') {
-          console.log('📡 Polling video status...', params.id);
+          console.log(`📡 Polling video status (attempt ${pollCount + 1})...`, params.id);
           const response = await fetch(`/api/patch-notes/${params.id}/video-status`, {
             cache: 'no-store'
           });
           
           if (!response.ok) {
             console.error(`❌ Video status poll failed with status: ${response.status}`);
+            pollCount++;
+            scheduleNextPoll();
             return;
           }
           
@@ -210,21 +222,22 @@ export default function BlogViewPage() {
               };
             });
 
-            if (videoStatus.status === 'completed') {
-              console.log('✅ Video render completed!');
-            } else if (videoStatus.status === 'failed') {
-              console.error('❌ Video render failed:', videoStatus.error);
+            if (videoStatus.status === 'completed' || videoStatus.status === 'failed') {
+              console.log(videoStatus.status === 'completed' ? '✅ Video render completed!' : '❌ Video render failed');
+              shouldContinuePolling = false;
             }
           }
         } else {
           // For other statuses, poll the main patch note endpoint
-          console.log('📡 Polling for updates...', params.id);
+          console.log(`📡 Polling for updates (attempt ${pollCount + 1})...`, params.id);
           const response = await fetch(`/api/patch-notes/${params.id}`, {
             cache: 'no-store'
           });
           
           if (!response.ok) {
             console.error(`❌ Poll failed with status: ${response.status}`);
+            pollCount++;
+            scheduleNextPoll();
             return;
           }
           
@@ -258,30 +271,55 @@ export default function BlogViewPage() {
               };
             });
 
+            // Stop polling if processing is complete or failed, or if video is ready
             if (data.processing_status === 'completed' || data.processing_status === 'failed') {
               console.log('✅ Processing completed with status:', data.processing_status);
-            }
-            if (data.video_url) {
+              shouldContinuePolling = false;
+            } else if (data.video_url) {
               console.log('✅ Video is ready!');
+              shouldContinuePolling = false;
             }
           }
+        }
+
+        // Only continue polling if we should
+        if (shouldContinuePolling && isMounted) {
+          pollCount++;
+          scheduleNextPoll();
+        } else {
+          console.log('🛑 Stopping polling - processing complete or video ready');
         }
       } catch (error) {
         if (isMounted) {
           console.error('❌ Error polling:', error);
+          pollCount++;
+          scheduleNextPoll();
         }
       }
+    };
+
+    const scheduleNextPoll = () => {
+      if (!isMounted) return;
+      
+      const delay = getPollDelay(pollCount);
+      console.log(`⏱️  Scheduling next poll in ${delay}ms (backoff level: ${pollCount})`);
+      
+      timeoutId = setTimeout(() => {
+        if (isMounted) {
+          poll();
+        }
+      }, delay);
     };
 
     // Kick off an immediate poll so the UI reflects the latest state ASAP
     poll();
 
-    const pollInterval = setInterval(poll, 5000); // Poll every 5 seconds
-
     return () => {
       console.log('🛑 Stopping polling');
       isMounted = false;
-      clearInterval(pollInterval);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
   }, [patchNote?.processingStatus, patchNote?.videoUrl, patchNote?.processingError, params.id]);
 

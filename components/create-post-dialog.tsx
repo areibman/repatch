@@ -581,7 +581,8 @@ export function CreatePostDialog() {
       router.push(`/blog/${data.id}`);
       router.refresh();
 
-      // Trigger background processing (don't await, handle errors silently)
+      // Trigger background processing (includes content generation + automatic video rendering)
+      // Don't await - processing happens in background, frontend polls for status
       console.log(`🚀 Triggering background processing for patch note: ${data.id}`);
       fetch(`/api/patch-notes/${data.id}/process`, {
         method: 'POST',
@@ -605,26 +606,8 @@ export function CreatePostDialog() {
           } else {
             const result = await response.json();
             console.log('✅ Background processing initiated successfully:', result);
-            
-            // If content generation completed and has video data, trigger video rendering
-            if (result.hasVideoData) {
-              console.log('🎬 Triggering video render...');
-              fetch(`/api/patch-notes/${data.id}/render-video`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-              })
-                .then(async (videoResponse) => {
-                  if (videoResponse.ok) {
-                    const videoResult = await videoResponse.json();
-                    console.log('✅ Video render started:', videoResult);
-                  } else {
-                    console.error('❌ Video render failed to start');
-                  }
-                })
-                .catch((err) => {
-                  console.error('❌ Video render request failed:', err);
-                });
-            }
+            // Video rendering is now automatically triggered by the process service
+            // No need for separate render-video call
           }
         })
         .catch((error) => {

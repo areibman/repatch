@@ -13,6 +13,7 @@ import {
   type SummarizeCommitsInput,
   type SummarizationResult,
 } from './github-summarize.service';
+import { renderVideo } from './video-render.service';
 import type { ServiceResult } from './github-stats.service';
 import type { PatchNoteFilters } from '@/types/patch-note';
 
@@ -256,9 +257,48 @@ export async function processPatchNote(
     await updatePatchNoteStatus(input.patchNoteId, finalUpdate, input.cookieStore);
 
     console.log('✅ Content generation complete');
+    
+    // Stage 5: Automatically trigger video rendering if video data is available
     if (videoData) {
       console.log('   - Video data ready with', videoData.topChanges.length, 'top changes');
-      console.log('   - Frontend should call /render-video endpoint');
+      console.log('   - Automatically triggering video render...');
+
+      // Trigger video rendering (fire-and-forget at service level, but with proper error handling)
+      renderVideo({ patchNoteId: input.patchNoteId })
+        .then((renderResult) => {
+          if (renderResult.success) {
+            console.log('✅ Video render job initiated:', renderResult.data);
+          } else {
+            console.error('❌ Failed to start video render:', renderResult.error);
+            // Update status to completed with error note
+            updatePatchNoteStatus(
+              input.patchNoteId,
+              {
+                processing_status: 'completed',
+                processing_stage: 'Video rendering failed to start',
+                processing_error: renderResult.error,
+              },
+              input.cookieStore
+            ).catch((err) => {
+              console.error('Failed to update video render error status:', err);
+            });
+          }
+        })
+        .catch((error) => {
+          console.error('❌ Unexpected error starting video render:', error);
+          // Update status to completed with error note
+          updatePatchNoteStatus(
+            input.patchNoteId,
+            {
+              processing_status: 'completed',
+              processing_stage: 'Video rendering failed to start',
+              processing_error: error instanceof Error ? error.message : 'Unknown error',
+            },
+            input.cookieStore
+          ).catch((err) => {
+            console.error('Failed to update video render error status:', err);
+          });
+        });
     }
 
     return {
