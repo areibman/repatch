@@ -13,6 +13,7 @@ import {
   type SummarizeCommitsInput,
   type SummarizationResult,
 } from './github-summarize.service';
+import { startVideoRender } from '@/lib/remotion-lambda-renderer';
 import type { ServiceResult } from './github-stats.service';
 import type { PatchNoteFilters } from '@/types/patch-note';
 
@@ -43,6 +44,16 @@ type ProcessingStage =
   | 'generating_video'
   | 'completed'
   | 'failed';
+
+/**
+ * Video render initiation result
+ */
+interface VideoRenderInitResult {
+  readonly success: boolean;
+  readonly renderId?: string;
+  readonly bucketName?: string;
+  readonly error?: string;
+}
 
 /**
  * Video data structure
@@ -132,6 +143,62 @@ async function generateVideoData(
 }
 
 /**
+ * Initiate video rendering (non-blocking, updates status in DB)
+ */
+async function initiateVideoRender(
+  patchNoteId: string,
+  cookieStore: ProcessPatchNoteInput['cookieStore']
+): Promise<VideoRenderInitResult> {
+  try {
+    console.log('🎬 Initiating video render for patch note:', patchNoteId);
+    
+    // Update status before starting render
+    await updatePatchNoteStatus(
+      patchNoteId,
+      createStatusUpdate('generating_video', 'Starting video render...'),
+      cookieStore
+    );
+
+    // Start video render (returns immediately, doesn't wait for completion)
+    const renderResult = await startVideoRender(patchNoteId);
+    
+    console.log('✅ Video render job initiated:', {
+      renderId: renderResult.renderId,
+      bucketName: renderResult.bucketName
+    });
+
+    return {
+      success: true,
+      renderId: renderResult.renderId,
+      bucketName: renderResult.bucketName,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error
+      ? error.message
+      : 'Failed to start video render';
+    
+    console.error('❌ Failed to initiate video render:', errorMessage);
+    
+    // Update status with error, but don't fail the entire process
+    // Content generation succeeded, video rendering can be retried
+    await updatePatchNoteStatus(
+      patchNoteId,
+      {
+        processing_status: 'completed',
+        processing_stage: null,
+        processing_error: `Content generated successfully, but video rendering failed: ${errorMessage}`,
+      },
+      cookieStore
+    );
+
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
  * Create final database update with all processed data
  */
 function createFinalUpdate(
@@ -141,7 +208,8 @@ function createFinalUpdate(
   contributors: readonly string[],
   detailedContexts: SummarizationResult['detailedContexts'],
   videoData: VideoData | null,
-  videoTopChanges: VideoData['topChanges'] | null
+  videoTopChanges: VideoData['topChanges'] | null,
+  videoRenderInitiated: boolean
 ): {
   readonly content: string;
   readonly changes: { readonly added: number; readonly modified: number; readonly removed: number };
@@ -163,8 +231,8 @@ function createFinalUpdate(
     ai_detailed_contexts: detailedContexts,
     video_data: videoData,
     video_top_changes: videoTopChanges,
-    processing_status: videoData ? 'generating_video' : 'completed',
-    processing_stage: videoData ? 'Preparing video render...' : null,
+    processing_status: videoRenderInitiated ? 'generating_video' : 'completed',
+    processing_stage: videoRenderInitiated ? 'Video render in progress...' : null,
   };
 }
 
@@ -242,23 +310,54 @@ export async function processPatchNote(
     const videoData = await generateVideoData(content, `${input.owner}/${input.repo}`);
     const videoTopChanges = videoData?.topChanges ?? null;
 
-    // Final Update
-    const finalUpdate = createFinalUpdate(
+    // Stage 5: Store video data and initiate rendering if available
+    // We need to store video data first, then trigger render
+    const initialUpdate = {
       content,
-      stats.additions,
-      stats.deletions,
-      stats.contributors,
-      detailedContexts,
-      videoData,
-      videoTopChanges
-    );
+      changes: {
+        added: stats.additions,
+        modified: 0,
+        removed: stats.deletions,
+      },
+      contributors: stats.contributors,
+      ai_detailed_contexts: detailedContexts,
+      video_data: videoData,
+      video_top_changes: videoTopChanges,
+      processing_status: 'generating_content' as const,
+      processing_stage: videoData ? 'Preparing video render...' : 'Finalizing...',
+    };
 
-    await updatePatchNoteStatus(input.patchNoteId, finalUpdate, input.cookieStore);
+    await updatePatchNoteStatus(input.patchNoteId, initialUpdate, input.cookieStore);
 
     console.log('✅ Content generation complete');
-    if (videoData) {
-      console.log('   - Video data ready with', videoData.topChanges.length, 'top changes');
-      console.log('   - Frontend should call /render-video endpoint');
+    
+    // If we have video data, automatically initiate video rendering
+    let videoRenderInitiated = false;
+    if (videoData && videoTopChanges && videoTopChanges.length > 0) {
+      console.log('   - Video data ready with', videoTopChanges.length, 'top changes');
+      console.log('   - Initiating video render...');
+      
+      const renderResult = await initiateVideoRender(input.patchNoteId, input.cookieStore);
+      videoRenderInitiated = renderResult.success;
+      
+      if (renderResult.success) {
+        console.log('   ✅ Video render job started:', {
+          renderId: renderResult.renderId,
+          bucketName: renderResult.bucketName
+        });
+      } else {
+        console.warn('   ⚠️ Video render failed, but content generation succeeded');
+      }
+    } else {
+      // No video data, mark as completed
+      await updatePatchNoteStatus(
+        input.patchNoteId,
+        {
+          processing_status: 'completed',
+          processing_stage: null,
+        },
+        input.cookieStore
+      );
     }
 
     return {

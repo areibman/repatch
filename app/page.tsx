@@ -91,68 +91,105 @@ export default function Home() {
     fetchPatchNotes();
   }, []);
 
-  // Poll for updates if there are any pending/processing notes
+  // Poll for updates only for pending/processing notes (per-note polling with exponential backoff)
   useEffect(() => {
-    const hasPendingNotes = patchNotes.some(
-      (note) => note.processingStatus && 
+    const pendingNoteIds = patchNotes
+      .filter((note) => 
+        note.processingStatus && 
         note.processingStatus !== 'completed' && 
         note.processingStatus !== 'failed'
-    );
+      )
+      .map((note) => note.id);
 
-    if (!hasPendingNotes) return;
+    if (pendingNoteIds.length === 0) return;
 
-    const pollInterval = setInterval(async () => {
+    console.log(`🔄 Polling ${pendingNoteIds.length} pending note(s) with exponential backoff`);
+
+    let isMounted = true;
+    let pollCount = 0;
+    let pollTimeout: NodeJS.Timeout | null = null;
+
+    // Exponential backoff: 5s, 10s, 20s, max 30s
+    const getPollDelay = (count: number): number => {
+      const baseDelay = 5000; // 5 seconds
+      const maxDelay = 30000; // 30 seconds max
+      const delay = Math.min(baseDelay * Math.pow(2, count), maxDelay);
+      return delay;
+    };
+
+    const pollNote = async (noteId: string): Promise<boolean> => {
       try {
-        const response = await fetch("/api/patch-notes");
-        if (response.ok) {
-          const data = await response.json();
-          const transformedData = data.map((note: {
-            id: string;
-            repo_name: string;
-            repo_url: string;
-            time_period: string;
-            generated_at: string;
-            title: string;
-            content: string;
-            changes: { added: number; modified: number; removed: number };
-            contributors: string[];
-            video_url?: string | null;
-            repo_branch?: string | null;
-            ai_summaries?: CommitSummary[] | null;
-            ai_overall_summary?: string | null;
-            ai_template_id?: string | null;
-            filter_metadata?: Record<string, unknown> | null;
-            processing_status?: string;
-            processing_stage?: string | null;
-            processing_error?: string | null;
-          }) => ({
-            id: note.id,
-            repoName: note.repo_name,
-            repoUrl: note.repo_url,
-            timePeriod: note.time_period,
-            generatedAt: new Date(note.generated_at),
-            title: note.title,
-            content: note.content,
-            changes: note.changes,
-            contributors: note.contributors,
-            videoUrl: note.video_url,
-            repoBranch: note.repo_branch,
-            aiSummaries: note.ai_summaries,
-            aiOverallSummary: note.ai_overall_summary,
-            aiTemplateId: note.ai_template_id,
-            filterMetadata: note.filter_metadata,
-            processingStatus: note.processing_status as 'pending' | 'processing' | 'completed' | 'failed' | undefined,
-            processingStage: note.processing_stage,
-            processingError: note.processing_error,
-          }));
-          setPatchNotes(transformedData);
+        const response = await fetch(`/api/patch-notes/${noteId}`, {
+          cache: 'no-store'
+        });
+        
+        if (!response.ok) {
+          return false; // Still pending
         }
-      } catch (error) {
-        console.error('Error polling for updates:', error);
-      }
-    }, 5000); // Poll every 5 seconds
 
-    return () => clearInterval(pollInterval);
+        const note = await response.json();
+        const isStillPending = note.processing_status && 
+          note.processing_status !== 'completed' && 
+          note.processing_status !== 'failed';
+
+        if (!isStillPending) {
+          // Update this specific note in state
+          setPatchNotes((prev) =>
+            prev.map((p) =>
+              p.id === noteId
+                ? {
+                    ...p,
+                    content: note.content || p.content,
+                    changes: note.changes || p.changes,
+                    contributors: note.contributors || p.contributors,
+                    videoUrl: note.video_url || p.videoUrl,
+                    processingStatus: note.processing_status as 'pending' | 'processing' | 'completed' | 'failed' | undefined,
+                    processingStage: note.processing_stage,
+                    processingError: note.processing_error,
+                  }
+                : p
+            )
+          );
+        }
+
+        return isStillPending;
+      } catch (error) {
+        console.error(`Error polling note ${noteId}:`, error);
+        return true; // Assume still pending on error
+      }
+    };
+
+    const poll = async () => {
+      if (!isMounted) return;
+
+      // Poll all pending notes in parallel
+      const results = await Promise.all(
+        pendingNoteIds.map((id) => pollNote(id))
+      );
+
+      // Check if any are still pending
+      const stillPending = results.some((pending) => pending);
+
+      if (!stillPending) {
+        console.log('✅ All notes completed, stopping polling');
+        return; // Stop polling
+      }
+
+      // Schedule next poll with exponential backoff
+      pollCount++;
+      const delay = getPollDelay(pollCount);
+      pollTimeout = setTimeout(poll, delay);
+    };
+
+    // Start polling
+    poll();
+
+    return () => {
+      isMounted = false;
+      if (pollTimeout) {
+        clearTimeout(pollTimeout);
+      }
+    };
   }, [patchNotes]);
 
   const getFilterLabel = (note: PatchNote) =>

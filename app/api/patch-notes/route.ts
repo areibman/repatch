@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
-import { renderVideo } from "@/lib/services";
 import { cookies } from "next/headers";
 
 // No longer needs extended timeout since we moved AI processing to background
@@ -73,32 +72,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Only trigger video rendering if the patch note is completed (not pending)
-    if (videoData && data.id && body.processing_status !== 'pending') {
-      console.log('🎬 Triggering video render directly via service...');
-      console.log('   - Patch Note ID:', data.id);
-      console.log('   - Repo:', body.repo_name);
-
-      // Call service directly (no HTTP overhead)
-      // Fire-and-forget: Don't block response, but handle errors gracefully
-      renderVideo({ patchNoteId: data.id })
-        .then((result) => {
-          if (result.success) {
-            console.log('✅ Video render started:', result.data);
-          } else {
-            console.error('❌ Failed to start video render:', result.error);
-          }
-        })
-        .catch((error: Error) => {
-          console.error('❌ Unexpected error in video render:', error);
-        });
-    } else if (body.processing_status === 'pending') {
-      console.log('⏳ Patch note is pending - will process later');
-    } else {
-      console.log('⚠️  Video rendering NOT triggered:', {
-        hasVideoData: !!videoData,
-        hasId: !!data.id
-      });
+    // Video rendering is now handled automatically by the process service
+    // No need to trigger it here - eliminates race conditions
+    if (body.processing_status === 'pending') {
+      console.log('⏳ Patch note is pending - processing will handle video rendering');
     }
 
     return NextResponse.json(data, { status: 201 });
