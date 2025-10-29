@@ -64,7 +64,7 @@ export async function startVideoRender(patchNoteId: string) {
     // Priority 1: Use video_top_changes if available
     if (patchNote.video_top_changes && Array.isArray(patchNote.video_top_changes) && patchNote.video_top_changes.length > 0) {
       console.log('✅ Using video_top_changes from DB:', patchNote.video_top_changes.length);
-      return patchNote.video_top_changes as readonly VideoChange[];
+      return patchNote.video_top_changes as unknown as readonly VideoChange[];
     }
     
     // Priority 2: Use video_data if available
