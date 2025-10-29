@@ -51,43 +51,74 @@ export async function startVideoRender(patchNoteId: string) {
     throw new Error('Failed to fetch patch note');
   }
 
-  // Build video input data from what's already in the database
-  let topChanges = null;
-  let allChanges: string[] = [];
+  // Build video input data from what's already in the database (functional, immutable)
+  type VideoChange = { readonly title: string; readonly description: string };
+  type VideoData = { readonly topChanges?: readonly VideoChange[] };
+  type DetailedContext = { readonly message?: string; readonly context?: string };
+  type AiSummary = { readonly message?: string; readonly aiSummary?: string };
 
-  // Priority 1: Use video_top_changes if available (manually edited or pre-generated)
-  if (patchNote.video_top_changes && Array.isArray(patchNote.video_top_changes) && patchNote.video_top_changes.length > 0) {
-    console.log('✅ Using video_top_changes from DB:', patchNote.video_top_changes.length);
-    topChanges = patchNote.video_top_changes;
-  }
-  // Priority 2: Use video_data if available
-  else if (patchNote.video_data && typeof patchNote.video_data === 'object') {
-    const vd = patchNote.video_data as any;
-    if (vd.topChanges && Array.isArray(vd.topChanges) && vd.topChanges.length > 0) {
-      console.log('✅ Using video_data.topChanges from DB:', vd.topChanges.length);
-      topChanges = vd.topChanges;
+  /**
+   * Extract top changes from video_top_changes or video_data
+   */
+  const extractTopChanges = (): readonly VideoChange[] | null => {
+    // Priority 1: Use video_top_changes if available
+    if (patchNote.video_top_changes && Array.isArray(patchNote.video_top_changes) && patchNote.video_top_changes.length > 0) {
+      console.log('✅ Using video_top_changes from DB:', patchNote.video_top_changes.length);
+      return patchNote.video_top_changes as unknown as readonly VideoChange[];
     }
-  }
+    
+    // Priority 2: Use video_data if available
+    if (patchNote.video_data && typeof patchNote.video_data === 'object') {
+      const videoData = patchNote.video_data as VideoData;
+      if (videoData.topChanges && Array.isArray(videoData.topChanges) && videoData.topChanges.length > 0) {
+        console.log('✅ Using video_data.topChanges from DB:', videoData.topChanges.length);
+        return videoData.topChanges;
+      }
+    }
+    
+    return null;
+  };
+
+  /**
+   * Format detailed context into scrolling text
+   */
+  const formatDetailedContext = (ctx: DetailedContext): string => {
+    const commitTitle = ctx.message?.split("\n")[0] || 'Change';
+    return `${commitTitle}\n${ctx.context || ctx.message}`;
+  };
+
+  /**
+   * Format AI summary into scrolling text
+   */
+  const formatAiSummary = (summary: AiSummary): string => {
+    const commitTitle = summary.message?.split("\n")[0] || 'Change';
+    return `${commitTitle}\n${summary.aiSummary || summary.message}`;
+  };
+
+  /**
+   * Extract scrolling changes from ai_detailed_contexts or ai_summaries
+   */
+  const extractAllChanges = (): readonly string[] => {
+    if (patchNote.ai_detailed_contexts && Array.isArray(patchNote.ai_detailed_contexts) && patchNote.ai_detailed_contexts.length > 0) {
+      console.log('✅ Using ai_detailed_contexts for scrolling:', patchNote.ai_detailed_contexts.length);
+      return (patchNote.ai_detailed_contexts as readonly DetailedContext[]).map(formatDetailedContext);
+    }
+    
+    if (patchNote.ai_summaries && Array.isArray(patchNote.ai_summaries) && patchNote.ai_summaries.length > 0) {
+      console.log('✅ Using ai_summaries for scrolling:', patchNote.ai_summaries.length);
+      return (patchNote.ai_summaries as readonly AiSummary[]).map(formatAiSummary);
+    }
+    
+    return [];
+  };
+
+  const topChanges = extractTopChanges();
+  const allChanges = extractAllChanges();
 
   if (!topChanges || topChanges.length === 0) {
     const errorMsg = 'No video data found. Process route must generate video_data or video_top_changes first.';
     console.error('❌', errorMsg);
     throw new Error(errorMsg);
-  }
-
-  // Build allChanges from ai_detailed_contexts or ai_summaries
-  if (patchNote.ai_detailed_contexts && Array.isArray(patchNote.ai_detailed_contexts) && patchNote.ai_detailed_contexts.length > 0) {
-    console.log('✅ Using ai_detailed_contexts for scrolling:', patchNote.ai_detailed_contexts.length);
-    allChanges = patchNote.ai_detailed_contexts.map((ctx: any) => {
-      const commitTitle = ctx.message?.split("\n")[0] || 'Change';
-      return `${commitTitle}\n${ctx.context || ctx.message}`;
-    });
-  } else if (patchNote.ai_summaries && Array.isArray(patchNote.ai_summaries) && patchNote.ai_summaries.length > 0) {
-    console.log('✅ Using ai_summaries for scrolling:', patchNote.ai_summaries.length);
-    allChanges = patchNote.ai_summaries.map((summary: any) => {
-      const commitTitle = summary.message?.split("\n")[0] || 'Change';
-      return `${commitTitle}\n${summary.aiSummary || summary.message}`;
-    });
   }
 
   const videoInputData = {
@@ -254,13 +285,10 @@ export async function getVideoRenderStatus(patchNoteId: string) {
       console.log('✅ Render completed!');
       console.log('   - Output file:', progress.outputFile);
 
-      // Construct video URL
-      let videoUrl: string;
-      if (progress.outputFile.startsWith('http://') || progress.outputFile.startsWith('https://')) {
-        videoUrl = progress.outputFile;
-      } else {
-        videoUrl = `https://${patchNote.video_bucket_name}.s3.${AWS_REGION}.amazonaws.com/${progress.outputFile}`;
-      }
+      // Construct video URL (functional, no mutation)
+      const videoUrl = progress.outputFile.startsWith('http://') || progress.outputFile.startsWith('https://')
+        ? progress.outputFile
+        : `https://${patchNote.video_bucket_name}.s3.${AWS_REGION}.amazonaws.com/${progress.outputFile}`;
 
       console.log('📝 Video URL:', videoUrl);
 
