@@ -32,5 +32,27 @@ export {
   type RenderVideoResult,
 } from './video-render.service';
 
+export {
+  getVideoRenderStatus,
+  transitionVideoRenderState,
+  startVideoRenderTransition,
+  completeVideoRender,
+  failVideoRender,
+  markRenderStarted,
+  type VideoRenderStatus,
+  type StateTransitionResult,
+} from './video-render-state.service';
+
+export {
+  type VideoRenderState,
+  type VideoRenderEvent,
+  isValidTransition,
+  getNextState,
+  isTerminalState,
+  isActiveState,
+  mapProcessingStatusToState,
+  mapStateToProcessingStatus,
+} from './video-render-state-machine';
+
 export type { ServiceResult } from './github-stats.service';
 

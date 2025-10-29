@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getVideoRenderStatus } from "@/lib/remotion-lambda-renderer";
+import { checkVideoRenderStatus } from "@/lib/remotion-lambda-renderer";
 
 // Configure maximum duration for this route
 // Just needs time to check Lambda render status
@@ -19,8 +19,8 @@ export async function GET(
 
     console.log('🔍 Checking video status for patch note:', id);
 
-    // Check render status
-    const status = await getVideoRenderStatus(id);
+    // Check render status using centralized state machine
+    const status = await checkVideoRenderStatus(id);
 
     console.log('📊 Video status:', status);
 

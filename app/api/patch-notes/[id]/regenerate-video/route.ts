@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startVideoRender } from "@/lib/remotion-lambda-renderer";
-import { createServerSupabaseClient } from "@/lib/supabase";
-import { cookies } from "next/headers";
+import { failVideoRender } from "@/lib/services/video-render-state.service";
 
 // Configure maximum duration for this route
 // Just needs time to initiate Lambda render (not wait for completion)
@@ -17,22 +16,8 @@ export async function POST(
 
     console.log('🎬 Regenerating video for patch note:', id);
 
-    // Update status to generating_video
-    const cookieStore = await cookies();
-    const supabase = createServerSupabaseClient(cookieStore);
-    await supabase
-      .from("patch_notes")
-      .update({
-        processing_status: "generating_video",
-        processing_stage: "Preparing video render...",
-        processing_error: null,
-        video_url: null, // Clear old video
-        video_render_id: null,
-        video_bucket_name: null,
-      })
-      .eq("id", id);
-
     // Start the render (returns immediately, doesn't wait)
+    // The render function will handle state transitions via the state machine
     const result = await startVideoRender(id);
 
     console.log('✅ Video render job initiated:', result);
@@ -45,10 +30,19 @@ export async function POST(
     });
   } catch (error) {
     console.error("Error regenerating video:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to regenerate video";
+    
+    // Use state machine to fail the render
+    try {
+      await failVideoRender(id, errorMessage);
+    } catch (stateError) {
+      console.error("Failed to update state:", stateError);
+    }
+    
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to regenerate video"
+        error: errorMessage
       },
       { status: 500 }
     );
