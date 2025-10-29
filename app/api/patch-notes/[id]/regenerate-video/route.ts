@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startVideoRender } from "@/lib/remotion-lambda-renderer";
-import { createServerSupabaseClient } from "@/lib/supabase";
-import { cookies } from "next/headers";
+import { transitionVideoRenderState } from "@/lib/services/video-render-state.service";
 
 // Configure maximum duration for this route
 // Just needs time to initiate Lambda render (not wait for completion)
@@ -17,22 +16,17 @@ export async function POST(
 
     console.log('🎬 Regenerating video for patch note:', id);
 
-    // Update status to generating_video
-    const cookieStore = await cookies();
-    const supabase = createServerSupabaseClient(cookieStore);
-    await supabase
-      .from("patch_notes")
-      .update({
-        processing_status: "generating_video",
-        processing_stage: "Preparing video render...",
-        processing_error: null,
-        video_url: null, // Clear old video
-        video_render_id: null,
-        video_bucket_name: null,
-      })
-      .eq("id", id);
+    // Reset state to idle first (clears old video and render tracking)
+    // This allows retrying from failed state or regenerating completed videos
+    await transitionVideoRenderState(id, 'idle', {
+      videoUrl: null,
+      renderId: null,
+      bucketName: null,
+      stage: 'Preparing video render...',
+    });
 
     // Start the render (returns immediately, doesn't wait)
+    // The startVideoRender function will transition to initiating -> rendering
     const result = await startVideoRender(id);
 
     console.log('✅ Video render job initiated:', result);
@@ -41,7 +35,7 @@ export async function POST(
       success: true,
       renderId: result.renderId,
       bucketName: result.bucketName,
-      message: "Video render started. Poll /video-status endpoint for progress."
+      message: "Video render started. Connect to /video-status-stream for real-time updates."
     });
   } catch (error) {
     console.error("Error regenerating video:", error);
