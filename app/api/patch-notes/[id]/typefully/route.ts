@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { Database } from "@/lib/supabase/database.types";
+import { createServerSupabaseClient, type Database } from "@/lib/supabase";
+import { cookies } from "next/headers";
 import { createTypefullyDraft } from "@/lib/typefully";
 
 type PatchNoteRow = Database["public"]["Tables"]["patch_notes"]["Row"];
@@ -11,7 +11,8 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
 
     const { data: patchNote, error } = await supabase
       .from("patch_notes")

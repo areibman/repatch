@@ -5,7 +5,8 @@ import {
   generateFinalChangelog,
   type SummaryTemplate,
 } from '@/lib/ai-summarizer';
-import { createClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase';
+import { cookies } from 'next/headers';
 import { mapTemplateRow } from '@/lib/templates';
 import { FilterValidationError } from '@/lib/filter-utils';
 import type { PatchNoteFilters } from '@/types/patch-note';
@@ -47,7 +48,8 @@ export async function POST(request: NextRequest) {
     let template: SummaryTemplate | undefined;
 
     if (templateId) {
-      const supabase = await createClient();
+      const cookieStore = await cookies();
+      const supabase = createServerSupabaseClient(cookieStore);
       const { data, error } = await supabase
         .from('ai_templates')
         .select('*')

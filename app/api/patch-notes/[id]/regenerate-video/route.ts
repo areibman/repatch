@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startVideoRender } from "@/lib/remotion-lambda-renderer";
-import { createClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase";
+import { cookies } from "next/headers";
 
 // Configure maximum duration for this route
 // Just needs time to initiate Lambda render (not wait for completion)
@@ -17,7 +18,8 @@ export async function POST(
     console.log('🎬 Regenerating video for patch note:', id);
 
     // Update status to generating_video
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
     await supabase
       .from("patch_notes")
       .update({

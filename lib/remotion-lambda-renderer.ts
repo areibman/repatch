@@ -1,5 +1,5 @@
 import { renderMediaOnLambda, getRenderProgress, AwsRegion } from '@remotion/lambda/client';
-import { createServiceClient } from '@/lib/supabase/service';
+import { createServiceSupabaseClient } from '@/lib/supabase';
 
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 const REMOTION_APP_FUNCTION_NAME = process.env.REMOTION_APP_FUNCTION_NAME || 'remotion-render-4-0-355-mem2048mb-disk2048mb-300sec';
@@ -14,7 +14,7 @@ const REMOTION_APP_SERVE_URL = process.env.REMOTION_APP_SERVE_URL || 'https://re
 export async function startVideoRender(patchNoteId: string) {
   console.log('🎬 Starting Lambda video render for patch note:', patchNoteId);
   
-  const supabase = createServiceClient();
+  const supabase = createServiceSupabaseClient();
 
   // Validate environment variables
   const missingVars: string[] = [];
@@ -167,7 +167,7 @@ export async function startVideoRender(patchNoteId: string) {
 export async function getVideoRenderStatus(patchNoteId: string) {
   console.log('🔍 Checking video render status for:', patchNoteId);
   
-  const supabase = createServiceClient();
+  const supabase = createServiceSupabaseClient();
 
   // Get render job info from database
   const { data: patchNote, error: fetchError } = await supabase

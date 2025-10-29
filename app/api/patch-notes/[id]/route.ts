@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { Database } from "@/lib/supabase/database.types";
+import { createServerSupabaseClient, type Database } from "@/lib/supabase";
+import { cookies } from "next/headers";
 
 type PatchNoteUpdate = Database["public"]["Tables"]["patch_notes"]["Update"];
 
@@ -15,7 +15,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
 
     const { data, error } = await supabase
       .from("patch_notes")
@@ -47,7 +48,8 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
     const body = await request.json();
 
     const updateData: PatchNoteUpdate = {};
@@ -103,7 +105,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    const supabase = createServerSupabaseClient(cookieStore);
 
     const { error } = await supabase.from("patch_notes").delete().eq("id", id);
 
