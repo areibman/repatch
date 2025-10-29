@@ -141,20 +141,19 @@ export default function BlogViewPage() {
     fetchPatchNote();
   }, [params.id]);
 
-  // Unified polling for processing and video status
+  // Real-time status updates via Server-Sent Events (SSE)
   useEffect(() => {
-    // Determine if we need to poll based on current status
-    const needsProcessingPoll = patchNote?.processingStatus && 
+    // Determine if we need to stream updates
+    const needsStreaming = patchNote?.processingStatus && 
       patchNote.processingStatus !== 'completed' && 
       patchNote.processingStatus !== 'failed';
-    
-    // Only poll for video if completed without errors and no video URL yet
-    const needsVideoPoll = patchNote?.processingStatus === 'completed' && 
-      !patchNote.videoUrl && 
-      !patchNote.processingError;
 
-    if (!needsProcessingPoll && !needsVideoPoll) {
-      console.log('✅ No polling needed', {
+    // For video rendering, use SSE stream
+    const needsVideoStream = patchNote?.processingStatus === 'generating_video' || 
+      patchNote?.processingStatus === 'rendering';
+
+    if (!needsStreaming && !needsVideoStream) {
+      console.log('✅ No streaming needed', {
         status: patchNote?.processingStatus,
         hasVideo: !!patchNote?.videoUrl,
         hasError: !!patchNote?.processingError
@@ -162,62 +161,80 @@ export default function BlogViewPage() {
       return;
     }
 
-    console.log('🔄 Starting polling...', {
-      processing: needsProcessingPoll,
-      video: needsVideoPoll,
+    console.log('🔄 Starting SSE stream...', {
+      video: needsVideoStream,
       status: patchNote?.processingStatus
     });
 
-    let isMounted = true;
+    // Use SSE for video rendering, polling for other statuses
+    if (needsVideoStream) {
+      const eventSource = new EventSource(`/api/patch-notes/${params.id}/video-status-stream`);
 
-    const poll = async () => {
-      if (!isMounted) return;
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('📡 SSE message:', data);
 
-      try {
-        // If generating video, poll the video-status endpoint for real-time progress
-        if (patchNote?.processingStatus === 'generating_video') {
-          console.log('📡 Polling video status...', params.id);
-          const response = await fetch(`/api/patch-notes/${params.id}/video-status`, {
-            cache: 'no-store'
-          });
-          
-          if (!response.ok) {
-            console.error(`❌ Video status poll failed with status: ${response.status}`);
+          if (data.type === 'connected') {
+            console.log('✅ SSE connection established');
             return;
           }
-          
-          if (!isMounted) return;
 
-          const videoStatus = await response.json();
-          console.log('🎬 Video status:', videoStatus);
-
-          if (isMounted) {
+          if (data.type === 'status') {
             setPatchNote(prev => {
               if (!prev) return null;
               return {
                 ...prev,
-                processingProgress: videoStatus.progress,
-                processingStage: videoStatus.status === 'rendering' 
-                  ? `Rendering video... ${videoStatus.progress}%`
-                  : videoStatus.status === 'completed'
+                processingProgress: data.progress ?? prev.processingProgress,
+                processingStage: data.status === 'rendering' 
+                  ? `Rendering video... ${data.progress ?? 0}%`
+                  : data.status === 'completed'
                   ? 'Video completed!'
-                  : videoStatus.status === 'failed'
+                  : data.status === 'failed'
                   ? 'Video rendering failed'
                   : prev.processingStage,
-                videoUrl: videoStatus.videoUrl || prev.videoUrl,
-                processingStatus: videoStatus.status === 'completed' ? 'completed' : prev.processingStatus,
-                processingError: videoStatus.error || prev.processingError,
+                videoUrl: data.videoUrl || prev.videoUrl,
+                processingStatus: data.status === 'completed' ? 'completed' : 
+                  data.status === 'failed' ? 'failed' : prev.processingStatus,
+                processingError: data.error || prev.processingError,
               };
             });
 
-            if (videoStatus.status === 'completed') {
+            if (data.status === 'completed') {
               console.log('✅ Video render completed!');
-            } else if (videoStatus.status === 'failed') {
-              console.error('❌ Video render failed:', videoStatus.error);
+              eventSource.close();
+            } else if (data.status === 'failed') {
+              console.error('❌ Video render failed:', data.error);
+              eventSource.close();
             }
           }
-        } else {
-          // For other statuses, poll the main patch note endpoint
+
+          if (data.type === 'error') {
+            console.error('❌ SSE error:', data.error);
+            eventSource.close();
+          }
+        } catch (error) {
+          console.error('❌ Error parsing SSE message:', error);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error('❌ SSE connection error:', error);
+        eventSource.close();
+      };
+
+      return () => {
+        console.log('🛑 Closing SSE connection');
+        eventSource.close();
+      };
+    } else {
+      // For non-video statuses, use polling (less frequent)
+      let isMounted = true;
+
+      const poll = async () => {
+        if (!isMounted) return;
+
+        try {
           console.log('📡 Polling for updates...', params.id);
           const response = await fetch(`/api/patch-notes/${params.id}`, {
             cache: 'no-store'
@@ -265,24 +282,23 @@ export default function BlogViewPage() {
               console.log('✅ Video is ready!');
             }
           }
+        } catch (error) {
+          if (isMounted) {
+            console.error('❌ Error polling:', error);
+          }
         }
-      } catch (error) {
-        if (isMounted) {
-          console.error('❌ Error polling:', error);
-        }
-      }
-    };
+      };
 
-    // Kick off an immediate poll so the UI reflects the latest state ASAP
-    poll();
+      // Poll immediately, then every 10 seconds (less frequent than before)
+      poll();
+      const pollInterval = setInterval(poll, 10000);
 
-    const pollInterval = setInterval(poll, 5000); // Poll every 5 seconds
-
-    return () => {
-      console.log('🛑 Stopping polling');
-      isMounted = false;
-      clearInterval(pollInterval);
-    };
+      return () => {
+        console.log('🛑 Stopping polling');
+        isMounted = false;
+        clearInterval(pollInterval);
+      };
+    }
   }, [patchNote?.processingStatus, patchNote?.videoUrl, patchNote?.processingError, params.id]);
 
   // Video URLs are now public paths after Lambda migration - no signed URL needed

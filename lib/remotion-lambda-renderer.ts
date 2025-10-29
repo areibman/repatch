@@ -1,5 +1,9 @@
 import { renderMediaOnLambda, getRenderProgress, AwsRegion } from '@remotion/lambda/client';
 import { createServiceSupabaseClient } from '@/lib/supabase';
+import {
+  transitionVideoRenderState,
+  clearStateCache,
+} from '@/lib/services/video-render-state-manager';
 
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 const REMOTION_APP_FUNCTION_NAME = process.env.REMOTION_APP_FUNCTION_NAME || 'remotion-render-4-0-355-mem2048mb-disk2048mb-300sec';
@@ -28,13 +32,9 @@ export async function startVideoRender(patchNoteId: string) {
     const errorMsg = `Missing required environment variables: ${missingVars.join(', ')}`;
     console.error('❌', errorMsg);
     
-    await supabase
-      .from('patch_notes')
-      .update({ 
-        processing_status: 'failed',
-        processing_error: errorMsg
-      })
-      .eq('id', patchNoteId);
+    await transitionVideoRenderState(patchNoteId, 'failed', {
+      processing_error: errorMsg,
+    });
     
     throw new Error(errorMsg);
   }
@@ -154,21 +154,25 @@ export async function startVideoRender(patchNoteId: string) {
     console.log('   - Render ID:', renderResponse.renderId);
     console.log('   - Bucket:', renderResponse.bucketName);
 
-    // Store render job info in database
-    const { error: updateError } = await supabase
-      .from('patch_notes')
-      .update({ 
+    // Store render job info in database using centralized state manager
+    const transitionResult = await transitionVideoRenderState(
+      patchNoteId,
+      'generating_video',
+      {
         video_render_id: renderResponse.renderId,
         video_bucket_name: renderResponse.bucketName,
-        processing_status: 'generating_video',
-        processing_error: null
-      })
-      .eq('id', patchNoteId);
+        processing_error: null,
+        processing_stage: 'Video render job initiated',
+      }
+    );
 
-    if (updateError) {
-      console.error('❌ Failed to update database with render info:', updateError);
-      throw new Error('Failed to update database');
+    if (!transitionResult.success) {
+      console.error('❌ Failed to update database with render info:', transitionResult.error);
+      throw new Error(`Failed to update database: ${transitionResult.error}`);
     }
+
+    // Clear cache to ensure fresh reads
+    clearStateCache(patchNoteId);
 
     return {
       renderId: renderResponse.renderId,
@@ -179,14 +183,11 @@ export async function startVideoRender(patchNoteId: string) {
     
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
-    await supabase
-      .from('patch_notes')
-      .update({ 
-        processing_status: 'failed',
-        processing_error: `Video render failed to start: ${errorMessage}`
-      })
-      .eq('id', patchNoteId);
+    await transitionVideoRenderState(patchNoteId, 'failed', {
+      processing_error: `Video render failed to start: ${errorMessage}`,
+    });
     
+    clearStateCache(patchNoteId);
     throw error;
   }
 }
@@ -194,55 +195,41 @@ export async function startVideoRender(patchNoteId: string) {
 /**
  * Checks the status of a video render job
  * Returns progress and completion status
+ * Uses centralized state manager to reduce database round-trips
  */
 export async function getVideoRenderStatus(patchNoteId: string) {
   console.log('🔍 Checking video render status for:', patchNoteId);
   
-  const supabase = createServiceSupabaseClient();
-
-  // Get render job info from database
-  const { data: patchNote, error: fetchError } = await supabase
-    .from('patch_notes')
-    .select('video_render_id, video_bucket_name, video_url, processing_status, processing_error')
-    .eq('id', patchNoteId)
-    .single();
-
-  if (fetchError || !patchNote) {
-    console.error('❌ Failed to fetch patch note:', fetchError);
-    return {
-      status: 'failed' as const,
-      progress: 0,
-      error: 'Patch note not found'
-    };
-  }
+  const { getVideoRenderState } = await import('@/lib/services/video-render-state-manager');
+  const currentState = await getVideoRenderState(patchNoteId);
 
   // Check if already completed
-  if (patchNote.video_url) {
+  if (currentState.videoUrl) {
     console.log('✅ Video already completed');
     return {
       status: 'completed' as const,
       progress: 100,
-      videoUrl: patchNote.video_url
+      videoUrl: currentState.videoUrl
     };
   }
 
   // Check if failed
-  if (patchNote.processing_status === 'failed') {
+  if (currentState.state === 'failed') {
     console.log('❌ Render marked as failed');
     return {
       status: 'failed' as const,
-      progress: 0,
-      error: patchNote.processing_error || 'Video rendering failed'
+      progress: currentState.progress ?? 0,
+      error: currentState.error || 'Video rendering failed'
     };
   }
 
   // Check if render job exists
-  if (!patchNote.video_render_id || !patchNote.video_bucket_name) {
+  if (!currentState.renderId || !currentState.bucketName) {
     console.log('⚠️  No render job found');
     return {
-      status: 'pending' as const,
-      progress: 0,
-      error: 'No render job initiated'
+      status: (currentState.state as 'pending' | 'generating_video') ?? ('pending' as const),
+      progress: currentState.progress ?? 0,
+      error: currentState.error ?? undefined
     };
   }
 
@@ -251,8 +238,8 @@ export async function getVideoRenderStatus(patchNoteId: string) {
     const progress = await getRenderProgress({
       region: AWS_REGION as AwsRegion,
       functionName: REMOTION_APP_FUNCTION_NAME,
-      bucketName: patchNote.video_bucket_name,
-      renderId: patchNote.video_render_id,
+      bucketName: currentState.bucketName,
+      renderId: currentState.renderId,
     });
 
     const progressPercent = Math.round((progress.overallProgress || 0) * 100);
@@ -263,15 +250,13 @@ export async function getVideoRenderStatus(patchNoteId: string) {
       const errorMsg = progress.errors?.[0]?.message || 'Unknown render error';
       console.error('❌ Render failed:', errorMsg);
       
-      await supabase
-        .from('patch_notes')
-        .update({ 
-          processing_status: 'failed',
-          processing_error: `Video render failed: ${errorMsg}`,
-          video_render_id: null,
-          video_bucket_name: null
-        })
-        .eq('id', patchNoteId);
+      await transitionVideoRenderState(patchNoteId, 'failed', {
+        processing_error: `Video render failed: ${errorMsg}`,
+        video_render_id: null,
+        video_bucket_name: null,
+      });
+      
+      clearStateCache(patchNoteId);
       
       return {
         status: 'failed' as const,
@@ -288,24 +273,27 @@ export async function getVideoRenderStatus(patchNoteId: string) {
       // Construct video URL (functional, no mutation)
       const videoUrl = progress.outputFile.startsWith('http://') || progress.outputFile.startsWith('https://')
         ? progress.outputFile
-        : `https://${patchNote.video_bucket_name}.s3.${AWS_REGION}.amazonaws.com/${progress.outputFile}`;
+        : `https://${currentState.bucketName}.s3.${AWS_REGION}.amazonaws.com/${progress.outputFile}`;
 
       console.log('📝 Video URL:', videoUrl);
 
-      // Update database with completed video
-      const { error: updateError } = await supabase
-        .from('patch_notes')
-        .update({ 
+      // Update database with completed video using centralized state manager
+      const transitionResult = await transitionVideoRenderState(
+        patchNoteId,
+        'completed',
+        {
           video_url: videoUrl,
-          processing_status: 'completed',
           video_render_id: null,
-          video_bucket_name: null
-        })
-        .eq('id', patchNoteId);
+          video_bucket_name: null,
+          processing_progress: 100,
+        }
+      );
 
-      if (updateError) {
-        console.error('❌ Failed to update database with video URL:', updateError);
+      if (!transitionResult.success) {
+        console.error('❌ Failed to update database with video URL:', transitionResult.error);
       }
+
+      clearStateCache(patchNoteId);
 
       return {
         status: 'completed' as const,
@@ -314,7 +302,15 @@ export async function getVideoRenderStatus(patchNoteId: string) {
       };
     }
 
-    // Still rendering
+    // Still rendering - update progress in database
+    const { updateVideoRenderProgress } = await import('@/lib/services/video-render-state-manager');
+    await updateVideoRenderProgress(
+      patchNoteId,
+      progressPercent,
+      `Rendering video... ${progressPercent}%`
+    );
+
+    // Return 'rendering' status for UI (even though DB state is 'generating_video')
     return {
       status: 'rendering' as const,
       progress: progressPercent

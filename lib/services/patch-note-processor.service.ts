@@ -15,6 +15,7 @@ import {
 } from './github-summarize.service';
 import type { ServiceResult } from './github-stats.service';
 import type { PatchNoteFilters } from '@/types/patch-note';
+import { transitionVideoRenderState } from './video-render-state-manager';
 
 /**
  * Input for processing a patch note
@@ -65,35 +66,40 @@ export interface ProcessingResult {
 
 /**
  * Update patch note status in database
- * Returns a function that creates the Supabase update object
- */
-function createStatusUpdate(
-  stage: ProcessingStage,
-  message: string
-): {
-  readonly processing_status: ProcessingStage;
-  readonly processing_stage: string;
-  readonly processing_error?: null;
-} {
-  return {
-    processing_status: stage,
-    processing_stage: message,
-    ...(stage !== 'failed' && { processing_error: null }),
-  };
-}
-
-/**
- * Update patch note in database
+ * Uses centralized state manager for video-related states
  */
 async function updatePatchNoteStatus(
   patchNoteId: string,
-  update: Record<string, unknown>,
+  stage: ProcessingStage,
+  message: string,
   cookieStore: ProcessPatchNoteInput['cookieStore']
 ): Promise<void> {
+  // Use centralized state manager for video-related states
+  if (stage === 'generating_video' || stage === 'failed' || stage === 'completed') {
+    const transitionResult = await transitionVideoRenderState(
+      patchNoteId,
+      stage as 'generating_video' | 'failed' | 'completed',
+      {
+        processing_stage: message,
+        ...(stage !== 'failed' && { processing_error: null }),
+      }
+    );
+
+    if (!transitionResult.success) {
+      throw new Error(`State transition failed: ${transitionResult.error}`);
+    }
+    return;
+  }
+
+  // For non-video states, use direct database update
   const supabase = createServerSupabaseClient(cookieStore);
   const { error } = await supabase
     .from('patch_notes')
-    .update(update)
+    .update({
+      processing_status: stage,
+      processing_stage: message,
+      ...(stage !== 'failed' && { processing_error: null }),
+    })
     .eq('id', patchNoteId);
 
   if (error) {
@@ -131,42 +137,6 @@ async function generateVideoData(
   }
 }
 
-/**
- * Create final database update with all processed data
- */
-function createFinalUpdate(
-  content: string,
-  additions: number,
-  deletions: number,
-  contributors: readonly string[],
-  detailedContexts: SummarizationResult['detailedContexts'],
-  videoData: VideoData | null,
-  videoTopChanges: VideoData['topChanges'] | null
-): {
-  readonly content: string;
-  readonly changes: { readonly added: number; readonly modified: number; readonly removed: number };
-  readonly contributors: readonly string[];
-  readonly ai_detailed_contexts: unknown;
-  readonly video_data: VideoData | null;
-  readonly video_top_changes: VideoData['topChanges'] | null;
-  readonly processing_status: 'generating_video' | 'completed';
-  readonly processing_stage: string | null;
-} {
-  return {
-    content,
-    changes: {
-      added: additions,
-      modified: 0,
-      removed: deletions,
-    },
-    contributors,
-    ai_detailed_contexts: detailedContexts,
-    video_data: videoData,
-    video_top_changes: videoTopChanges,
-    processing_status: videoData ? 'generating_video' : 'completed',
-    processing_stage: videoData ? 'Preparing video render...' : null,
-  };
-}
 
 /**
  * Main processing pipeline
@@ -183,7 +153,8 @@ export async function processPatchNote(
     // Stage 1: Fetch Stats
     await updatePatchNoteStatus(
       input.patchNoteId,
-      createStatusUpdate('fetching_stats', 'Fetching repository statistics...'),
+      'fetching_stats',
+      'Fetching repository statistics...',
       input.cookieStore
     );
 
@@ -203,7 +174,8 @@ export async function processPatchNote(
     // Stage 2: Analyze Commits
     await updatePatchNoteStatus(
       input.patchNoteId,
-      createStatusUpdate('analyzing_commits', 'Analyzing commits with AI (30-60s)...'),
+      'analyzing_commits',
+      'Analyzing commits with AI (30-60s)...',
       input.cookieStore
     );
 
@@ -234,7 +206,8 @@ export async function processPatchNote(
     // Stage 3: Generate Content
     await updatePatchNoteStatus(
       input.patchNoteId,
-      createStatusUpdate('generating_content', 'Generating patch note content...'),
+      'generating_content',
+      'Generating patch note content...',
       input.cookieStore
     );
 
@@ -242,18 +215,46 @@ export async function processPatchNote(
     const videoData = await generateVideoData(content, `${input.owner}/${input.repo}`);
     const videoTopChanges = videoData?.topChanges ?? null;
 
-    // Final Update
-    const finalUpdate = createFinalUpdate(
+    // Final Update - update database with content and stats
+    const supabase = createServerSupabaseClient(input.cookieStore);
+    const finalUpdate = {
       content,
-      stats.additions,
-      stats.deletions,
-      stats.contributors,
-      detailedContexts,
-      videoData,
-      videoTopChanges
-    );
+      changes: {
+        added: stats.additions,
+        modified: 0,
+        removed: stats.deletions,
+      },
+      contributors: stats.contributors,
+      ai_detailed_contexts: detailedContexts,
+      video_data: videoData,
+      video_top_changes: videoTopChanges,
+    };
 
-    await updatePatchNoteStatus(input.patchNoteId, finalUpdate, input.cookieStore);
+    const { error: updateError } = await supabase
+      .from('patch_notes')
+      .update(finalUpdate)
+      .eq('id', input.patchNoteId);
+
+    if (updateError) {
+      throw new Error(`Failed to update patch note: ${updateError.message}`);
+    }
+
+    // Update status using centralized state manager
+    if (videoData) {
+      await updatePatchNoteStatus(
+        input.patchNoteId,
+        'generating_video',
+        'Preparing video render...',
+        input.cookieStore
+      );
+    } else {
+      await updatePatchNoteStatus(
+        input.patchNoteId,
+        'completed',
+        'Content generation complete',
+        input.cookieStore
+      );
+    }
 
     console.log('✅ Content generation complete');
     if (videoData) {
@@ -276,10 +277,8 @@ export async function processPatchNote(
     try {
       await updatePatchNoteStatus(
         input.patchNoteId,
-        {
-          processing_status: 'failed',
-          processing_error: errorMessage,
-        },
+        'failed',
+        errorMessage,
         input.cookieStore
       );
     } catch (updateError) {
