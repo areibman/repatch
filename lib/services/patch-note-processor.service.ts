@@ -14,7 +14,8 @@ import {
   type SummarizationResult,
 } from './github-summarize.service';
 import type { ServiceResult } from './github-stats.service';
-import type { PatchNoteFilters } from '@/types/patch-note';
+import type { PatchNoteFilters, ProcessingStatus } from '@/types/patch-note';
+import { validateProcessingStatus } from '@/lib/validation';
 
 /**
  * Input for processing a patch note
@@ -32,17 +33,6 @@ export interface ProcessPatchNoteInput {
     set(name: string, value: string, options?: Record<string, unknown>): void;
   };
 }
-
-/**
- * Processing stage for status updates
- */
-type ProcessingStage =
-  | 'fetching_stats'
-  | 'analyzing_commits'
-  | 'generating_content'
-  | 'generating_video'
-  | 'completed'
-  | 'failed';
 
 /**
  * Video data structure
@@ -66,19 +56,23 @@ export interface ProcessingResult {
 /**
  * Update patch note status in database
  * Returns a function that creates the Supabase update object
+ * Validates the status at runtime to ensure enum compliance
  */
 function createStatusUpdate(
-  stage: ProcessingStage,
+  stage: ProcessingStatus,
   message: string
 ): {
-  readonly processing_status: ProcessingStage;
+  readonly processing_status: ProcessingStatus;
   readonly processing_stage: string;
   readonly processing_error?: null;
 } {
+  // Validate the status at runtime
+  const validatedStatus = validateProcessingStatus(stage);
+  
   return {
-    processing_status: stage,
+    processing_status: validatedStatus,
     processing_stage: message,
-    ...(stage !== 'failed' && { processing_error: null }),
+    ...(validatedStatus !== 'failed' && { processing_error: null }),
   };
 }
 
@@ -149,7 +143,7 @@ function createFinalUpdate(
   readonly ai_detailed_contexts: unknown;
   readonly video_data: VideoData | null;
   readonly video_top_changes: VideoData['topChanges'] | null;
-  readonly processing_status: 'generating_video' | 'completed';
+  readonly processing_status: ProcessingStatus;
   readonly processing_stage: string | null;
 } {
   return {
@@ -163,7 +157,7 @@ function createFinalUpdate(
     ai_detailed_contexts: detailedContexts,
     video_data: videoData,
     video_top_changes: videoTopChanges,
-    processing_status: videoData ? 'generating_video' : 'completed',
+    processing_status: validateProcessingStatus(videoData ? 'generating_video' : 'completed'),
     processing_stage: videoData ? 'Preparing video render...' : null,
   };
 }
@@ -277,7 +271,7 @@ export async function processPatchNote(
       await updatePatchNoteStatus(
         input.patchNoteId,
         {
-          processing_status: 'failed',
+          processing_status: validateProcessingStatus('failed'),
           processing_error: errorMessage,
         },
         input.cookieStore

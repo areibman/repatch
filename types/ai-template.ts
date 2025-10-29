@@ -1,12 +1,11 @@
-export interface AiTemplate {
-  id: string;
-  name: string;
-  content: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+// Re-export validated types from schemas for runtime validation
+export type {
+  AiTemplate,
+  AiTemplatePayload,
+} from "@/lib/schemas/ai-template.schema";
 
-export interface AiTemplatePayload {
-  name: string;
-  content: string;
-}
+// Export schemas for runtime validation
+export {
+  AiTemplateSchema,
+  AiTemplatePayloadSchema,
+} from "@/lib/schemas/ai-template.schema";

@@ -1,5 +1,6 @@
 import { renderMediaOnLambda, getRenderProgress, AwsRegion } from '@remotion/lambda/client';
 import { createServiceSupabaseClient } from '@/lib/supabase';
+import { validateProcessingStatus } from '@/lib/validation';
 
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 const REMOTION_APP_FUNCTION_NAME = process.env.REMOTION_APP_FUNCTION_NAME || 'remotion-render-4-0-355-mem2048mb-disk2048mb-300sec';
@@ -31,7 +32,7 @@ export async function startVideoRender(patchNoteId: string) {
     await supabase
       .from('patch_notes')
       .update({ 
-        processing_status: 'failed',
+        processing_status: validateProcessingStatus('failed'),
         processing_error: errorMsg
       })
       .eq('id', patchNoteId);
@@ -160,7 +161,7 @@ export async function startVideoRender(patchNoteId: string) {
       .update({ 
         video_render_id: renderResponse.renderId,
         video_bucket_name: renderResponse.bucketName,
-        processing_status: 'generating_video',
+        processing_status: validateProcessingStatus('generating_video'),
         processing_error: null
       })
       .eq('id', patchNoteId);
@@ -182,7 +183,7 @@ export async function startVideoRender(patchNoteId: string) {
     await supabase
       .from('patch_notes')
       .update({ 
-        processing_status: 'failed',
+        processing_status: validateProcessingStatus('failed'),
         processing_error: `Video render failed to start: ${errorMessage}`
       })
       .eq('id', patchNoteId);
@@ -266,7 +267,7 @@ export async function getVideoRenderStatus(patchNoteId: string) {
       await supabase
         .from('patch_notes')
         .update({ 
-          processing_status: 'failed',
+          processing_status: validateProcessingStatus('failed'),
           processing_error: `Video render failed: ${errorMsg}`,
           video_render_id: null,
           video_bucket_name: null
@@ -297,7 +298,7 @@ export async function getVideoRenderStatus(patchNoteId: string) {
         .from('patch_notes')
         .update({ 
           video_url: videoUrl,
-          processing_status: 'completed',
+          processing_status: validateProcessingStatus('completed'),
           video_render_id: null,
           video_bucket_name: null
         })

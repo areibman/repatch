@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { renderVideo } from "@/lib/services";
 import { cookies } from "next/headers";
+import { safeMapPatchNoteRowToDomain } from "@/lib/mappers";
+import { ProcessingStatusSchema } from "@/lib/schemas/patch-note.schema";
 
 // No longer needs extended timeout since we moved AI processing to background
 // export const maxDuration = 90; // 90 seconds
@@ -21,8 +23,25 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data);
+    if (!data) {
+      return NextResponse.json([]);
+    }
+
+    // Validate and map each row to domain type
+    const validatedData = data
+      .map((row) => {
+        const result = safeMapPatchNoteRowToDomain(row);
+        if (result.success) {
+          return result.data;
+        }
+        console.error("Failed to validate patch note row:", result.error);
+        return null;
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+
+    return NextResponse.json(validatedData);
   } catch (error) {
+    console.error("API error:", error);
     return NextResponse.json(
       { error: "Failed to fetch patch notes" },
       { status: 500 }
@@ -37,6 +56,11 @@ export async function POST(request: NextRequest) {
     const supabase = createServerSupabaseClient(cookieStore);
     const body = await request.json();
 
+    // Validate processing_status if provided
+    const processingStatus = body.processing_status
+      ? ProcessingStatusSchema.parse(body.processing_status)
+      : ("completed" as const);
+
     // Don't generate video top changes here - let the background process handle it
     // This ensures the modal closes immediately
     const videoData = body.video_data;
@@ -47,7 +71,7 @@ export async function POST(request: NextRequest) {
         {
           repo_name: body.repo_name,
           repo_url: body.repo_url,
-          repo_branch: body.repo_branch || 'main',
+          repo_branch: body.repo_branch || "main",
           time_period: body.time_period,
           title: body.title,
           content: body.content,
@@ -61,7 +85,7 @@ export async function POST(request: NextRequest) {
           ai_template_id: body.ai_template_id || null,
           filter_metadata: body.filter_metadata || null,
           generated_at: body.generated_at || new Date().toISOString(),
-          processing_status: body.processing_status || 'completed',
+          processing_status: processingStatus,
           processing_stage: body.processing_stage || null,
         },
       ])
@@ -73,37 +97,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    if (!data) {
+      return NextResponse.json(
+        { error: "Failed to create patch note" },
+        { status: 500 }
+      );
+    }
+
+    // Validate and map the created row
+    const mappedResult = safeMapPatchNoteRowToDomain(data);
+    if (!mappedResult.success) {
+      console.error("Failed to validate created patch note:", mappedResult.error);
+      // Still return the raw data, but log the validation error
+    }
+
     // Only trigger video rendering if the patch note is completed (not pending)
-    if (videoData && data.id && body.processing_status !== 'pending') {
-      console.log('🎬 Triggering video render directly via service...');
-      console.log('   - Patch Note ID:', data.id);
-      console.log('   - Repo:', body.repo_name);
+    if (videoData && data.id && processingStatus !== "pending") {
+      console.log("🎬 Triggering video render directly via service...");
+      console.log("   - Patch Note ID:", data.id);
+      console.log("   - Repo:", body.repo_name);
 
       // Call service directly (no HTTP overhead)
       // Fire-and-forget: Don't block response, but handle errors gracefully
       renderVideo({ patchNoteId: data.id })
         .then((result) => {
           if (result.success) {
-            console.log('✅ Video render started:', result.data);
+            console.log("✅ Video render started:", result.data);
           } else {
-            console.error('❌ Failed to start video render:', result.error);
+            console.error("❌ Failed to start video render:", result.error);
           }
         })
         .catch((error: Error) => {
-          console.error('❌ Unexpected error in video render:', error);
+          console.error("❌ Unexpected error in video render:", error);
         });
-    } else if (body.processing_status === 'pending') {
-      console.log('⏳ Patch note is pending - will process later');
+    } else if (processingStatus === "pending") {
+      console.log("⏳ Patch note is pending - will process later");
     } else {
-      console.log('⚠️  Video rendering NOT triggered:', {
+      console.log("⚠️  Video rendering NOT triggered:", {
         hasVideoData: !!videoData,
-        hasId: !!data.id
+        hasId: !!data.id,
       });
     }
 
-    return NextResponse.json(data, { status: 201 });
+    // Return mapped domain type if validation succeeded, otherwise raw data
+    return NextResponse.json(
+      mappedResult.success ? mappedResult.data : data,
+      { status: 201 }
+    );
   } catch (error) {
     console.error("API error:", error);
+    if (error instanceof Error && error.name === "ZodError") {
+      return NextResponse.json(
+        { error: `Validation error: ${error.message}` },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(
       {
         error:
