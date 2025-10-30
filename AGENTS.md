@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The Next.js App Router lives in `app/`, where route segments own their UI, server actions, and API routes. Shared UI and form primitives belong in `components/`, reusable hooks in `hooks/`, and TypeScript contracts in `types/`. `lib/` centralizes integrations: `github.ts` handles repo history, `ai-summarizer.ts` should wrap LiteLLM requests to AWS Bedrock, and `supabase/` stores SQL migrations. Keep automation scripts in `scripts/`, static assets in `public/`, and Remotion compositions in `remotion/`.
+The Next.js App Router lives in `app/`, where route segments own their UI, server actions, and API routes. Shared UI and form primitives belong in `components/`, reusable hooks in `hooks/`, and TypeScript contracts in `types/`. `lib/` centralizes integrations: `github/` provides a modular GitHub API client with Octokit, caching, and rate limiting; `ai-summarizer.ts` wraps LiteLLM requests to AWS Bedrock; and `supabase/` stores SQL migrations. Keep automation scripts in `scripts/`, static assets in `public/`, and Remotion compositions in `remotion/`.
 
 ## Build, Test, and Development Commands
 Install dependencies with `bun install`, then launch the local server with `bun dev`. Produce a production bundle via `bun run build` and serve it using `bun start`. Run linting through `bun run lint`, check formatting with `bunx prettier --check .`, and seed demo data using `bun run db:seed`. Render video previews through `bun run preview` before sharing Motion assets.
