@@ -158,6 +158,17 @@ export default function Home() {
   const getFilterLabel = (note: PatchNote) =>
     formatFilterSummary(note.filterMetadata, note.timePeriod);
 
+  const getReleaseTags = (note: PatchNote): string[] => {
+    if (note.filterMetadata?.mode === "release" && note.filterMetadata.releases) {
+      return note.filterMetadata.releases.map((release) => release.name || release.tag);
+    }
+    return [];
+  };
+
+  const isReleaseMode = (note: PatchNote): boolean => {
+    return note.filterMetadata?.mode === "release" || note.timePeriod === "release";
+  };
+
   const getTimePeriodColor = (period: string) => {
     switch (period) {
       case "1day":
@@ -279,12 +290,26 @@ export default function Home() {
                 <Card className="h-full hover:shadow-lg transition-all duration-200 hover:scale-[1.02] cursor-pointer group">
                   <CardHeader>
                     <div className="flex items-center justify-between mb-2">
-                      <Badge
-                        variant="outline"
-                        className={getTimePeriodColor(note.timePeriod)}
-                      >
-                        {getFilterLabel(note)}
-                      </Badge>
+                      {isReleaseMode(note) && getReleaseTags(note).length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {getReleaseTags(note).map((tag, index) => (
+                            <Badge
+                              key={index}
+                              variant="outline"
+                              className={getTimePeriodColor(note.timePeriod)}
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className={getTimePeriodColor(note.timePeriod)}
+                        >
+                          {getFilterLabel(note)}
+                        </Badge>
+                      )}
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <CalendarIcon className="h-3 w-3" />
                         {new Date(note.generatedAt).toLocaleDateString("en-US", {
