@@ -646,7 +646,7 @@ export function CreatePostDialog() {
     <TooltipProvider>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button size="lg">
+          <Button>
             <PlusIcon className="h-5 w-5 mr-2" />
             Create New Post
           </Button>
