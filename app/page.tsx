@@ -214,9 +214,6 @@ export default function Home() {
         <div className="container mx-auto px-4 py-6 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Repatch</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              AI-generated patch notes from your repositories
-            </p>
           </div>
           <div className="flex items-center gap-3">
             <Button asChild variant="outline">
