@@ -217,6 +217,9 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             <Button asChild variant="outline">
+              <Link href="/settings/users">Users</Link>
+            </Button>
+            <Button asChild variant="outline">
               <Link href="/settings/templates">Templates</Link>
             </Button>
             <CreatePostDialog />

@@ -157,8 +157,49 @@ export type Database = {
             referencedRelation: "ai_templates"
             referencedColumns: ["id"]
           },
-        ]
-      }
+          ]
+        }
+        profiles: {
+          Row: {
+            avatar_url: string | null
+            created_at: string
+            email: string
+            full_name: string | null
+            id: string
+            last_sign_in_at: string | null
+            role: Database["public"]["Enums"]["user_role_type"]
+            updated_at: string
+          }
+          Insert: {
+            avatar_url?: string | null
+            created_at?: string
+            email: string
+            full_name?: string | null
+            id: string
+            last_sign_in_at?: string | null
+            role?: Database["public"]["Enums"]["user_role_type"]
+            updated_at?: string
+          }
+          Update: {
+            avatar_url?: string | null
+            created_at?: string
+            email?: string
+            full_name?: string | null
+            id?: string
+            last_sign_in_at?: string | null
+            role?: Database["public"]["Enums"]["user_role_type"]
+            updated_at?: string
+          }
+          Relationships: [
+            {
+              foreignKeyName: "profiles_id_fkey"
+              columns: ["id"]
+              isOneToOne: true
+              referencedRelation: "users"
+              referencedColumns: ["id"]
+            },
+          ]
+        },
     }
     Views: {
       [_ in never]: never
@@ -167,15 +208,16 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      processing_status_type:
-        | "pending"
-        | "fetching_stats"
-        | "analyzing_commits"
-        | "generating_content"
-        | "generating_video"
-        | "completed"
-        | "failed"
-      time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
+        processing_status_type:
+          | "pending"
+          | "fetching_stats"
+          | "analyzing_commits"
+          | "generating_content"
+          | "generating_video"
+          | "completed"
+          | "failed"
+        time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
+        user_role_type: "owner" | "admin" | "member" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -315,7 +357,8 @@ export const Constants = {
         "completed",
         "failed",
       ],
-      time_period_type: ["1day", "1week", "1month", "custom", "release"],
+        time_period_type: ["1day", "1week", "1month", "custom", "release"],
+        user_role_type: ["owner", "admin", "member", "viewer"],
     },
   },
 } as const
