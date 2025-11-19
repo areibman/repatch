@@ -3,6 +3,7 @@ import { createServerSupabaseClient, type Database } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { mapTemplateRow } from "@/lib/templates";
 import type { AiTemplatePayload } from "@/types/ai-template";
+import { getUser } from "@/lib/auth/server";
 
 type TemplateUpdate = Database["public"]["Tables"]["ai_templates"]["Update"];
 
@@ -10,6 +11,12 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function PUT(request: NextRequest, { params }: Params) {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const payload = (await request.json()) as AiTemplatePayload;
 
@@ -60,6 +67,12 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const cookieStore = await cookies();
     const supabase = createServerSupabaseClient(cookieStore);

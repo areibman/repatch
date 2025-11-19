@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient, type Database } from "@/lib/supabase";
 import { cookies } from "next/headers";
+import { getUser } from "@/lib/auth/server";
 
 type PatchNoteUpdate = Database["public"]["Tables"]["patch_notes"]["Update"];
 
@@ -14,6 +15,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const cookieStore = await cookies();
     const supabase = createServerSupabaseClient(cookieStore);
@@ -47,6 +54,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const cookieStore = await cookies();
     const supabase = createServerSupabaseClient(cookieStore);
@@ -104,6 +117,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
     const cookieStore = await cookies();
     const supabase = createServerSupabaseClient(cookieStore);

@@ -3,11 +3,20 @@ import { createServerSupabaseClient } from "@/lib/supabase";
 import { cookies } from "next/headers";
 import { mapTemplateRow } from "@/lib/templates";
 import type { AiTemplatePayload } from "@/types/ai-template";
+import { getUser } from "@/lib/auth/server";
 
 export async function GET() {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const cookieStore = await cookies();
     const supabase = createServerSupabaseClient(cookieStore);
+    
+    // RLS policies will automatically filter by user_id
     const { data, error } = await supabase
       .from("ai_templates")
       .select("*")
@@ -29,6 +38,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const payload = (await request.json()) as AiTemplatePayload;
 
     if (!payload.name?.trim()) {
@@ -50,6 +65,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from("ai_templates")
       .insert({
+        user_id: user.id, // Associate template with current user
         name: payload.name.trim(),
         content: payload.content.trim(),
       })

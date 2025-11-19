@@ -2,16 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase";
 import { renderVideo } from "@/lib/services";
 import { cookies } from "next/headers";
+import { getUser } from "@/lib/auth/server";
 
 // No longer needs extended timeout since we moved AI processing to background
 // export const maxDuration = 90; // 90 seconds
 
-// GET /api/patch-notes - Fetch all patch notes
+// GET /api/patch-notes - Fetch all patch notes for the current user
 export async function GET() {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const cookieStore = await cookies();
     const supabase = createServerSupabaseClient(cookieStore);
 
+    // RLS policies will automatically filter by user_id
     const { data, error } = await supabase
       .from("patch_notes")
       .select("*")
@@ -33,6 +41,12 @@ export async function GET() {
 // POST /api/patch-notes - Create a new patch note
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const cookieStore = await cookies();
     const supabase = createServerSupabaseClient(cookieStore);
     const body = await request.json();
@@ -45,6 +59,7 @@ export async function POST(request: NextRequest) {
       .from("patch_notes")
       .insert([
         {
+          user_id: user.id, // Associate patch note with current user
           repo_name: body.repo_name,
           repo_url: body.repo_url,
           repo_branch: body.repo_branch || 'main',

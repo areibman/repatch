@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/sidebar";
 import { HomeIcon, Cog6ToothIcon, UsersIcon } from "@heroicons/react/16/solid";
 import { SidebarHeaderContent } from "@/components/sidebar-header";
+import { AuthProvider } from "@/components/auth";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -83,7 +84,11 @@ export default function RootLayout({
                 </SidebarGroupContent>
               </SidebarGroup>
             </SidebarContent>
-            <SidebarFooter />
+            <SidebarFooter>
+              <div className="p-2">
+                <AuthProvider />
+              </div>
+            </SidebarFooter>
             <SidebarRail />
           </Sidebar>
 

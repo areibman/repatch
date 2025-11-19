@@ -41,6 +41,7 @@ export type Database = {
           id: string
           name: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           content?: string | null
@@ -48,6 +49,7 @@ export type Database = {
           id?: string
           name: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           content?: string | null
@@ -55,8 +57,17 @@ export type Database = {
           id?: string
           name?: string
           updated_at?: string
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ai_templates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       patch_notes: {
         Row: {
@@ -83,6 +94,7 @@ export type Database = {
           time_period: Database["public"]["Enums"]["time_period_type"]
           title: string
           updated_at: string
+          user_id: string | null
           video_bucket_name: string | null
           video_data: Json | null
           video_render_id: string | null
@@ -113,6 +125,7 @@ export type Database = {
           time_period: Database["public"]["Enums"]["time_period_type"]
           title: string
           updated_at?: string
+          user_id?: string | null
           video_bucket_name?: string | null
           video_data?: Json | null
           video_render_id?: string | null
@@ -143,6 +156,7 @@ export type Database = {
           time_period?: Database["public"]["Enums"]["time_period_type"]
           title?: string
           updated_at?: string
+          user_id?: string | null
           video_bucket_name?: string | null
           video_data?: Json | null
           video_render_id?: string | null
@@ -157,7 +171,41 @@ export type Database = {
             referencedRelation: "ai_templates"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "patch_notes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
         ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
     }
     Views: {
