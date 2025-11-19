@@ -9,7 +9,8 @@
     "lint": "eslint",
     "preview": "remotion preview remotion/index.ts",
     "db:seed": "dotenv -e .env.local -- tsx scripts/add-sample-data.ts",
-    "regenerate-videos": "dotenv -e .env.local -- tsx scripts/regenerate-videos.ts"
+    "regenerate-videos": "dotenv -e .env.local -- tsx scripts/regenerate-videos.ts",
+    "stainless:generate": "stainless generate --config stainless.config.yml"
   },
   "dependencies": {
     "@actions/core": "^1.10.0",
