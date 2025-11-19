@@ -261,6 +261,26 @@ If you need to rebuild the database from scratch (e.g., to clean up schema drift
     -   Link projects: `supabase link --project-ref <dev>` and `supabase link --project-ref <prod> --env prod`.
     -   Workflow: develop migrations locally → `supabase db push` (dev) → validate → `supabase db deploy --env prod`.
 
+## Authentication & User Management
+
+Our authentication flow now follows the [Supabase Next.js user management guide](https://supabase.com/docs/guides/getting-started/tutorials/with-nextjs):
+
+- Visit `/login` to sign in or create an account using email + password. New sign-ups receive Supabase's confirmation email before gaining access.
+- All application routes (dashboard, subscribers, templates, account, and every `/api/*` endpoint) are protected by middleware that checks the Supabase session and returns `401` for unauthorized API calls.
+- When a Supabase Auth user is created, the `profiles` table (see `supabase/migrations/00000000000000_initial_schema.sql`) receives a corresponding row via the `handle_new_user` trigger. This keeps profile metadata in sync with `auth.users`.
+- Users can manage their display name, company, and role from the new `/account` settings page. Changes persist to `public.profiles` and are reflected in the sidebar/user menu instantly.
+- Service code should continue using the helpers in `lib/supabase/` (`createBrowserSupabaseClient`, `createServerSupabaseClient`, `createServiceSupabaseClient`) to ensure sessions and service-role permissions align with Supabase documentation.
+
+If you need to reset everything locally:
+
+```bash
+supabase db reset
+supabase db push
+supabase gen types typescript --project-ref <dev-ref> --schema public > lib/supabase/database.types.ts
+```
+
+Then seed a user via the Supabase dashboard or CLI before visiting `/login`.
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration

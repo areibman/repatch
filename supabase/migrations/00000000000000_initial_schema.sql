@@ -71,11 +71,74 @@ CREATE TRIGGER update_patch_notes_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Create profiles table for Supabase Auth users
+CREATE TABLE profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT UNIQUE,
+    full_name TEXT,
+    avatar_url TEXT,
+    company_name TEXT,
+    role TEXT,
+    last_sign_in_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_profiles_email ON profiles(email);
+
+CREATE TRIGGER update_profiles_updated_at
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Keep profiles in sync with auth.users
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, full_name, avatar_url, company_name, role, last_sign_in_at)
+    VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
+        NEW.raw_user_meta_data->>'avatar_url',
+        NEW.raw_user_meta_data->>'company_name',
+        NEW.raw_user_meta_data->>'role',
+        NEW.last_sign_in_at
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
+        avatar_url = COALESCE(EXCLUDED.avatar_url, profiles.avatar_url),
+        company_name = COALESCE(EXCLUDED.company_name, profiles.company_name),
+        role = COALESCE(EXCLUDED.role, profiles.role),
+        last_sign_in_at = COALESCE(EXCLUDED.last_sign_in_at, profiles.last_sign_in_at),
+        updated_at = NOW();
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_new_user();
+
 -- Enable RLS
 ALTER TABLE ai_templates ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all access" ON ai_templates FOR ALL USING (true) WITH CHECK (true);
 
 ALTER TABLE patch_notes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all access" ON patch_notes FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can read own profile" ON profiles
+    FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "Users can insert their profile" ON profiles
+    FOR INSERT WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Users can update own profile" ON profiles
+    FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 
