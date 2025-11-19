@@ -391,7 +391,7 @@ export async function POST(
       <div class="stat">
         <div class="stat-label">Contributors</div>
         <div class="stat-value">${
-          (patchNote as PatchNote).contributors.length
+          ((patchNote as PatchNote).contributors ?? []).length
         }</div>
       </div>
     </div>
@@ -400,14 +400,13 @@ export async function POST(
       ${htmlContent}
     </div>
 
-    ${
-      (patchNote as PatchNote).contributors &&
-      (patchNote as PatchNote).contributors.length > 0
-        ? `
+      ${
+        ((patchNote as PatchNote).contributors ?? []).length > 0
+          ? `
     <div class="contributors">
       <div class="contributors-title">Contributors</div>
       <div>
-        ${(patchNote as PatchNote).contributors
+          ${((patchNote as PatchNote).contributors ?? [])
           .map(
             (contributor: string) =>
               `<span class="contributor-tag">${contributor}</span>`
