@@ -20,8 +20,7 @@ export const webpackOverride: WebpackOverrideFn = (currentConfiguration) =>
           ? currentConfiguration.module.rules
           : []
         )
-          // @ts-ignore all
-          .filter((rule) => {
+          .filter((rule: any) => {
             if (!rule || rule === "...") {
               return false;
             }
