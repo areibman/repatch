@@ -30,6 +30,16 @@ export {
   type ClientContext,
 } from './factory';
 
+// Auth helper exports
+export {
+  getCurrentUser,
+  getCurrentUserProfile,
+  updateUserProfile,
+  requireAuth,
+  userOwnsResource,
+  ensureUserOwnership,
+} from './auth-helpers';
+
 // Re-export types
 export type { Database } from './database.types';
 
