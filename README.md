@@ -231,6 +231,36 @@ Send beautiful HTML emails to subscribers with:
 - Contributor list
 - Custom video links (when available)
 
+## Development: Resetting the Database
+
+If you need to rebuild the database from scratch (e.g., to clean up schema drift), follow these steps:
+
+1.  **Snapshot current state**
+    -   Ensure `bun install` has run and your `.env.local` contains Supabase service + anon keys.
+    -   Export any production data you care about (`supabase db dump --data-only`) because the migration reset will drop everything.
+
+2.  **Trim repository**
+    -   The migration history has been consolidated into `supabase/migrations/00000000000000_initial_schema.sql`.
+
+3.  **Apply schema to a clean database**
+    -   Run `supabase db reset` locally (creates fresh shadow DB, runs the initial migration).
+    -   Verify via `supabase db remote commit` if you maintain branch-based migrations.
+    -   Optional: seed with `bun run db:seed` or `bun run scripts/add-sample-data.ts`.
+
+4.  **Regenerate TypeScript bindings**
+    -   Execute:
+        ```bash
+        supabase gen types typescript --project-ref <dev-ref> --schema public > lib/supabase/database.types.ts
+        ```
+    -   Run `bun run lint` to ensure the codebase compiles against the new types.
+
+5.  **Configure dual Supabase environments**
+    -   Create two Supabase projects (dev/prod). Save their URLs/keys in:
+        -   `.env.local` → dev project (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, etc.).
+        -   `.env.production` → prod project (same variables but prod values).
+    -   Link projects: `supabase link --project-ref <dev>` and `supabase link --project-ref <prod> --env prod`.
+    -   Workflow: develop migrations locally → `supabase db push` (dev) → validate → `supabase db deploy --env prod`.
+
 ## Documentation
 
 - [Supabase Setup](./SUPABASE_SETUP.md) - Database configuration

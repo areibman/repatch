@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -41,141 +36,24 @@ export type Database = {
     Tables: {
       ai_templates: {
         Row: {
-          content: string
+          content: string | null
           created_at: string
           id: string
           name: string
           updated_at: string
         }
         Insert: {
-          content: string
+          content?: string | null
           created_at?: string
           id?: string
           name: string
           updated_at?: string
         }
         Update: {
-          content?: string
+          content?: string | null
           created_at?: string
           id?: string
           name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      ai_templates_backup: {
-        Row: {
-          audience: string | null
-          commit_prompt: string | null
-          created_at: string | null
-          description: string | null
-          examples: Json | null
-          id: string | null
-          name: string | null
-          overall_prompt: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          audience?: string | null
-          commit_prompt?: string | null
-          created_at?: string | null
-          description?: string | null
-          examples?: Json | null
-          id?: string | null
-          name?: string | null
-          overall_prompt?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          audience?: string | null
-          commit_prompt?: string | null
-          created_at?: string | null
-          description?: string | null
-          examples?: Json | null
-          id?: string | null
-          name?: string | null
-          overall_prompt?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      email_integrations: {
-        Row: {
-          created_at: string
-          id: string
-          is_active: boolean
-          provider: Database["public"]["Enums"]["email_provider_type"]
-          settings: Json
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          provider: Database["public"]["Enums"]["email_provider_type"]
-          settings?: Json
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          provider?: Database["public"]["Enums"]["email_provider_type"]
-          settings?: Json
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      email_subscribers: {
-        Row: {
-          active: boolean
-          created_at: string
-          email: string
-          id: string
-          updated_at: string
-        }
-        Insert: {
-          active?: boolean
-          created_at?: string
-          email: string
-          id?: string
-          updated_at?: string
-        }
-        Update: {
-          active?: boolean
-          created_at?: string
-          email?: string
-          id?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      github_configs: {
-        Row: {
-          access_token: string
-          created_at: string
-          id: string
-          repo_name: string | null
-          repo_owner: string | null
-          repo_url: string
-          updated_at: string
-        }
-        Insert: {
-          access_token: string
-          created_at?: string
-          id?: string
-          repo_name?: string | null
-          repo_owner?: string | null
-          repo_url: string
-          updated_at?: string
-        }
-        Update: {
-          access_token?: string
-          created_at?: string
-          id?: string
-          repo_name?: string | null
-          repo_owner?: string | null
-          repo_url?: string
           updated_at?: string
         }
         Relationships: []
@@ -188,7 +66,7 @@ export type Database = {
           ai_template_id: string | null
           changes: Json
           content: string | null
-          contributors: string[]
+          contributors: string[] | null
           created_at: string
           filter_metadata: Json | null
           generated_at: string
@@ -218,7 +96,7 @@ export type Database = {
           ai_template_id?: string | null
           changes?: Json
           content?: string | null
-          contributors?: string[]
+          contributors?: string[] | null
           created_at?: string
           filter_metadata?: Json | null
           generated_at?: string
@@ -248,7 +126,7 @@ export type Database = {
           ai_template_id?: string | null
           changes?: Json
           content?: string | null
-          contributors?: string[]
+          contributors?: string[] | null
           created_at?: string
           filter_metadata?: Json | null
           generated_at?: string
@@ -271,7 +149,15 @@ export type Database = {
           video_top_changes?: Json | null
           video_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "patch_notes_ai_template_id_fkey"
+            columns: ["ai_template_id"]
+            isOneToOne: false
+            referencedRelation: "ai_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -281,7 +167,6 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      email_provider_type: "resend" | "customerio"
       processing_status_type:
         | "pending"
         | "fetching_stats"
@@ -421,7 +306,6 @@ export const Constants = {
   },
   public: {
     Enums: {
-      email_provider_type: ["resend", "customerio"],
       processing_status_type: [
         "pending",
         "fetching_stats",
@@ -435,3 +319,4 @@ export const Constants = {
     },
   },
 } as const
+
