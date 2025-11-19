@@ -102,15 +102,16 @@ Follow the instructions in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to:
 
 ### 4. Run Database Migrations
 
-Make sure to run all migrations, including the latest video_url migration:
+Keep your local database in sync with the consolidated schema plus incremental feature migrations:
 
 ```bash
-# Run the video_url migration via Supabase CLI
+# Apply everything locally (preferred)
 supabase db push
 
-# Or via the Supabase Dashboard SQL Editor:
-# Copy and run /supabase/migrations/20250106000000_add_video_url.sql
-# Copy and run /supabase/migrations/20250107000000_add_filter_metadata.sql
+# Or manually run individual files via SQL editor:
+# - /supabase/migrations/20250106000000_add_video_url.sql
+# - /supabase/migrations/20250107000000_add_filter_metadata.sql
+# - /supabase/migrations/20250119000001_add_user_management.sql
 ```
 
 ### 5. Run Development Server
@@ -230,6 +231,22 @@ Send beautiful HTML emails to subscribers with:
 - Repository statistics
 - Contributor list
 - Custom video links (when available)
+
+### 👥 Supabase User Management
+
+Following the [Supabase Auth user management guide](https://supabase.com/docs/guides/auth/managing-user-data), the app now:
+
+- Mirrors every `auth.users` record into `public.user_profiles` with role metadata, onboarding state, and preferences managed via RLS
+- Tracks invites in `public.user_invites` with status changes handled in the `handle_new_user_profile` trigger
+- Exposes REST endpoints for admin tooling:
+  - `GET /api/users` → paginated roster + outstanding invites (optional `page`, `perPage`, `search`)
+  - `POST /api/users` → invite a new teammate (stores audit trail + triggers Supabase invite email)
+  - `GET /api/users/:id` → resolve a single account (auth + profile metadata)
+  - `PATCH /api/users/:id` → update role/profile fields or email
+  - `DELETE /api/users/:id` → hard delete via `auth.admin`
+  - `PATCH /api/users/invites/:id` → revoke outstanding invites
+
+All database policies default to `auth.role() = 'service_role'` for administrative actions and `auth.uid() = id` for self-service profile updates, aligning with Supabase's recommended RLS posture.
 
 ## Development: Resetting the Database
 

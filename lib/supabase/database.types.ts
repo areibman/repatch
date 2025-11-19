@@ -158,7 +158,104 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
+        },
+        user_invites: {
+          Row: {
+            accepted_at: string | null
+            created_at: string
+            email: string
+            expires_at: string | null
+            id: string
+            invited_by: string | null
+            metadata: Json
+            role: Database["public"]["Enums"]["user_role_type"]
+            status: Database["public"]["Enums"]["user_invite_status_type"]
+            token: string | null
+            updated_at: string
+          }
+          Insert: {
+            accepted_at?: string | null
+            created_at?: string
+            email: string
+            expires_at?: string | null
+            id?: string
+            invited_by?: string | null
+            metadata?: Json
+            role?: Database["public"]["Enums"]["user_role_type"]
+            status?: Database["public"]["Enums"]["user_invite_status_type"]
+            token?: string | null
+            updated_at?: string
+          }
+          Update: {
+            accepted_at?: string | null
+            created_at?: string
+            email?: string
+            expires_at?: string | null
+            id?: string
+            invited_by?: string | null
+            metadata?: Json
+            role?: Database["public"]["Enums"]["user_role_type"]
+            status?: Database["public"]["Enums"]["user_invite_status_type"]
+            token?: string | null
+            updated_at?: string
+          }
+          Relationships: [
+            {
+              foreignKeyName: "user_invites_invited_by_fkey"
+              columns: ["invited_by"]
+              isOneToOne: false
+              referencedRelation: "users"
+              referencedColumns: ["id"]
+            },
+          ]
+        },
+        user_profiles: {
+          Row: {
+            avatar_url: string | null
+            created_at: string
+            email: string
+            full_name: string | null
+            id: string
+            last_sign_in_at: string | null
+            onboarding_state: Json
+            preferences: Json
+            role: Database["public"]["Enums"]["user_role_type"]
+            updated_at: string
+          }
+          Insert: {
+            avatar_url?: string | null
+            created_at?: string
+            email: string
+            full_name?: string | null
+            id: string
+            last_sign_in_at?: string | null
+            onboarding_state?: Json
+            preferences?: Json
+            role?: Database["public"]["Enums"]["user_role_type"]
+            updated_at?: string
+          }
+          Update: {
+            avatar_url?: string | null
+            created_at?: string
+            email?: string
+            full_name?: string | null
+            id?: string
+            last_sign_in_at?: string | null
+            onboarding_state?: Json
+            preferences?: Json
+            role?: Database["public"]["Enums"]["user_role_type"]
+            updated_at?: string
+          }
+          Relationships: [
+            {
+              foreignKeyName: "user_profiles_id_fkey"
+              columns: ["id"]
+              isOneToOne: true
+              referencedRelation: "users"
+              referencedColumns: ["id"]
+            },
+          ]
+        }
     }
     Views: {
       [_ in never]: never
@@ -174,8 +271,10 @@ export type Database = {
         | "generating_content"
         | "generating_video"
         | "completed"
-        | "failed"
-      time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
+          | "failed",
+        time_period_type: "1day" | "1week" | "1month" | "custom" | "release",
+        user_invite_status_type: "pending" | "accepted" | "expired" | "revoked",
+        user_role_type: "owner" | "admin" | "editor" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -315,7 +414,14 @@ export const Constants = {
         "completed",
         "failed",
       ],
-      time_period_type: ["1day", "1week", "1month", "custom", "release"],
+        time_period_type: ["1day", "1week", "1month", "custom", "release"],
+        user_invite_status_type: [
+          "pending",
+          "accepted",
+          "expired",
+          "revoked",
+        ],
+        user_role_type: ["owner", "admin", "editor", "viewer"],
     },
   },
 } as const

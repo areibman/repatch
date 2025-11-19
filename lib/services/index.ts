@@ -32,5 +32,21 @@ export {
   type RenderVideoResult,
 } from './video-render.service';
 
+export {
+  listManagedUsers,
+  inviteUser,
+  getManagedUser,
+  updateManagedUser,
+  deleteManagedUser,
+  revokeInvite,
+  validateInviteUserPayload,
+  validateUpdateUserPayload,
+  validateDeleteUserPayload,
+  type ListUsersInput,
+  type InviteUserInput,
+  type UpdateUserInput,
+  type DeleteUserInput,
+} from './user-management.service';
+
 export type { ServiceResult } from './github-stats.service';
 
