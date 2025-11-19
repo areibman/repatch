@@ -32,5 +32,17 @@ export {
   type RenderVideoResult,
 } from './video-render.service';
 
+export {
+  listManagedUsers,
+  getManagedUserById,
+  createManagedUser,
+  updateManagedUser,
+  deleteManagedUser,
+  UserManagementError,
+  listUsersParamsSchema,
+  createUserPayloadSchema,
+  updateUserPayloadSchema,
+} from './user-management.service';
+
 export type { ServiceResult } from './github-stats.service';
 

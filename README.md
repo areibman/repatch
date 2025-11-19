@@ -33,6 +33,7 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 SUPABASE_VIDEO_BUCKET=videos
+USER_MANAGEMENT_API_KEY=a_long_random_string
 
 # Resend (for sending emails)
 RESEND_API_KEY=your_resend_api_key
@@ -230,6 +231,17 @@ Send beautiful HTML emails to subscribers with:
 - Repository statistics
 - Contributor list
 - Custom video links (when available)
+
+### 🔐 User Management API + OpenAPI
+
+- Manage Supabase auth users via first-party endpoints:
+  - `GET /api/users` — list users with pagination/filtering
+  - `POST /api/users` — create a user (auto-generates a password if omitted)
+  - `GET /api/users/{id}` — fetch user detail
+  - `PATCH /api/users/{id}` — update profile, role, or status
+  - `DELETE /api/users/{id}` — remove a user
+- All endpoints require the `x-api-key` header to match `USER_MANAGEMENT_API_KEY`.
+- Retrieve the machine-consumable spec at `GET /api/openapi`; it’s OpenAPI 3.1 compatible for MCP adapters or Postman collections.
 
 ## Development: Resetting the Database
 

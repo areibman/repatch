@@ -159,27 +159,76 @@ export type Database = {
           },
         ]
       }
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      [_ in never]: never
-    }
-    Enums: {
-      processing_status_type:
-        | "pending"
-        | "fetching_stats"
-        | "analyzing_commits"
-        | "generating_content"
-        | "generating_video"
-        | "completed"
-        | "failed"
-      time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+        user_profiles: {
+          Row: {
+            avatar_url: string | null
+            created_at: string
+            email: string
+            full_name: string | null
+            id: string
+            is_active: boolean
+            last_sign_in_at: string | null
+            metadata: Json
+            role: Database["public"]["Enums"]["user_role_type"]
+            updated_at: string
+          }
+          Insert: {
+            avatar_url?: string | null
+            created_at?: string
+            email: string
+            full_name?: string | null
+            id: string
+            is_active?: boolean
+            last_sign_in_at?: string | null
+            metadata?: Json
+            role?: Database["public"]["Enums"]["user_role_type"]
+            updated_at?: string
+          }
+          Update: {
+            avatar_url?: string | null
+            created_at?: string
+            email?: string
+            full_name?: string | null
+            id?: string
+            is_active?: boolean
+            last_sign_in_at?: string | null
+            metadata?: Json
+            role?: Database["public"]["Enums"]["user_role_type"]
+            updated_at?: string
+          }
+          Relationships: [
+            {
+              foreignKeyName: "user_profiles_id_fkey"
+              columns: ["id"]
+              isOneToOne: true
+              referencedRelation: "users"
+              referencedSchema: "auth"
+              referencedColumns: ["id"]
+            },
+          ]
+        }
+      }
+      Views: {
+        [_ in never]: never
+      }
+      Functions: {
+        [_ in never]: never
+      }
+      Enums: {
+        processing_status_type:
+          | "pending"
+          | "fetching_stats"
+          | "analyzing_commits"
+          | "generating_content"
+          | "generating_video"
+          | "completed"
+          | "failed"
+        time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
+        user_role_type: "admin" | "editor" | "viewer"
+      }
+      CompositeTypes: {
+        [_ in never]: never
+      }
   }
 }
 
@@ -316,6 +365,7 @@ export const Constants = {
         "failed",
       ],
       time_period_type: ["1day", "1week", "1month", "custom", "release"],
+      user_role_type: ["admin", "editor", "viewer"],
     },
   },
 } as const
