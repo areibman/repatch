@@ -26,7 +26,7 @@ import {
 import { SidebarHeaderContent } from "@/components/sidebar-header";
 import { useSupabase } from "@/components/providers/supabase-provider";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback"];
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback"];
 
 export function ProtectedShell({ children }: { children: ReactNode }) {
   const router = useRouter();

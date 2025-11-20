@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2Icon, LockIcon, GithubIcon } from "lucide-react";
 import type { Provider } from "@supabase/supabase-js";
-
-import { Separator } from "@/components/ui/separator";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,13 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSupabase } from "@/components/providers/supabase-provider";
-
-function sanitizeRedirect(path?: string | null) {
-  if (!path || !path.startsWith("/")) {
-    return "/";
-  }
-  return path;
-}
+import { sanitizeRedirect } from "@/lib/auth-redirect";
 
 function LoginContent() {
   const router = useRouter();
@@ -83,6 +76,14 @@ function LoginContent() {
       setIsSubmitting(false);
     }
   };
+
+  const signupHref = useMemo(
+    () =>
+      redirectTo && redirectTo !== "/"
+        ? `/signup?redirectTo=${encodeURIComponent(redirectTo)}`
+        : "/signup",
+    [redirectTo]
+  );
 
   return (
       <Card className="w-full max-w-md shadow-xl">
@@ -188,8 +189,14 @@ function LoginContent() {
             </Button>
           </form>
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            Need an account? Ask an administrator to invite you from the
-            Subscribers dashboard.
+            Need an account?{" "}
+            <Link
+              href={signupHref}
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Create one
+            </Link>
+            .
           </p>
         </CardContent>
       </Card>

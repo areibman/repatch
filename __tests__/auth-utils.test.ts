@@ -4,6 +4,7 @@ import {
   roleAtLeast,
   ForbiddenError,
 } from "@/lib/auth";
+import { sanitizeRedirect } from "@/lib/auth-redirect";
 
 describe("hashPersonalAccessToken", () => {
   it("produces a stable hash for the same input", () => {
@@ -17,6 +18,21 @@ describe("hashPersonalAccessToken", () => {
     const hashA = hashPersonalAccessToken("rpt_token_a");
     const hashB = hashPersonalAccessToken("rpt_token_b");
     expect(hashA).not.toEqual(hashB);
+  });
+});
+
+describe("sanitizeRedirect", () => {
+  it("falls back to root when the path is invalid", () => {
+    expect(sanitizeRedirect(null)).toBe("/");
+    expect(sanitizeRedirect("https://example.com")).toBe("/");
+    expect(sanitizeRedirect("")).toBe("/");
+  });
+
+  it("keeps relative paths that start with a slash", () => {
+    expect(sanitizeRedirect("/subscribers")).toBe("/subscribers");
+    expect(sanitizeRedirect("/settings/templates")).toBe(
+      "/settings/templates"
+    );
   });
 });
 
@@ -34,4 +50,5 @@ describe("role helpers", () => {
     expect(() => requireRole(admin, ["admin"])).not.toThrow();
   });
 });
+
 
