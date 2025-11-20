@@ -7,31 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       ai_templates: {
@@ -159,6 +134,146 @@ export type Database = {
           },
         ]
       }
+      user_api_tokens: {
+        Row: {
+          created_at: string
+          description: string | null
+          expires_at: string | null
+          hashed_token: string
+          id: string
+          last_used_at: string | null
+          metadata: Json
+          name: string
+          revoked_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          expires_at?: string | null
+          hashed_token: string
+          id?: string
+          last_used_at?: string | null
+          metadata?: Json
+          name: string
+          revoked_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          expires_at?: string | null
+          hashed_token?: string
+          id?: string
+          last_used_at?: string | null
+          metadata?: Json
+          name?: string
+          revoked_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_api_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          new_values: Json | null
+          previous_values: Json | null
+          reason: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          new_values?: Json | null
+          previous_values?: Json | null
+          reason?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          new_values?: Json | null
+          previous_values?: Json | null
+          reason?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_audit_logs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          email_confirmed_at: string | null
+          full_name: string | null
+          last_sign_in_at: string | null
+          metadata: Json
+          role: Database["public"]["Enums"]["user_role_type"]
+          status: Database["public"]["Enums"]["user_status_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          email_confirmed_at?: string | null
+          full_name?: string | null
+          last_sign_in_at?: string | null
+          metadata?: Json
+          role?: Database["public"]["Enums"]["user_role_type"]
+          status?: Database["public"]["Enums"]["user_status_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          email_confirmed_at?: string | null
+          full_name?: string | null
+          last_sign_in_at?: string | null
+          metadata?: Json
+          role?: Database["public"]["Enums"]["user_role_type"]
+          status?: Database["public"]["Enums"]["user_status_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -176,6 +291,8 @@ export type Database = {
         | "completed"
         | "failed"
       time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
+      user_role_type: "admin" | "manager" | "editor" | "viewer" | "service"
+      user_status_type: "invited" | "active" | "suspended" | "deactivated"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -301,9 +418,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       processing_status_type: [
@@ -316,6 +430,8 @@ export const Constants = {
         "failed",
       ],
       time_period_type: ["1day", "1week", "1month", "custom", "release"],
+      user_role_type: ["admin", "manager", "editor", "viewer", "service"],
+      user_status_type: ["invited", "active", "suspended", "deactivated"],
     },
   },
 } as const

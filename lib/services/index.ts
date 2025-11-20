@@ -34,3 +34,13 @@ export {
 
 export type { ServiceResult } from './github-stats.service';
 
+export {
+  listUsers,
+  getUser,
+  createUser,
+  updateUser,
+  deactivateUser,
+  createApiToken,
+  revokeApiToken,
+} from './user-management.service';
+
