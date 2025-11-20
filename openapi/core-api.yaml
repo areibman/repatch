@@ -1,0 +1,1031 @@
+openapi: 3.1.0
+info:
+  title: Repatch Core API
+  version: 0.1.0
+  description: |
+    HTTP surface area for managing patch notes, AI summarization, and media rendering.
+    Designed to back the Next.js frontend, a standalone CLI, and MCP integrations via Stainless.
+servers:
+  - url: https://api.repatch.app/v1
+    description: Production
+  - url: https://staging-api.repatch.app/v1
+    description: Staging
+  - url: http://localhost:8787/v1
+    description: Local development
+security:
+  - bearerAuth: []
+tags:
+  - name: PatchNotes
+    description: Create, update, and distribute patch notes
+  - name: Jobs
+    description: Track asynchronous work like processing and video renders
+  - name: GitHub
+    description: Repository metadata, stats, and summaries
+  - name: Templates
+    description: AI prompt templates
+  - name: Subscribers
+    description: Newsletter subscriber management
+  - name: Video
+    description: Video helper utilities
+paths:
+  /patch-notes:
+    get:
+      tags: [PatchNotes]
+      summary: List patch notes
+      parameters:
+        - in: query
+          name: repo
+          schema:
+            type: string
+          description: Filter by repository slug (owner/repo)
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, fetching_stats, analyzing_commits, generating_content, generating_video, completed, failed]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Opaque pagination cursor
+      responses:
+        '200':
+          description: Patch notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPatchNotes'
+    post:
+      tags: [PatchNotes]
+      summary: Create a patch note shell
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchNoteRequest'
+      responses:
+        '201':
+          description: Patch note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatchNote'
+  /patch-notes/{patchNoteId}:
+    parameters:
+      - in: path
+        name: patchNoteId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [PatchNotes]
+      summary: Fetch a single patch note
+      responses:
+        '200':
+          description: Patch note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatchNote'
+    patch:
+      tags: [PatchNotes]
+      summary: Update a patch note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchNoteUpdateRequest'
+      responses:
+        '200':
+          description: Updated patch note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatchNote'
+    delete:
+      tags: [PatchNotes]
+      summary: Delete a patch note
+      responses:
+        '204':
+          description: Deleted
+  /patch-notes/{patchNoteId}/process:
+    parameters:
+      - in: path
+        name: patchNoteId
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [PatchNotes, Jobs]
+      summary: Kick off asynchronous processing for a patch note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessPatchNoteRequest'
+      responses:
+        '202':
+          description: Processing accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+  /patch-notes/{patchNoteId}/video-render:
+    parameters:
+      - in: path
+        name: patchNoteId
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [PatchNotes, Video, Jobs]
+      summary: Start or restart video rendering for a patch note
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VideoRenderRequest'
+      responses:
+        '202':
+          description: Render job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+  /patch-notes/{patchNoteId}/deliveries:
+    parameters:
+      - in: path
+        name: patchNoteId
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [PatchNotes]
+      summary: Send a patch note via configured channels
+      description: Triggers a Resend email blast or other downstream delivery workers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryRequest'
+      responses:
+        '202':
+          description: Delivery scheduled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+  /patch-notes/{patchNoteId}/social-drafts:
+    parameters:
+      - in: path
+        name: patchNoteId
+        required: true
+        schema:
+          type: string
+    post:
+      tags: [PatchNotes]
+      summary: Create a social-media draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialDraftRequest'
+      responses:
+        '200':
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialDraftResponse'
+  /jobs/{jobId}:
+    parameters:
+      - in: path
+        name: jobId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Jobs]
+      summary: Fetch status for an asynchronous job
+      responses:
+        '200':
+          description: Job info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+  /video-top-changes:
+    post:
+      tags: [Video]
+      summary: Generate the top changes for video narration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VideoTopChangesRequest'
+      responses:
+        '200':
+          description: Structured top changes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoTopChangesResponse'
+  /github/metadata:
+    get:
+      tags: [GitHub]
+      summary: Fetch branches, tags, labels, or releases for a repository
+      parameters:
+        - in: query
+          name: owner
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: repo
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: type
+          required: true
+          schema:
+            type: string
+            enum: [branches, tags, labels, releases]
+      responses:
+        '200':
+          description: Metadata payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubMetadataResponse'
+  /github/stats:
+    post:
+      tags: [GitHub]
+      summary: Aggregate repository statistics for a filter window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitHubStatsRequest'
+      responses:
+        '200':
+          description: Repository stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubStatsResponse'
+  /github/summaries:
+    post:
+      tags: [GitHub]
+      summary: Generate AI summaries for commits within a window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GitHubSummaryRequest'
+      responses:
+        '200':
+          description: Summaries and contexts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubSummaryResponse'
+  /templates:
+    get:
+      tags: [Templates]
+      summary: List AI templates
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Templates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTemplates'
+    post:
+      tags: [Templates]
+      summary: Create an AI template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiTemplateRequest'
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiTemplate'
+  /templates/{templateId}:
+    parameters:
+      - in: path
+        name: templateId
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [Templates]
+      summary: Fetch a template
+      responses:
+        '200':
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiTemplate'
+    patch:
+      tags: [Templates]
+      summary: Update a template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiTemplateRequest'
+      responses:
+        '200':
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiTemplate'
+    delete:
+      tags: [Templates]
+      summary: Delete a template
+      responses:
+        '204':
+          description: Deleted
+  /subscribers:
+    get:
+      tags: [Subscribers]
+      summary: List subscribers
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [active, unsubscribed]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: cursor
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscribers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedSubscribers'
+    post:
+      tags: [Subscribers]
+      summary: Add a subscriber
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriberRequest'
+      responses:
+        '201':
+          description: Subscriber created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscriber'
+  /subscribers/{subscriberId}:
+    parameters:
+      - in: path
+        name: subscriberId
+        required: true
+        schema:
+          type: string
+    patch:
+      tags: [Subscribers]
+      summary: Update subscriber state
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriberUpdateRequest'
+      responses:
+        '200':
+          description: Updated subscriber
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscriber'
+    delete:
+      tags: [Subscribers]
+      summary: Remove a subscriber
+      responses:
+        '204':
+          description: Deleted
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    PaginatedPatchNotes:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PatchNote'
+        nextCursor:
+          type: string
+          nullable: true
+    PatchNote:
+      type: object
+      required: [id, title, repoName, repoUrl, timePeriod, generatedAt, processingStatus]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        repoName:
+          type: string
+        repoUrl:
+          type: string
+        repoBranch:
+          type: string
+          nullable: true
+        timePeriod:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        content:
+          type: string
+          nullable: true
+        changes:
+          type: object
+          properties:
+            added:
+              type: integer
+            modified:
+              type: integer
+            removed:
+              type: integer
+        contributors:
+          type: array
+          items:
+            type: string
+        videoData:
+          $ref: '#/components/schemas/VideoData'
+        videoUrl:
+          type: string
+          format: uri
+          nullable: true
+        videoTopChanges:
+          type: array
+          items:
+            $ref: '#/components/schemas/VideoTopChange'
+          nullable: true
+        aiSummaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitSummary'
+          nullable: true
+        aiOverallSummary:
+          type: string
+          nullable: true
+        aiDetailedContexts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetailedContext'
+          nullable: true
+        aiTemplateId:
+          type: string
+          nullable: true
+        filterMetadata:
+          $ref: '#/components/schemas/PatchNoteFilters'
+        processingStatus:
+          type: string
+          enum: [pending, fetching_stats, analyzing_commits, generating_content, generating_video, completed, failed]
+        processingStage:
+          type: string
+          nullable: true
+        processingError:
+          type: string
+          nullable: true
+    PatchNoteRequest:
+      type: object
+      required: [repoName, repoUrl, timePeriod, title]
+      properties:
+        repoName:
+          type: string
+        repoUrl:
+          type: string
+        repoBranch:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        timePeriod:
+          type: string
+        contributors:
+          type: array
+          items:
+            type: string
+        filterMetadata:
+          $ref: '#/components/schemas/PatchNoteFilters'
+        videoData:
+          $ref: '#/components/schemas/VideoData'
+        aiTemplateId:
+          type: string
+    PatchNoteUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        contributors:
+          type: array
+          items:
+            type: string
+        videoData:
+          $ref: '#/components/schemas/VideoData'
+        videoTopChanges:
+          type: array
+          items:
+            $ref: '#/components/schemas/VideoTopChange'
+        aiOverallSummary:
+          type: string
+        aiSummaries:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitSummary'
+        aiDetailedContexts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetailedContext'
+        processingStatus:
+          type: string
+    VideoData:
+      type: object
+      properties:
+        langCode:
+          type: string
+        topChanges:
+          type: array
+          items:
+            $ref: '#/components/schemas/VideoTopChange'
+        allChanges:
+          type: array
+          items:
+            type: string
+    VideoTopChange:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+    CommitSummary:
+      type: object
+      properties:
+        sha:
+          type: string
+        message:
+          type: string
+        aiSummary:
+          type: string
+        aiTitle:
+          type: string
+          nullable: true
+        additions:
+          type: integer
+        deletions:
+          type: integer
+    DetailedContext:
+      type: object
+      properties:
+        context:
+          type: string
+        message:
+          type: string
+        additions:
+          type: integer
+        deletions:
+          type: integer
+        authors:
+          type: array
+          items:
+            type: string
+        prNumber:
+          type: integer
+          nullable: true
+    PatchNoteFilters:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [preset, custom, release]
+        preset:
+          type: string
+          enum: [1day, 1week, 1month]
+        customRange:
+          type: object
+          properties:
+            since:
+              type: string
+              format: date-time
+            until:
+              type: string
+              format: date-time
+        includeLabels:
+          type: array
+          items:
+            type: string
+        excludeLabels:
+          type: array
+          items:
+            type: string
+        includeTags:
+          type: array
+          items:
+            type: string
+        excludeTags:
+          type: array
+          items:
+            type: string
+        releases:
+          type: array
+          items:
+            type: object
+            properties:
+              tag:
+                type: string
+              name:
+                type: string
+                nullable: true
+              previousTag:
+                type: string
+                nullable: true
+              publishedAt:
+                type: string
+                format: date-time
+                nullable: true
+              targetCommitish:
+                type: string
+                nullable: true
+    ProcessPatchNoteRequest:
+      type: object
+      required: [owner, repo, repoUrl, filters]
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        repoUrl:
+          type: string
+        branch:
+          type: string
+        filters:
+          $ref: '#/components/schemas/PatchNoteFilters'
+        templateId:
+          type: string
+    VideoRenderRequest:
+      type: object
+      properties:
+        forceRegenerate:
+          type: boolean
+          default: false
+        priority:
+          type: string
+          enum: [normal, high]
+          default: normal
+    DeliveryRequest:
+      type: object
+      required: [channel]
+      properties:
+        channel:
+          type: string
+          enum: [resend_email]
+        audienceId:
+          type: string
+          description: Optional Resend audience override; defaults to workspace setting
+        recipients:
+          type: array
+          items:
+            type: string
+            format: email
+          description: Optional explicit recipient list
+        subject:
+          type: string
+        previewImageUrl:
+          type: string
+          format: uri
+          nullable: true
+    SocialDraftRequest:
+      type: object
+      properties:
+        platform:
+          type: string
+          enum: [typefully, twitter, linkedin]
+          default: typefully
+        content:
+          type: string
+          description: Override text; defaults to patch note markdown
+        publishOptions:
+          type: object
+          additionalProperties: true
+    SocialDraftResponse:
+      type: object
+      properties:
+        platform:
+          type: string
+        draftUrl:
+          type: string
+          format: uri
+        externalId:
+          type: string
+    Job:
+      type: object
+      required: [id, type, status]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [patch_note_processing, video_render, delivery, unknown]
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        progress:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        result:
+          type: object
+          additionalProperties: true
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          properties:
+            patchNoteId:
+              type: string
+            renderId:
+              type: string
+            bucketName:
+              type: string
+          additionalProperties: true
+    VideoTopChangesRequest:
+      type: object
+      required: [content, repoName]
+      properties:
+        content:
+          type: string
+          description: Markdown content to analyze
+        repoName:
+          type: string
+        language:
+          type: string
+          default: en
+    VideoTopChangesResponse:
+      type: object
+      properties:
+        topChanges:
+          type: array
+          items:
+            $ref: '#/components/schemas/VideoTopChange'
+    GitHubMetadataResponse:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [branches, tags, labels, releases]
+        items:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/GitHubBranch'
+              - $ref: '#/components/schemas/GitHubTag'
+              - $ref: '#/components/schemas/GitHubLabel'
+              - $ref: '#/components/schemas/GitHubRelease'
+    GitHubBranch:
+      type: object
+      properties:
+        name:
+          type: string
+        protected:
+          type: boolean
+        commitSha:
+          type: string
+    GitHubTag:
+      type: object
+      properties:
+        name:
+          type: string
+        commitSha:
+          type: string
+    GitHubLabel:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+    GitHubRelease:
+      type: object
+      properties:
+        id:
+          type: integer
+        tagName:
+          type: string
+        name:
+          type: string
+          nullable: true
+        publishedAt:
+          type: string
+          format: date-time
+          nullable: true
+    GitHubStatsRequest:
+      type: object
+      required: [owner, repo]
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        branch:
+          type: string
+        filters:
+          $ref: '#/components/schemas/PatchNoteFilters'
+    GitHubStatsResponse:
+      type: object
+      properties:
+        commits:
+          type: integer
+        additions:
+          type: integer
+        deletions:
+          type: integer
+        contributors:
+          type: array
+          items:
+            type: string
+    GitHubSummaryRequest:
+      type: object
+      required: [owner, repo, filters]
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        branch:
+          type: string
+        filters:
+          $ref: '#/components/schemas/PatchNoteFilters'
+        templateId:
+          type: string
+    GitHubSummaryResponse:
+      type: object
+      properties:
+        content:
+          type: string
+        detailedContexts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetailedContext'
+        totalCommits:
+          type: integer
+        totalAdditions:
+          type: integer
+        totalDeletions:
+          type: integer
+    AiTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AiTemplateRequest:
+      type: object
+      required: [name, content]
+      properties:
+        name:
+          type: string
+        content:
+          type: string
+    PaginatedTemplates:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AiTemplate'
+        nextCursor:
+          type: string
+          nullable: true
+    Subscriber:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SubscriberRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+    SubscriberUpdateRequest:
+      type: object
+      properties:
+        unsubscribed:
+          type: boolean
+    PaginatedSubscribers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subscriber'
+        nextCursor:
+          type: string
+          nullable: true
