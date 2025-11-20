@@ -267,6 +267,9 @@ If you need to rebuild the database from scratch (e.g., to clean up schema drift
 - [Video Generation](./VIDEO_GENERATION.md) - Remotion video rendering
 - [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
+- [MCP Core Separation](./docs/mcp-core-separation.md) - Core API inventory, consolidation plan, Stainless workflow
+- [Core OpenAPI Spec](./openapi/mcp-core.yaml) - Contract driving future `/api/core` routes and MCP tooling
+- [Stainless Config](./stainless.config.yml) - CLI settings for generating the MCP server subpackage
 
 ## Learn More
 

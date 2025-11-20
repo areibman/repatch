@@ -1,0 +1,44 @@
+# Stainless configuration generated for MCP separation work.
+# See docs/mcp-core-separation.md for the reasoning behind these values.
+
+openapi:
+  input: ./openapi/mcp-core.yaml
+
+organization:
+  name: Repatch
+  contact: team@repatch.app
+  homepage: https://repatch.app
+
+settings:
+  environments:
+    - name: production
+      base_url: https://repatch.app/api/core
+    - name: development
+      base_url: http://localhost:3000/api/core
+
+targets:
+  typescript:
+    package_name: '@repatch/sdk'
+    publish:
+      npm: false
+    options:
+      mcp_server:
+        package_name: '@repatch/mcp-server'
+        enable_all_resources: true
+        enable_docs_tool: false
+        enable_code_tool: false
+        enable_jq_filter: false
+        publish:
+          npm: true
+          docker:
+            image_name: repatch/mcp-server
+        oauth_resource_metadata:
+          authorization_servers:
+            - https://auth.repatch.app
+        generate_cloudflare_worker: true
+
+  cli:
+    package_name: repatch-cli
+    publish:
+      npm: false
+
