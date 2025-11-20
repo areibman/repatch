@@ -1,0 +1,1157 @@
+openapi: 3.1.0
+
+info:
+  title: Repatch API
+  version: 1.0.0
+  description: |
+    Core API for GitHub patch note generation, AI summarization, and video rendering.
+    Supports both synchronous operations and asynchronous job-based workflows.
+  contact:
+    name: Repatch Support
+    url: https://repatch.com/support
+
+servers:
+  - url: https://api.repatch.com/v1
+    description: Production
+  - url: http://localhost:3000/api/v1
+    description: Development
+
+security:
+  - apiKey: []
+
+tags:
+  - name: GitHub
+    description: GitHub repository metadata and statistics
+  - name: Patch Notes
+    description: Patch note CRUD operations
+  - name: Jobs
+    description: Async job management and status polling
+  - name: Templates
+    description: AI prompt template management
+  - name: Subscribers
+    description: Email subscriber management
+
+paths:
+  # ==================== GitHub APIs ====================
+  
+  /github/repositories/{owner}/{repo}/branches:
+    get:
+      tags: [GitHub]
+      summary: List repository branches
+      operationId: listBranches
+      parameters:
+        - $ref: '#/components/parameters/Owner'
+        - $ref: '#/components/parameters/Repo'
+      responses:
+        '200':
+          description: List of branches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Branch'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /github/repositories/{owner}/{repo}/labels:
+    get:
+      tags: [GitHub]
+      summary: List repository labels
+      operationId: listLabels
+      parameters:
+        - $ref: '#/components/parameters/Owner'
+        - $ref: '#/components/parameters/Repo'
+      responses:
+        '200':
+          description: List of labels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Label'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /github/repositories/{owner}/{repo}/releases:
+    get:
+      tags: [GitHub]
+      summary: List repository releases
+      operationId: listReleases
+      parameters:
+        - $ref: '#/components/parameters/Owner'
+        - $ref: '#/components/parameters/Repo'
+      responses:
+        '200':
+          description: List of releases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Release'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /github/repositories/{owner}/{repo}/tags:
+    get:
+      tags: [GitHub]
+      summary: List repository tags
+      operationId: listTags
+      parameters:
+        - $ref: '#/components/parameters/Owner'
+        - $ref: '#/components/parameters/Repo'
+      responses:
+        '200':
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tag'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /github/repositories/{owner}/{repo}/stats:
+    post:
+      tags: [GitHub]
+      summary: Get repository commit statistics
+      operationId: getStats
+      parameters:
+        - $ref: '#/components/parameters/Owner'
+        - $ref: '#/components/parameters/Repo'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatsRequest'
+      responses:
+        '200':
+          description: Repository statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubStats'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /github/repositories/{owner}/{repo}/commits/summarize:
+    post:
+      tags: [GitHub]
+      summary: AI-summarize repository commits
+      description: |
+        Summarize commits using AI. Returns a job ID for polling.
+        This is an async operation that may take 1-2 minutes.
+      operationId: summarizeCommits
+      parameters:
+        - $ref: '#/components/parameters/Owner'
+        - $ref: '#/components/parameters/Repo'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SummarizeRequest'
+      responses:
+        '202':
+          description: Job created for summarization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== Patch Notes APIs ====================
+
+  /patch-notes:
+    get:
+      tags: [Patch Notes]
+      summary: List all patch notes
+      operationId: listPatchNotes
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of patch notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PatchNote'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Patch Notes]
+      summary: Create a new patch note
+      operationId: createPatchNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePatchNoteRequest'
+      responses:
+        '201':
+          description: Patch note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatchNote'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /patch-notes/{id}:
+    get:
+      tags: [Patch Notes]
+      summary: Get a single patch note
+      operationId: getPatchNote
+      parameters:
+        - $ref: '#/components/parameters/PatchNoteId'
+      responses:
+        '200':
+          description: Patch note details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatchNote'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [Patch Notes]
+      summary: Update a patch note
+      operationId: updatePatchNote
+      parameters:
+        - $ref: '#/components/parameters/PatchNoteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePatchNoteRequest'
+      responses:
+        '200':
+          description: Patch note updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatchNote'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [Patch Notes]
+      summary: Delete a patch note
+      operationId: deletePatchNote
+      parameters:
+        - $ref: '#/components/parameters/PatchNoteId'
+      responses:
+        '200':
+          description: Patch note deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /patch-notes/{id}/jobs/process:
+    post:
+      tags: [Patch Notes, Jobs]
+      summary: Start AI processing job for patch note
+      description: |
+        Fetches GitHub stats, summarizes commits with AI, and generates content.
+        Returns a job ID for polling status.
+      operationId: processPatchNote
+      parameters:
+        - $ref: '#/components/parameters/PatchNoteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessPatchNoteRequest'
+      responses:
+        '202':
+          description: Processing job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /patch-notes/{id}/jobs/render-video:
+    post:
+      tags: [Patch Notes, Jobs]
+      summary: Start video rendering job
+      description: |
+        Triggers Remotion Lambda video render.
+        Returns a job ID for polling render status.
+      operationId: renderPatchNoteVideo
+      parameters:
+        - $ref: '#/components/parameters/PatchNoteId'
+      responses:
+        '202':
+          description: Video render job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== Jobs APIs ====================
+
+  /jobs/{jobId}:
+    get:
+      tags: [Jobs]
+      summary: Get job status and result
+      description: |
+        Poll this endpoint to check job progress.
+        Returns status, progress (0-100), and result when complete.
+      operationId: getJob
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /jobs/{jobId}/cancel:
+    post:
+      tags: [Jobs]
+      summary: Cancel a running job
+      operationId: cancelJob
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Job cannot be cancelled (already completed or failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== Templates APIs ====================
+
+  /templates:
+    get:
+      tags: [Templates]
+      summary: List all AI templates
+      operationId: listTemplates
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Template'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Templates]
+      summary: Create a new template
+      operationId: createTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTemplateRequest'
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /templates/{id}:
+    put:
+      tags: [Templates]
+      summary: Update a template
+      operationId: updateTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTemplateRequest'
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [Templates]
+      summary: Delete a template
+      operationId: deleteTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== Subscribers APIs ====================
+
+  /subscribers:
+    get:
+      tags: [Subscribers]
+      summary: List all subscribers
+      operationId: listSubscribers
+      responses:
+        '200':
+          description: List of subscribers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subscriber'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags: [Subscribers]
+      summary: Add a new subscriber
+      operationId: createSubscriber
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriberRequest'
+      responses:
+        '201':
+          description: Subscriber added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscriber'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email already subscribed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags: [Subscribers]
+      summary: Update a subscriber
+      operationId: updateSubscriber
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSubscriberRequest'
+      responses:
+        '200':
+          description: Subscriber updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscriber'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags: [Subscribers]
+      summary: Remove a subscriber
+      operationId: deleteSubscriber
+      parameters:
+        - name: email
+          in: query
+          schema:
+            type: string
+            format: email
+        - name: id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscriber removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+# ==================== Components ====================
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+  parameters:
+    Owner:
+      name: owner
+      in: path
+      required: true
+      schema:
+        type: string
+      description: GitHub repository owner
+      example: facebook
+    
+    Repo:
+      name: repo
+      in: path
+      required: true
+      schema:
+        type: string
+      description: GitHub repository name
+      example: react
+    
+    PatchNoteId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Patch note ID
+    
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Job ID
+
+  schemas:
+    # ===== GitHub Schemas =====
+    
+    Branch:
+      type: object
+      properties:
+        name:
+          type: string
+          example: main
+        commit:
+          type: object
+          properties:
+            sha:
+              type: string
+            url:
+              type: string
+
+    Label:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: bug
+        color:
+          type: string
+          example: d73a4a
+        description:
+          type: string
+          nullable: true
+
+    Release:
+      type: object
+      properties:
+        id:
+          type: integer
+        tag_name:
+          type: string
+          example: v1.0.0
+        name:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+        body:
+          type: string
+          nullable: true
+
+    Tag:
+      type: object
+      properties:
+        name:
+          type: string
+          example: v1.0.0
+        commit:
+          type: object
+          properties:
+            sha:
+              type: string
+            url:
+              type: string
+
+    StatsRequest:
+      type: object
+      properties:
+        branch:
+          type: string
+          example: main
+        filters:
+          $ref: '#/components/schemas/Filters'
+
+    GitHubStats:
+      type: object
+      properties:
+        commits:
+          type: array
+          items:
+            $ref: '#/components/schemas/Commit'
+        totalCommits:
+          type: integer
+        additions:
+          type: integer
+        deletions:
+          type: integer
+        contributors:
+          type: array
+          items:
+            type: string
+
+    Commit:
+      type: object
+      properties:
+        sha:
+          type: string
+        message:
+          type: string
+        author:
+          type: string
+        date:
+          type: string
+          format: date-time
+        additions:
+          type: integer
+        deletions:
+          type: integer
+        url:
+          type: string
+
+    SummarizeRequest:
+      type: object
+      required:
+        - commits
+      properties:
+        commits:
+          type: array
+          items:
+            $ref: '#/components/schemas/Commit'
+        templateId:
+          type: string
+          format: uuid
+          nullable: true
+
+    # ===== Patch Note Schemas =====
+
+    PatchNote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        repo_name:
+          type: string
+        repo_url:
+          type: string
+        repo_branch:
+          type: string
+          nullable: true
+        time_period:
+          type: string
+          enum: [1day, 1week, 1month, custom, release]
+        title:
+          type: string
+        content:
+          type: string
+        changes:
+          type: object
+          properties:
+            added:
+              type: integer
+            modified:
+              type: integer
+            removed:
+              type: integer
+        contributors:
+          type: array
+          items:
+            type: string
+        video_url:
+          type: string
+          format: uri
+          nullable: true
+        video_data:
+          type: object
+          nullable: true
+        ai_summaries:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/CommitSummary'
+        ai_overall_summary:
+          type: string
+          nullable: true
+        ai_template_id:
+          type: string
+          format: uuid
+          nullable: true
+        filter_metadata:
+          $ref: '#/components/schemas/Filters'
+        processing_status:
+          $ref: '#/components/schemas/ProcessingStatus'
+        processing_stage:
+          type: string
+          nullable: true
+        processing_error:
+          type: string
+          nullable: true
+        generated_at:
+          type: string
+          format: date-time
+
+    CreatePatchNoteRequest:
+      type: object
+      required:
+        - repo_name
+        - repo_url
+        - title
+        - content
+      properties:
+        repo_name:
+          type: string
+        repo_url:
+          type: string
+        repo_branch:
+          type: string
+        time_period:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        changes:
+          type: object
+        contributors:
+          type: array
+          items:
+            type: string
+        video_data:
+          type: object
+        ai_template_id:
+          type: string
+          format: uuid
+        filter_metadata:
+          $ref: '#/components/schemas/Filters'
+
+    UpdatePatchNoteRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        repo_name:
+          type: string
+        repo_branch:
+          type: string
+        changes:
+          type: object
+        contributors:
+          type: array
+          items:
+            type: string
+        video_data:
+          type: object
+
+    ProcessPatchNoteRequest:
+      type: object
+      required:
+        - owner
+        - repo
+        - repoUrl
+        - filters
+      properties:
+        owner:
+          type: string
+        repo:
+          type: string
+        repoUrl:
+          type: string
+        branch:
+          type: string
+        filters:
+          $ref: '#/components/schemas/Filters'
+        templateId:
+          type: string
+          format: uuid
+
+    CommitSummary:
+      type: object
+      properties:
+        sha:
+          type: string
+        message:
+          type: string
+        aiSummary:
+          type: string
+        aiTitle:
+          type: string
+        additions:
+          type: integer
+        deletions:
+          type: integer
+
+    ProcessingStatus:
+      type: string
+      enum:
+        - pending
+        - fetching_stats
+        - analyzing_commits
+        - generating_content
+        - generating_video
+        - completed
+        - failed
+
+    Filters:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [preset, custom, release]
+        preset:
+          type: string
+          enum: [1day, 1week, 1month]
+        customRange:
+          type: object
+          properties:
+            since:
+              type: string
+              format: date-time
+            until:
+              type: string
+              format: date-time
+        includeLabels:
+          type: array
+          items:
+            type: string
+        excludeLabels:
+          type: array
+          items:
+            type: string
+        includeTags:
+          type: array
+          items:
+            type: string
+        excludeTags:
+          type: array
+          items:
+            type: string
+
+    # ===== Job Schemas =====
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [video_render, ai_process, commit_summarize]
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        result:
+          type: object
+          nullable: true
+          description: Job result (available when status is completed)
+        error:
+          type: string
+          nullable: true
+          description: Error message (available when status is failed)
+        metadata:
+          type: object
+          nullable: true
+          description: Job-specific metadata
+        resource_type:
+          type: string
+          example: patch_note
+        resource_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    JobCreated:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          example: pending
+        pollUrl:
+          type: string
+          format: uri
+          example: /api/v1/jobs/123e4567-e89b-12d3-a456-426614174000
+
+    # ===== Template Schemas =====
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTemplateRequest:
+      type: object
+      required:
+        - name
+        - content
+      properties:
+        name:
+          type: string
+        content:
+          type: string
+
+    UpdateTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        content:
+          type: string
+
+    # ===== Subscriber Schemas =====
+
+    Subscriber:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateSubscriberRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+
+    UpdateSubscriberRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        id:
+          type: string
+        unsubscribed:
+          type: boolean
+
+    # ===== Common Schemas =====
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code
+        details:
+          type: object
+          description: Additional error details
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
