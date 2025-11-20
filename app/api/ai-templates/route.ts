@@ -1,9 +1,43 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { withApiAuth } from "@/lib/api/with-auth";
-import { mapTemplateRow } from "@/lib/templates";
+import { DEFAULT_AI_TEMPLATES, mapTemplateRow } from "@/lib/templates";
 import type { AiTemplatePayload } from "@/types/ai-template";
 import { createServerSupabaseClient } from "@/lib/supabase";
+import type { Database } from "@/lib/supabase/database.types";
+
+const TEMPLATE_COLUMNS =
+  "id, name, content, owner_id, created_at, updated_at";
+
+async function seedTemplatesForUser(
+  supabase: SupabaseClient<Database>,
+  ownerId: string
+): Promise<boolean> {
+  try {
+    if (!ownerId) {
+      return false;
+    }
+
+    const payload = DEFAULT_AI_TEMPLATES.map((template) => ({
+      name: template.name,
+      content: template.content,
+      owner_id: ownerId,
+    }));
+
+    const { error } = await supabase.from("ai_templates").insert(payload);
+
+    if (error) {
+      console.warn("[API] Templates: Failed to seed defaults", error.message);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("[API] Templates: Unexpected seeding error", error);
+    return false;
+  }
+}
 
 export async function GET() {
   const start = Date.now();
@@ -18,18 +52,19 @@ export async function GET() {
     const authPromise = supabase.auth.getSession();
     const dbPromise = supabase
       .from("ai_templates")
-      .select("id, name, content, owner_id, created_at, updated_at") // Explicit columns
+      .select(TEMPLATE_COLUMNS) // Explicit columns
       .order("name", { ascending: true });
 
     const [authResult, dbResult] = await Promise.all([authPromise, dbPromise]);
     
     const { error: authError, data: authData } = authResult;
     let { error: dbError, data: dbData } = dbResult;
+    let userId = authData.session?.user?.id;
 
     console.log(`[API] Templates: Parallel operations completed in ${Date.now() - start}ms`);
 
     // 1. Check Auth Failure
-    if (authError || !authData.session) {
+    if (authError || !authData.session || !userId) {
       console.warn("[API] Templates: No local session, trying remote verification...");
       
       // Fallback: Try remote verification
@@ -41,6 +76,8 @@ export async function GET() {
           { status: 401 }
         );
       }
+
+      userId = remoteData.user.id;
     }
 
     // 2. Retry DB if it failed but Auth succeeded
@@ -48,11 +85,26 @@ export async function GET() {
       console.warn("[API] Templates: Initial DB query failed, retrying...", dbError.message);
       const retryResult = await supabase
         .from("ai_templates")
-        .select("id, name, content, owner_id, created_at, updated_at")
+        .select(TEMPLATE_COLUMNS)
         .order("name", { ascending: true });
         
       dbError = retryResult.error;
       dbData = retryResult.data;
+    }
+
+    // 3. Seed defaults when a new account has zero templates
+    if (!dbError && (dbData?.length ?? 0) === 0 && userId) {
+      const seeded = await seedTemplatesForUser(supabase, userId);
+
+      if (seeded) {
+        const refreshResult = await supabase
+          .from("ai_templates")
+          .select(TEMPLATE_COLUMNS)
+          .order("name", { ascending: true });
+
+        dbError = refreshResult.error;
+        dbData = refreshResult.data;
+      }
     }
 
     if (dbError) {
