@@ -158,7 +158,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
+        },
+        user_profiles: {
+          Row: {
+            avatar_url: string | null
+            created_at: string
+            email: string
+            full_name: string | null
+            id: string
+            last_sign_in_at: string | null
+            metadata: Json
+            role: Database["public"]["Enums"]["user_role_type"]
+            status: Database["public"]["Enums"]["user_status_type"]
+            updated_at: string
+          }
+          Insert: {
+            avatar_url?: string | null
+            created_at?: string
+            email: string
+            full_name?: string | null
+            id: string
+            last_sign_in_at?: string | null
+            metadata?: Json
+            role?: Database["public"]["Enums"]["user_role_type"]
+            status?: Database["public"]["Enums"]["user_status_type"]
+            updated_at?: string
+          }
+          Update: {
+            avatar_url?: string | null
+            created_at?: string
+            email?: string
+            full_name?: string | null
+            id?: string
+            last_sign_in_at?: string | null
+            metadata?: Json
+            role?: Database["public"]["Enums"]["user_role_type"]
+            status?: Database["public"]["Enums"]["user_status_type"]
+            updated_at?: string
+          }
+          Relationships: [
+            {
+              foreignKeyName: "user_profiles_id_fkey"
+              columns: ["id"]
+              isOneToOne: true
+              referencedRelation: "users"
+              referencedColumns: ["id"]
+            },
+            ]
+        },
     }
     Views: {
       [_ in never]: never
@@ -167,15 +214,17 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      processing_status_type:
-        | "pending"
-        | "fetching_stats"
-        | "analyzing_commits"
-        | "generating_content"
-        | "generating_video"
-        | "completed"
-        | "failed"
-      time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
+        processing_status_type:
+          | "pending"
+          | "fetching_stats"
+          | "analyzing_commits"
+          | "generating_content"
+          | "generating_video"
+          | "completed"
+          | "failed"
+        time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
+        user_role_type: "owner" | "admin" | "editor" | "viewer"
+        user_status_type: "invited" | "active" | "suspended" | "deactivated"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -316,6 +365,8 @@ export const Constants = {
         "failed",
       ],
       time_period_type: ["1day", "1week", "1month", "custom", "release"],
+      user_role_type: ["owner", "admin", "editor", "viewer"],
+      user_status_type: ["invited", "active", "suspended", "deactivated"],
     },
   },
 } as const

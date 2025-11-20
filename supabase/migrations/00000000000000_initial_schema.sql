@@ -4,6 +4,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Create enums
 CREATE TYPE time_period_type AS ENUM ('1day', '1week', '1month', 'custom', 'release');
 CREATE TYPE processing_status_type AS ENUM ('pending', 'fetching_stats', 'analyzing_commits', 'generating_content', 'generating_video', 'completed', 'failed');
+CREATE TYPE user_role_type AS ENUM ('owner', 'admin', 'editor', 'viewer');
+CREATE TYPE user_status_type AS ENUM ('invited', 'active', 'suspended', 'deactivated');
 
 -- Create ai_templates table
 CREATE TABLE ai_templates (
@@ -51,6 +53,25 @@ CREATE INDEX idx_patch_notes_time_period ON patch_notes(time_period);
 CREATE INDEX idx_patch_notes_processing_status ON patch_notes(processing_status);
 CREATE INDEX idx_patch_notes_video_render_id ON patch_notes(video_render_id) WHERE video_render_id IS NOT NULL;
 
+-- Create user_profiles table to mirror Supabase Auth users
+CREATE TABLE user_profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email TEXT NOT NULL UNIQUE,
+    full_name TEXT,
+    avatar_url TEXT,
+    role user_role_type NOT NULL DEFAULT 'viewer',
+    status user_status_type NOT NULL DEFAULT 'invited',
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    last_sign_in_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for user profiles
+CREATE INDEX idx_user_profiles_email ON user_profiles(email);
+CREATE INDEX idx_user_profiles_role ON user_profiles(role);
+CREATE INDEX idx_user_profiles_status ON user_profiles(status);
+
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -71,11 +92,21 @@ CREATE TRIGGER update_patch_notes_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_user_profiles_updated_at
+    BEFORE UPDATE ON user_profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Enable RLS
 ALTER TABLE ai_templates ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all access" ON ai_templates FOR ALL USING (true) WITH CHECK (true);
 
 ALTER TABLE patch_notes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all access" ON patch_notes FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view own profile" ON user_profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can insert own profile" ON user_profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON user_profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
 
 

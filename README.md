@@ -268,6 +268,11 @@ If you need to rebuild the database from scratch (e.g., to clean up schema drift
 - [Email Integration](./EMAIL_INTEGRATION.md) - Resend email setup
 - [GitHub Integration](./GITHUB_INTEGRATION.md) - GitHub API usage
 
+### OpenAPI & MCP Access
+
+- `GET /api/openapi` returns the OpenAPI 3.1 specification for the Repatch Admin API, including the `/api/users` user-management endpoints.
+- Use this spec to bootstrap MCP integrations or generate typed clients. Update `NEXT_PUBLIC_APP_URL` to ensure the server URL in the document matches your environment.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

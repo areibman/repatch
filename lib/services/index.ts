@@ -34,3 +34,19 @@ export {
 
 export type { ServiceResult } from './github-stats.service';
 
+export {
+  listManagedUsers,
+  getManagedUserById,
+  createManagedUser,
+  updateManagedUser,
+  deleteManagedUser,
+  listUsersQuerySchema,
+  createUserSchema,
+  updateUserSchema,
+  UserManagementError,
+  type PaginatedUsers,
+  type CreateUserInput,
+  type UpdateUserInput,
+  type ListUsersQuery,
+} from './user-management.service';
+
