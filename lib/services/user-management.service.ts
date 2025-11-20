@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes } from 'crypto';
 
 import { type User, type UserAttributes } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -333,7 +333,8 @@ export async function updateManagedUser(
   const payload = updateUserPayloadSchema.parse(rawPayload);
   const supabase = getSupabaseServiceClient();
 
-  const authUpdates: UserAttributes = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const authUpdates: any = {};
 
   if (payload.email) {
     authUpdates.email = payload.email;

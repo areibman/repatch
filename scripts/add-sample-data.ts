@@ -5,10 +5,11 @@
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('Error: Missing Supabase environment variables');
-  console.error('Make sure .env.local is configured correctly');
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('Error: Missing Supabase environment variables (URL, ANON_KEY, or SERVICE_ROLE_KEY)');
+  console.error('Make sure .env.local is configured correctly with SUPABASE_SERVICE_ROLE_KEY');
   process.exit(1);
 }
 
@@ -94,7 +95,7 @@ async function addSampleData() {
         headers: {
           'Content-Type': 'application/json',
           'apikey': SUPABASE_ANON_KEY!,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY!}`,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY!}`,
           'Prefer': 'return=representation',
         },
         body: JSON.stringify(data),

@@ -6,21 +6,19 @@ function nilToUndefined(value: string | null) {
   return value === null ? undefined : value;
 }
 
-export function ensureUserManagementAuthorized(request: NextRequest) {
+export function hasUserManagementApiKey(request: NextRequest) {
   const expectedKey = process.env.USER_MANAGEMENT_API_KEY;
 
   if (!expectedKey) {
-    return null;
+    return false;
   }
 
   const providedKey =
     request.headers.get('x-api-key') ?? request.headers.get('authorization');
 
-  if (providedKey === expectedKey || providedKey === `Bearer ${expectedKey}`) {
-    return null;
-  }
-
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return (
+    providedKey === expectedKey || providedKey === `Bearer ${expectedKey}`
+  );
 }
 
 export function parseListQueryParams(request: NextRequest) {

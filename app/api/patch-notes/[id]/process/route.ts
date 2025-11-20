@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { processPatchNote, type ProcessPatchNoteInput } from "@/lib/services";
 import { cookies } from "next/headers";
 import type { PatchNoteFilters } from "@/types/patch-note";
+import { withApiAuth } from "@/lib/api/with-auth";
 
 export const maxDuration = 300; // 5 minutes
 
@@ -59,23 +60,34 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  console.log('📥 Received process request');
-  
-  const { id } = await params;
-  const body = await request.json();
-  const cookieStore = await cookies();
+  return withApiAuth(async ({ supabase, auth }) => {
+    console.log("📥 Received process request");
 
-  // Build and validate input
-  const input = buildProcessInput(body, id, cookieStore);
-  
-  if ('error' in input) {
-    return NextResponse.json({ error: input.error }, { status: 400 });
-  }
+    const { id } = await params;
+    const body = await request.json();
+    const cookieStore = await cookies();
 
-  // Call service directly (no HTTP overhead!)
-  const result = await processPatchNote(input);
+    const { error: ownershipError } = await supabase
+      .from("patch_notes")
+      .select("id")
+      .eq("id", id)
+      .eq("owner_id", auth.user.id)
+      .single();
 
-  return result.success
-    ? NextResponse.json(result.data)
-    : NextResponse.json({ error: result.error }, { status: 500 });
+    if (ownershipError) {
+      return NextResponse.json({ error: "Patch note not found" }, { status: 404 });
+    }
+
+    const input = buildProcessInput(body, id, cookieStore);
+
+    if ("error" in input) {
+      return NextResponse.json({ error: input.error }, { status: 400 });
+    }
+
+    const result = await processPatchNote(input);
+
+    return result.success
+      ? NextResponse.json(result.data)
+      : NextResponse.json({ error: result.error }, { status: 500 });
+  });
 }

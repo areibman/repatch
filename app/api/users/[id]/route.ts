@@ -8,9 +8,11 @@ import {
 } from '@/lib/services';
 
 import {
-  ensureUserManagementAuthorized,
+  hasUserManagementApiKey,
   handleServiceError,
 } from '../helpers';
+import { withApiAuth } from '@/lib/api/with-auth';
+import { requireRole } from '@/lib/supabase';
 
 const userIdSchema = z.string().uuid();
 
@@ -24,58 +26,66 @@ function parseUserId(params: { id?: string }) {
   return result.data;
 }
 
-export async function GET(
+async function authorizeRequest(
   request: NextRequest,
-  context: { params: { id: string } }
+  handler: () => Promise<NextResponse>
 ) {
-  const unauthorized = ensureUserManagementAuthorized(request);
-  if (unauthorized) {
-    return unauthorized;
+  if (hasUserManagementApiKey(request)) {
+    return handler();
   }
 
-  try {
-    const userId = parseUserId(context.params);
-    const user = await getManagedUserById(userId);
-    return NextResponse.json(user);
-  } catch (error) {
-    return handleServiceError(error, 'Failed to load user');
-  }
+  return withApiAuth(async ({ auth }) => {
+    requireRole(auth, ['admin']);
+    return handler();
+  });
+}
+
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
+  return authorizeRequest(request, async () => {
+    try {
+      const userId = parseUserId({ id });
+      const user = await getManagedUserById(userId);
+      return NextResponse.json(user);
+    } catch (error) {
+      return handleServiceError(error, 'Failed to load user');
+    }
+  });
 }
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const unauthorized = ensureUserManagementAuthorized(request);
-  if (unauthorized) {
-    return unauthorized;
-  }
-
-  try {
-    const userId = parseUserId(context.params);
-    const payload = await request.json();
-    const updated = await updateManagedUser(userId, payload);
-    return NextResponse.json(updated);
-  } catch (error) {
-    return handleServiceError(error, 'Failed to update user');
-  }
+  const { id } = await context.params;
+  return authorizeRequest(request, async () => {
+    try {
+      const userId = parseUserId({ id });
+      const payload = await request.json();
+      const updated = await updateManagedUser(userId, payload);
+      return NextResponse.json(updated);
+    } catch (error) {
+      return handleServiceError(error, 'Failed to update user');
+    }
+  });
 }
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const unauthorized = ensureUserManagementAuthorized(request);
-  if (unauthorized) {
-    return unauthorized;
-  }
-
-  try {
-    const userId = parseUserId(context.params);
-    const result = await deleteManagedUser(userId);
-    return NextResponse.json(result);
-  } catch (error) {
-    return handleServiceError(error, 'Failed to delete user');
-  }
+  const { id } = await context.params;
+  return authorizeRequest(request, async () => {
+    try {
+      const userId = parseUserId({ id });
+      const result = await deleteManagedUser(userId);
+      return NextResponse.json(result);
+    } catch (error) {
+      return handleServiceError(error, 'Failed to delete user');
+    }
+  });
 }
 
