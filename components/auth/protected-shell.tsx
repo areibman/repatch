@@ -26,7 +26,7 @@ import {
 import { SidebarHeaderContent } from "@/components/sidebar-header";
 import { useSupabase } from "@/components/providers/supabase-provider";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback"];
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback", "/auth/session"];
 
 export function ProtectedShell({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -54,6 +54,9 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
     params.set("redirectTo", targetPath);
 
     router.replace(`/login?${params.toString()}`);
+    console.info("[protected-shell] Redirected unauthenticated user", {
+      redirectTo: `/login?${params.toString()}`,
+    });
   }, [
     isProtectedRoute,
     isLoading,

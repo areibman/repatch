@@ -101,7 +101,11 @@ function SignupContent() {
       return;
     }
 
-    setSignupResultEmail(payload.email);
+    const confirmedEmail = data.user?.email ?? email;
+    console.info("[signup] Awaiting email confirmation", {
+      confirmedEmail,
+    });
+    setSignupResultEmail(confirmedEmail);
     setIsSubmitting(false);
     setFullName("");
     setEmail("");
