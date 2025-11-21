@@ -119,9 +119,10 @@ function createUserResponseSchema(): Schema {
   };
 }
 
+import { getAppBaseUrl } from '@/lib/url';
+
 export function buildUserManagementOpenApiDocument() {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const baseUrl = getAppBaseUrl();
 
   return {
     openapi: '3.1.0',

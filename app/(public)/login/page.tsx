@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSupabase } from "@/components/providers/supabase-provider";
 import { sanitizeRedirect } from "@/lib/auth-redirect";
+import { getAppBaseUrl } from "@/lib/url";
 
 function LoginContent() {
   const router = useRouter();
@@ -59,10 +60,12 @@ function LoginContent() {
     setFormError(null);
     setIsSubmitting(true);
 
+    const appBaseUrl = getAppBaseUrl();
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}`,
+        redirectTo: `${appBaseUrl}/auth/callback?next=${redirectTo}`,
       },
     });
 

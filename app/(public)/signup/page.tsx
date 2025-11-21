@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSupabase } from "@/components/providers/supabase-provider";
 import { sanitizeRedirect } from "@/lib/auth-redirect";
+import { getAppBaseUrl } from "@/lib/url";
 
 function SignupContent() {
   const router = useRouter();
@@ -46,10 +47,12 @@ function SignupContent() {
     setSignupResultEmail(null);
     setIsSubmitting(true);
 
+    const appBaseUrl = getAppBaseUrl();
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}`,
+        redirectTo: `${appBaseUrl}/auth/callback?next=${redirectTo}`,
       },
     });
 
@@ -80,11 +83,13 @@ function SignupContent() {
 
     setIsSubmitting(true);
 
+    const appBaseUrl = getAppBaseUrl();
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}`,
+        emailRedirectTo: `${appBaseUrl}/auth/callback?next=${redirectTo}`,
         data: fullName ? { full_name: fullName } : undefined,
       },
     });

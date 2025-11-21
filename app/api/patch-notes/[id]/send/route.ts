@@ -4,6 +4,7 @@ import { withApiAuth } from "@/lib/api/with-auth";
 import { createServiceSupabaseClient, type Database } from "@/lib/supabase";
 import { marked } from "marked";
 import { formatFilterSummary } from "@/lib/filter-utils";
+import { getAppBaseUrl } from "@/lib/url";
 import type { PatchNoteFilters } from "@/types/patch-note";
 
 type PatchNote = Database["public"]["Tables"]["patch_notes"]["Row"];
@@ -87,11 +88,7 @@ export async function POST(
 
       const htmlContent = markdownToHtml(note.content || "");
 
-      const baseUrl =
-        process.env.NEXT_PUBLIC_APP_URL ||
-        (process.env.VERCEL_URL
-          ? `https://${process.env.VERCEL_URL}`
-          : "http://localhost:3000");
+      const baseUrl = getAppBaseUrl();
 
       let videoUrl: string;
 
