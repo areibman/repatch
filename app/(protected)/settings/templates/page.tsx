@@ -51,6 +51,11 @@ export default function TemplatesSettingsPage() {
         setIsLoading(true);
         setError(null);
         const response = await fetch("/api/ai-templates");
+        if (response.status === 401) {
+          setTemplates([]);
+          return;
+        }
+
         if (!response.ok) {
           const err = await response.json();
           throw new Error(err.error || "Failed to load templates");

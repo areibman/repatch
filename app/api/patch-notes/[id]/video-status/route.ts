@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getVideoRenderStatus } from "@/lib/remotion-lambda-renderer";
+import { withApiAuth } from "@/lib/api/with-auth";
 
 // Configure maximum duration for this route
 // Just needs time to check Lambda render status
@@ -11,30 +12,48 @@ export const maxDuration = 30;
  * Returns current progress and completion status
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await context.params;
+  return withApiAuth(async ({ supabase, auth }) => {
+    try {
+      const { id } = await context.params;
 
-    console.log('🔍 Checking video status for patch note:', id);
+      console.log("🔍 Checking video status for patch note:", id);
 
-    // Check render status
-    const status = await getVideoRenderStatus(id);
+      const { data, error } = await supabase
+        .from("patch_notes")
+        .select("id")
+        .eq("id", id)
+        .eq("owner_id", auth.user.id)
+        .single();
 
-    console.log('📊 Video status:', status);
+      if (error || !data) {
+        return NextResponse.json(
+          { error: "Patch note not found" },
+          { status: 404 }
+        );
+      }
 
-    return NextResponse.json(status);
-  } catch (error) {
-    console.error("❌ Error checking video status:", error);
-    return NextResponse.json(
-      {
-        status: 'failed' as const,
-        progress: 0,
-        error: error instanceof Error ? error.message : "Failed to check video status"
-      },
-      { status: 500 }
-    );
-  }
+      const status = await getVideoRenderStatus(id);
+
+      console.log("📊 Video status:", status);
+
+      return NextResponse.json(status);
+    } catch (error) {
+      console.error("❌ Error checking video status:", error);
+      return NextResponse.json(
+        {
+          status: "failed" as const,
+          progress: 0,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to check video status",
+        },
+        { status: 500 }
+      );
+    }
+  });
 }
 

@@ -115,6 +115,12 @@ export function CreatePostDialog() {
         setIsLoadingTemplates(true);
         setTemplateError(null);
         const response = await fetch('/api/ai-templates');
+        if (response.status === 401) {
+          setTemplates([]);
+          setSelectedTemplateId(null);
+          return;
+        }
+
         if (!response.ok) {
           const error = await response.json();
           throw new Error(error.error || 'Failed to load templates');

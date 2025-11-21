@@ -40,6 +40,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          owner_id: string | null
           updated_at: string
         }
         Insert: {
@@ -47,6 +48,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          owner_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -54,9 +56,67 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          owner_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ai_templates_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedSchema: "auth"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          last_used_at: string | null
+          name: string
+          revoked_at: string | null
+          scopes: string[]
+          token_hash: string
+          token_prefix: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          name: string
+          revoked_at?: string | null
+          scopes?: string[]
+          token_hash: string
+          token_prefix: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          name?: string
+          revoked_at?: string | null
+          scopes?: string[]
+          token_hash?: string
+          token_prefix?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedSchema: "auth"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       patch_notes: {
         Row: {
@@ -71,6 +131,7 @@ export type Database = {
           filter_metadata: Json | null
           generated_at: string
           id: string
+          owner_id: string | null
           processing_error: string | null
           processing_progress: number | null
           processing_stage: string | null
@@ -101,6 +162,7 @@ export type Database = {
           filter_metadata?: Json | null
           generated_at?: string
           id?: string
+          owner_id?: string | null
           processing_error?: string | null
           processing_progress?: number | null
           processing_stage?: string | null
@@ -131,6 +193,7 @@ export type Database = {
           filter_metadata?: Json | null
           generated_at?: string
           id?: string
+          owner_id?: string | null
           processing_error?: string | null
           processing_progress?: number | null
           processing_stage?: string | null
@@ -157,29 +220,86 @@ export type Database = {
             referencedRelation: "ai_templates"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "patch_notes_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedSchema: "auth"
+            referencedColumns: ["id"]
+          },
         ]
       }
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      [_ in never]: never
-    }
-    Enums: {
-      processing_status_type:
-        | "pending"
-        | "fetching_stats"
-        | "analyzing_commits"
-        | "generating_content"
-        | "generating_video"
-        | "completed"
-        | "failed"
-      time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+        user_profiles: {
+          Row: {
+            avatar_url: string | null
+            created_at: string
+            email: string
+            full_name: string | null
+            id: string
+            is_active: boolean
+            last_sign_in_at: string | null
+            metadata: Json
+            role: Database["public"]["Enums"]["user_role_type"]
+            updated_at: string
+          }
+          Insert: {
+            avatar_url?: string | null
+            created_at?: string
+            email: string
+            full_name?: string | null
+            id: string
+            is_active?: boolean
+            last_sign_in_at?: string | null
+            metadata?: Json
+            role?: Database["public"]["Enums"]["user_role_type"]
+            updated_at?: string
+          }
+          Update: {
+            avatar_url?: string | null
+            created_at?: string
+            email?: string
+            full_name?: string | null
+            id?: string
+            is_active?: boolean
+            last_sign_in_at?: string | null
+            metadata?: Json
+            role?: Database["public"]["Enums"]["user_role_type"]
+            updated_at?: string
+          }
+          Relationships: [
+            {
+              foreignKeyName: "user_profiles_id_fkey"
+              columns: ["id"]
+              isOneToOne: true
+              referencedRelation: "users"
+              referencedSchema: "auth"
+              referencedColumns: ["id"]
+            },
+          ]
+        }
+      }
+      Views: {
+        [_ in never]: never
+      }
+      Functions: {
+        [_ in never]: never
+      }
+      Enums: {
+        processing_status_type:
+          | "pending"
+          | "fetching_stats"
+          | "analyzing_commits"
+          | "generating_content"
+          | "generating_video"
+          | "completed"
+          | "failed"
+        time_period_type: "1day" | "1week" | "1month" | "custom" | "release"
+        user_role_type: "admin" | "editor" | "viewer"
+      }
+      CompositeTypes: {
+        [_ in never]: never
+      }
   }
 }
 
@@ -316,6 +436,7 @@ export const Constants = {
         "failed",
       ],
       time_period_type: ["1day", "1week", "1month", "custom", "release"],
+      user_role_type: ["admin", "editor", "viewer"],
     },
   },
 } as const

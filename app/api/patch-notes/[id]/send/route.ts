@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
-import { createServerSupabaseClient, createServiceSupabaseClient, type Database } from "@/lib/supabase";
-import { cookies } from "next/headers";
+import { withApiAuth } from "@/lib/api/with-auth";
+import { createServiceSupabaseClient, type Database } from "@/lib/supabase";
 import { marked } from "marked";
 import { formatFilterSummary } from "@/lib/filter-utils";
 import type { PatchNoteFilters } from "@/types/patch-note";
@@ -29,112 +29,106 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params;
-    const cookieStore = await cookies();
-    const supabase = createServerSupabaseClient(cookieStore);
-
-    // Fetch the patch note
-    const { data: patchNote, error: patchNoteError } = await supabase
-      .from("patch_notes")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (patchNoteError || !patchNote) {
-      return NextResponse.json(
-        { error: "Patch note not found" },
-        { status: 404 }
-      );
-    }
-
-    // Use hardcoded audience ID from the docs
-    const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
-
-    // Get contacts from the audience (we need their emails for the 'to' field)
-    const resend = getResendClient();
-    const contacts = await resend.contacts.list({ audienceId });
-
-    if (!contacts.data || contacts.data.data.length === 0) {
-      return NextResponse.json(
-        { error: "No subscribers found in audience" },
-        { status: 400 }
-      );
-    }
-
-    // Filter out unsubscribed contacts and extract emails
-    const activeEmails = contacts.data.data
-      .filter((contact: { unsubscribed?: boolean }) => !contact.unsubscribed)
-      .map((contact: { email: string }) => contact.email);
-
-    if (activeEmails.length === 0) {
-      return NextResponse.json(
-        { error: "No active subscribers found" },
-        { status: 400 }
-      );
-    }
-
-    // Check if video is ready before sending
-    const rawVideoUrl = (patchNote as PatchNote).video_url;
-    if (!rawVideoUrl) {
-      return NextResponse.json(
-        { error: "Video is still rendering. Please wait until the video is ready before sending." },
-        { status: 400 }
-      );
-    }
-
-    // Add a small delay to avoid hitting rate limits (2 req/sec = 500ms between calls)
-    await new Promise(resolve => setTimeout(resolve, 600));
-
-    // Convert markdown content to HTML
-    const htmlContent = markdownToHtml((patchNote as PatchNote).content || '');
-
-    // Get the base URL for absolute links
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
-                    'http://localhost:3000');
-    
-    // Generate a signed URL for the video
-    let videoUrl: string;
-    
+  return withApiAuth(async ({ supabase, auth }) => {
     try {
-      // If it's already a full URL, use it as is (legacy)
-      if (/^https?:\/\//i.test(rawVideoUrl)) {
-        videoUrl = rawVideoUrl;
-      } else {
-        // Generate a signed URL valid for 1 year (effectively permanent for email blasts)
-        // Email blasts are effectively public once sent (can be forwarded, shared, etc.)
-        // so expiration doesn't add meaningful security, just creates bad UX
-        const serviceSupabase = createServiceSupabaseClient();
-        const videoBucket = process.env.SUPABASE_VIDEO_BUCKET || 'videos';
-        
-        const { data: signedData, error: signedError } = await serviceSupabase.storage
-          .from(videoBucket)
-          .createSignedUrl(rawVideoUrl, 31536000); // 365 days in seconds
-        
-        if (signedData && !signedError) {
-          videoUrl = signedData.signedUrl;
-        } else {
-          console.error('Failed to generate signed URL for email:', signedError);
-          throw new Error('Failed to generate video URL');
-        }
-      }
-    } catch (error) {
-      console.error('Error generating signed URL:', error);
-      return NextResponse.json(
-        { error: "Failed to generate video URL for email. Please try again." },
-        { status: 500 }
-      );
-    }
+      const { id } = await params;
 
-    // Create styled HTML email
-    const emailHtml = `
+      const { data: patchNote, error: patchNoteError } = await supabase
+        .from("patch_notes")
+        .select("*")
+        .eq("id", id)
+        .eq("owner_id", auth.user.id)
+        .single();
+
+      if (patchNoteError || !patchNote) {
+        return NextResponse.json(
+          { error: "Patch note not found" },
+          { status: 404 }
+        );
+      }
+
+      const note = patchNote as PatchNote;
+      const contributors = note.contributors ?? [];
+      const audienceId = "fa2a9141-3fa1-4d41-a873-5883074e6516";
+
+      const resend = getResendClient();
+      const contacts = await resend.contacts.list({ audienceId });
+
+      if (!contacts.data || contacts.data.data.length === 0) {
+        return NextResponse.json(
+          { error: "No subscribers found in audience" },
+          { status: 400 }
+        );
+      }
+
+      const activeEmails = contacts.data.data
+        .filter((contact: { unsubscribed?: boolean }) => !contact.unsubscribed)
+        .map((contact: { email: string }) => contact.email);
+
+      if (activeEmails.length === 0) {
+        return NextResponse.json(
+          { error: "No active subscribers found" },
+          { status: 400 }
+        );
+      }
+
+      const rawVideoUrl = note.video_url;
+      if (!rawVideoUrl) {
+        return NextResponse.json(
+          {
+            error:
+              "Video is still rendering. Please wait until the video is ready before sending.",
+          },
+          { status: 400 }
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      const htmlContent = markdownToHtml(note.content || "");
+
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        (process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : "http://localhost:3000");
+
+      let videoUrl: string;
+
+      try {
+        if (/^https?:\/\//i.test(rawVideoUrl)) {
+          videoUrl = rawVideoUrl;
+        } else {
+          const serviceSupabase = createServiceSupabaseClient();
+          const videoBucket = process.env.SUPABASE_VIDEO_BUCKET || "videos";
+
+          const { data: signedData, error: signedError } =
+            await serviceSupabase.storage
+              .from(videoBucket)
+              .createSignedUrl(rawVideoUrl, 31536000);
+
+          if (signedData && !signedError) {
+            videoUrl = signedData.signedUrl;
+          } else {
+            console.error("Failed to generate signed URL for email:", signedError);
+            throw new Error("Failed to generate video URL");
+          }
+        }
+      } catch (error) {
+        console.error("Error generating signed URL:", error);
+        return NextResponse.json(
+          { error: "Failed to generate video URL for email. Please try again." },
+          { status: 500 }
+        );
+      }
+
+      const emailHtml = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${(patchNote as PatchNote).title}</title>
+  <title>${note.title}</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -358,15 +352,15 @@ export async function POST(
     </div>
     
     <div class="header">
-      <h1 class="title">${(patchNote as PatchNote).title}</h1>
+      <h1 class="title">${note.title}</h1>
       <div class="metadata">
-        <span class="badge">${(patchNote as PatchNote).repo_name}</span>
+        <span class="badge">${note.repo_name}</span>
         <span class="badge">${formatFilterSummary(
-          (patchNote as PatchNote).filter_metadata as PatchNoteFilters | null,
-          (patchNote as PatchNote).time_period
+          note.filter_metadata as PatchNoteFilters | null,
+          note.time_period
         )}</span>
         <span>${new Date(
-          (patchNote as PatchNote).generated_at
+          note.generated_at
         ).toLocaleDateString("en-US", {
           month: "long",
           day: "numeric",
@@ -379,20 +373,18 @@ export async function POST(
       <div class="stat">
         <div class="stat-label">Added</div>
         <div class="stat-value added">+${(
-          (patchNote as PatchNote).changes as { added: number; modified: number; removed: number }
+          note.changes as { added: number; modified: number; removed: number }
         ).added.toLocaleString()}</div>
       </div>
       <div class="stat">
         <div class="stat-label">Removed</div>
         <div class="stat-value removed">-${(
-          (patchNote as PatchNote).changes as { added: number; modified: number; removed: number }
+          note.changes as { added: number; modified: number; removed: number }
         ).removed.toLocaleString()}</div>
       </div>
       <div class="stat">
         <div class="stat-label">Contributors</div>
-        <div class="stat-value">${
-          (patchNote as PatchNote).contributors.length
-        }</div>
+        <div class="stat-value">${contributors.length}</div>
       </div>
     </div>
 
@@ -401,13 +393,12 @@ export async function POST(
     </div>
 
     ${
-      (patchNote as PatchNote).contributors &&
-      (patchNote as PatchNote).contributors.length > 0
+      contributors.length > 0
         ? `
     <div class="contributors">
       <div class="contributors-title">Contributors</div>
       <div>
-        ${(patchNote as PatchNote).contributors
+        ${contributors
           .map(
             (contributor: string) =>
               `<span class="contributor-tag">${contributor}</span>`
@@ -421,9 +412,7 @@ export async function POST(
 
     <div class="footer">
       <p>
-        View this patch note on the web: <a href="${
-          (patchNote as PatchNote).repo_url
-        }" target="_blank">${(patchNote as PatchNote).repo_name}</a>
+        View this patch note on the web: <a href="${note.repo_url}" target="_blank">${note.repo_name}</a>
       </p>
       <p>
         <small>This email was sent by Repatch - AI-powered patch notes for your repositories</small>
@@ -434,36 +423,35 @@ export async function POST(
 </html>
     `;
 
-    // Send email using Resend to all active subscribers
-    const { data, error } = await resend.emails.send({
-      from: "Repatch <onboarding@resend.dev>",
-      to: activeEmails, // Array of email addresses
-      subject: `${(patchNote as PatchNote).title} - ${
-        (patchNote as PatchNote).repo_name
-      }`,
-      html: emailHtml,
-    });
+      const { data, error } = await resend.emails.send({
+        from: "Repatch <onboarding@resend.dev>",
+        to: activeEmails,
+        subject: `${note.title} - ${note.repo_name}`,
+        html: emailHtml,
+      });
 
-    if (error) {
-      console.error("Resend error:", error);
+      if (error) {
+        console.error("Resend error:", error);
+        return NextResponse.json(
+          { error: error.message || "Failed to send email" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        sentTo: activeEmails.length,
+        emailId: data?.id,
+      });
+    } catch (error) {
+      console.error("API error:", error);
       return NextResponse.json(
-        { error: error.message || "Failed to send email" },
+        {
+          error:
+            error instanceof Error ? error.message : "Failed to send email",
+        },
         { status: 500 }
       );
     }
-
-    return NextResponse.json({
-      success: true,
-      sentTo: activeEmails.length,
-      emailId: data?.id,
-    });
-  } catch (error) {
-    console.error("API error:", error);
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to send email",
-      },
-      { status: 500 }
-    );
-  }
+  });
 }

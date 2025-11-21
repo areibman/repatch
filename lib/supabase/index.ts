@@ -30,12 +30,19 @@ export {
   type ClientContext,
 } from './factory';
 
+export {
+  getUserOrThrow,
+  requireRole,
+  hasRole,
+  roleAtLeast,
+  buildAuthContext,
+  AuthError,
+  UnauthorizedError,
+  ForbiddenError,
+  type AuthContext,
+} from '../auth';
+
+
 // Re-export types
 export type { Database } from './database.types';
-
-// Legacy exports for backward compatibility
-// These will be removed in a future refactor
-export { createClient as createLegacyBrowserClient } from './client';
-export { createClient as createLegacyServerClient } from './server';
-export { createServiceClient as createLegacyServiceClient } from './service';
 
