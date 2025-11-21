@@ -63,7 +63,7 @@ export async function getUserOrThrow(
 
   const { data: profile, error: profileError } = await supabase
     .from("user_profiles")
-    .select("role, is_active, full_name, avatar_url, email, id")
+    .select("*")
     .eq("id", data.user.id)
     .maybeSingle();
 

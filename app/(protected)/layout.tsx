@@ -24,7 +24,7 @@ export default async function ProtectedLayout({
   try {
     auth = await getUserOrThrow(supabase);
   } catch (error) {
-    const headerList = headers();
+    const headerList = await headers();
     const pathname =
       extractPathname(headerList.get("x-invoke-path")) ??
       extractPathname(headerList.get("x-matched-path")) ??
