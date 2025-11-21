@@ -1,87 +1,46 @@
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { withApiAuth } from "@/lib/api/with-auth";
 import { renderVideo } from "@/lib/services";
-import { createServerSupabaseClient } from "@/lib/supabase";
+
+const PATCH_NOTE_COLUMNS =
+  "id, repo_name, repo_url, repo_branch, time_period, generated_at, title, content, changes, contributors, video_url, filter_metadata, processing_status, processing_stage, processing_error, owner_id";
 
 // No longer needs extended timeout since we moved AI processing to background
 // export const maxDuration = 90; // 90 seconds
 
 // GET /api/patch-notes - Fetch all patch notes
 export async function GET() {
-  const start = Date.now();
-  console.log("[API] Fetching patch notes started");
+  return withApiAuth(
+    async ({ supabase, auth }) => {
+      const start = Date.now();
+      const authType = auth.token ? `token:${auth.token.prefix}` : "session";
+      console.log(
+        `[API][patch-notes] user=${auth.user.id} via=${authType} fetching patch notes`
+      );
 
-  try {
-    const cookieStore = await cookies();
-    const supabase = createServerSupabaseClient(cookieStore);
+      const { data, error } = await supabase
+        .from("patch_notes")
+        .select(PATCH_NOTE_COLUMNS)
+        .order("generated_at", { ascending: false });
 
-    // Optimization: Run Auth check and DB query in parallel
-    // Using getSession() is faster than getUser() as it validates the JWT locally without a remote call
-    // We trust the JWT for read operations; RLS still enforces security at the DB layer
-    const authPromise = supabase.auth.getSession();
-    const dbPromise = supabase
-      .from("patch_notes")
-      .select(
-        "id, repo_name, repo_url, repo_branch, time_period, generated_at, title, content, changes, contributors, video_url, filter_metadata, processing_status, processing_stage, processing_error, owner_id"
-      )
-      .order("generated_at", { ascending: false });
-
-    const [authResult, dbResult] = await Promise.all([authPromise, dbPromise]);
-    
-    const { error: authError, data: authData } = authResult;
-    let { error: dbError, data: dbData } = dbResult;
-
-    console.log(`[API] Parallel operations completed in ${Date.now() - start}ms`);
-
-    // 1. Check Auth Failure
-    if (authError || !authData.session) {
-      console.warn("[API] No local session, trying remote verification...", authError?.message);
-      
-      // Fallback: Try remote verification (getUser) if local session check fails
-      const { data: remoteData, error: remoteError } = await supabase.auth.getUser();
-      
-      if (remoteError || !remoteData.user) {
-        console.warn("[API] Remote verification failed:", remoteError?.message);
+      if (error) {
+        console.error("[API][patch-notes] query failed:", error);
         return NextResponse.json(
-          { error: "Unauthorized" },
-          { status: 401 }
+          { error: "Failed to fetch patch notes" },
+          { status: 500 }
         );
       }
-    }
 
-    // 2. Retry DB if it failed but Auth succeeded (e.g. token refresh race condition)
-    if (dbError) {
-      console.warn("[API] Initial DB query failed, retrying with refreshed token...", dbError.message);
-      const retryStart = Date.now();
-      
-      // The supabase client should now have the refreshed token from the getUser call
-      const retryResult = await supabase
-        .from("patch_notes")
-        .select(
-          "id, repo_name, repo_url, repo_branch, time_period, generated_at, title, content, changes, contributors, video_url, filter_metadata, processing_status, processing_stage, processing_error, owner_id"
-        )
-        .order("generated_at", { ascending: false });
-        
-      dbError = retryResult.error;
-      dbData = retryResult.data;
-      
-      console.log(`[API] DB Retry took ${Date.now() - retryStart}ms`);
-    }
+      console.log(
+        `[API][patch-notes] user=${auth.user.id} fetched ${
+          data?.length ?? 0
+        } rows in ${Date.now() - start}ms`
+      );
 
-    if (dbError) {
-      console.error("[API] DB Error:", dbError);
-      return NextResponse.json({ error: dbError.message }, { status: 500 });
-    }
-
-    return NextResponse.json(dbData);
-  } catch (error) {
-    console.error(`[API] Error after ${Date.now() - start}ms:`, error);
-    return NextResponse.json(
-      { error: "Failed to fetch patch notes" },
-      { status: 500 }
-    );
-  }
+      return NextResponse.json(data ?? []);
+    },
+    { skipProfile: true }
+  );
 }
 
 // POST /api/patch-notes - Create a new patch note
