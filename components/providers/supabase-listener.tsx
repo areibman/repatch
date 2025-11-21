@@ -13,11 +13,12 @@ export function SupabaseListener() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
-      if (
-        event === "TOKEN_REFRESHED" ||
-        event === "SIGNED_IN" ||
-        event === "SIGNED_OUT"
-      ) {
+      if (event === "SIGNED_OUT") {
+        router.replace("/login");
+        return;
+      }
+
+      if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") {
         router.refresh();
       }
     });

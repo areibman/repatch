@@ -93,7 +93,6 @@ export function ProtectedShell({ children, auth }: ProtectedShellProps) {
       setIsSigningOut(false);
       console.log("[SignOut] Redirecting to /login");
       router.replace("/login");
-      router.refresh();
     }
   };
 
