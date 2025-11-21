@@ -61,10 +61,12 @@ export async function middleware(request: NextRequest) {
   );
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session && !isPublicPath(pathname)) {
+  console.log(`Middleware: Path ${pathname}, Session ${user ? "Found" : "Missing"}`);
+
+  if (!user && !isPublicPath(pathname)) {
     const redirectUrl = new URL("/login", request.url);
     redirectUrl.searchParams.set(
       "redirectTo",
@@ -73,10 +75,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (session && pathname === "/login") {
-    const redirectTo =
-      request.nextUrl.searchParams.get("redirectTo") ?? "/";
-    return NextResponse.redirect(new URL(redirectTo, request.url));
+  if (user && pathname === "/login") {
+    // Disable automatic redirect from login page to home
+    // This prevents redirect loops when client/server session states disagree
+    // The login page itself will handle redirection if it detects a valid session client-side
+    return response;
   }
 
   return response;

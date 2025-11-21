@@ -42,6 +42,7 @@ export {
   type AuthContext,
 } from '../auth';
 
+
 // Re-export types
 export type { Database } from './database.types';
 

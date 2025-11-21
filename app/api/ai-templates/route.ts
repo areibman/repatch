@@ -1,124 +1,178 @@
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { withApiAuth } from "@/lib/api/with-auth";
 import { DEFAULT_AI_TEMPLATES, mapTemplateRow } from "@/lib/templates";
 import type { AiTemplatePayload } from "@/types/ai-template";
-import { createServerSupabaseClient } from "@/lib/supabase";
 import type { Database } from "@/lib/supabase/database.types";
 
 const TEMPLATE_COLUMNS =
   "id, name, content, owner_id, created_at, updated_at";
 
-async function seedTemplatesForUser(
+type TemplateRow = Database["public"]["Tables"]["ai_templates"]["Row"];
+
+const DEFAULT_TEMPLATE_NAMES = new Set(
+  DEFAULT_AI_TEMPLATES.map((template) => template.name.toLowerCase())
+);
+
+function getTemplateTimestamp(template: TemplateRow): number {
+  const timestamp = template.updated_at || template.created_at;
+  return timestamp ? new Date(timestamp).getTime() : 0;
+}
+
+async function pruneDefaultTemplateDuplicates(
   supabase: SupabaseClient<Database>,
-  ownerId: string
+  templates: TemplateRow[]
 ): Promise<boolean> {
-  try {
-    if (!ownerId) {
-      return false;
+  const duplicates: string[] = [];
+
+  const grouped = new Map<string, TemplateRow[]>();
+  for (const template of templates) {
+    const key = template.name?.toLowerCase();
+    if (!key || !DEFAULT_TEMPLATE_NAMES.has(key)) {
+      continue;
     }
 
-    const payload = DEFAULT_AI_TEMPLATES.map((template) => ({
-      name: template.name,
-      content: template.content,
-      owner_id: ownerId,
-    }));
+    const list = grouped.get(key) ?? [];
+    list.push(template);
+    grouped.set(key, list);
+  }
 
-    const { error } = await supabase.from("ai_templates").insert(payload);
-
-    if (error) {
-      console.warn("[API] Templates: Failed to seed defaults", error.message);
-      return false;
+  grouped.forEach((list) => {
+    if (list.length <= 1) {
+      return;
     }
 
-    return true;
-  } catch (error) {
-    console.error("[API] Templates: Unexpected seeding error", error);
+    list
+      .sort((a, b) => getTemplateTimestamp(b) - getTemplateTimestamp(a))
+      .slice(1)
+      .forEach((template) => duplicates.push(template.id));
+  });
+
+  if (duplicates.length === 0) {
     return false;
   }
+
+  const { error } = await supabase
+    .from("ai_templates")
+    .delete()
+    .in("id", duplicates);
+
+  if (error) {
+    console.warn("[API] Templates: Failed to prune duplicates", error.message);
+    return false;
+  }
+
+  return true;
+}
+
+async function syncDefaultTemplatesForUser(
+  supabase: SupabaseClient<Database>,
+  ownerId: string | undefined,
+  templates: TemplateRow[]
+): Promise<boolean> {
+  if (!ownerId) {
+    return false;
+  }
+
+  const existingDefaultNames = new Set(
+    templates
+      .map((template) => template.name?.toLowerCase() ?? "")
+      .filter((name) => DEFAULT_TEMPLATE_NAMES.has(name))
+  );
+
+  const payload = DEFAULT_AI_TEMPLATES.filter(
+    (template) => !existingDefaultNames.has(template.name.toLowerCase())
+  ).map((template) => ({
+    name: template.name,
+    content: template.content,
+    owner_id: ownerId,
+  }));
+
+  if (payload.length === 0) {
+    return false;
+  }
+
+  const { error } = await supabase.from("ai_templates").insert(payload);
+
+  if (error) {
+    console.warn("[API] Templates: Failed to seed defaults", error.message);
+    return false;
+  }
+
+  return true;
+}
+
+function sortTemplates(templates: TemplateRow[]): TemplateRow[] {
+  return [...templates].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function refetchTemplates(supabase: SupabaseClient<Database>) {
+  return supabase
+    .from("ai_templates")
+    .select(TEMPLATE_COLUMNS)
+    .order("name", { ascending: true });
 }
 
 export async function GET() {
   const start = Date.now();
   console.log("[API] Fetching templates started");
 
-  try {
-    const cookieStore = await cookies();
-    const supabase = createServerSupabaseClient(cookieStore);
+  return withApiAuth(
+    async ({ supabase, auth }) => {
+      try {
+        const initialResult = await refetchTemplates(supabase);
 
-    // Optimization: Run Auth check and DB query in parallel
-    // Using getSession() for local JWT validation
-    const authPromise = supabase.auth.getSession();
-    const dbPromise = supabase
-      .from("ai_templates")
-      .select(TEMPLATE_COLUMNS) // Explicit columns
-      .order("name", { ascending: true });
+        if (initialResult.error) {
+          return NextResponse.json(
+            { error: initialResult.error.message },
+            { status: 500 }
+          );
+        }
 
-    const [authResult, dbResult] = await Promise.all([authPromise, dbPromise]);
-    
-    const { error: authError, data: authData } = authResult;
-    let { error: dbError, data: dbData } = dbResult;
-    let userId = authData.session?.user?.id;
+        let templates = initialResult.data ?? [];
 
-    console.log(`[API] Templates: Parallel operations completed in ${Date.now() - start}ms`);
+        const refreshTemplates = async () => {
+          const refreshResult = await refetchTemplates(supabase);
+          if (refreshResult.error) {
+            throw new Error(refreshResult.error.message);
+          }
+          return refreshResult.data ?? [];
+        };
 
-    // 1. Check Auth Failure
-    if (authError || !authData.session || !userId) {
-      console.warn("[API] Templates: No local session, trying remote verification...");
-      
-      // Fallback: Try remote verification
-      const { data: remoteData, error: remoteError } = await supabase.auth.getUser();
-      
-      if (remoteError || !remoteData.user) {
+        const duplicatesRemoved = await pruneDefaultTemplateDuplicates(
+          supabase,
+          templates
+        );
+
+        if (duplicatesRemoved) {
+          templates = await refreshTemplates();
+        }
+
+        const seeded = await syncDefaultTemplatesForUser(
+          supabase,
+          auth.user.id,
+          templates
+        );
+
+        if (seeded) {
+          templates = await refreshTemplates();
+        }
+
+        const sortedTemplates = sortTemplates(templates);
+        console.log(
+          `[API] Templates completed in ${Date.now() - start}ms`
+        );
+        return NextResponse.json(sortedTemplates.map(mapTemplateRow));
+      } catch (error) {
+        console.error("Error fetching templates:", error);
         return NextResponse.json(
-          { error: "Unauthorized" },
-          { status: 401 }
+          { error: "Failed to load templates" },
+          { status: 500 }
         );
       }
-
-      userId = remoteData.user.id;
-    }
-
-    // 2. Retry DB if it failed but Auth succeeded
-    if (dbError) {
-      console.warn("[API] Templates: Initial DB query failed, retrying...", dbError.message);
-      const retryResult = await supabase
-        .from("ai_templates")
-        .select(TEMPLATE_COLUMNS)
-        .order("name", { ascending: true });
-        
-      dbError = retryResult.error;
-      dbData = retryResult.data;
-    }
-
-    // 3. Seed defaults when a new account has zero templates
-    if (!dbError && (dbData?.length ?? 0) === 0 && userId) {
-      const seeded = await seedTemplatesForUser(supabase, userId);
-
-      if (seeded) {
-        const refreshResult = await supabase
-          .from("ai_templates")
-          .select(TEMPLATE_COLUMNS)
-          .order("name", { ascending: true });
-
-        dbError = refreshResult.error;
-        dbData = refreshResult.data;
-      }
-    }
-
-    if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 500 });
-    }
-
-    return NextResponse.json((dbData || []).map(mapTemplateRow));
-  } catch (error) {
-    console.error("Error fetching templates:", error);
-    return NextResponse.json(
-      { error: "Failed to load templates" },
-      { status: 500 }
-    );
-  }
+    },
+    { skipProfile: true }
+  );
 }
 
 export async function POST(request: NextRequest) {

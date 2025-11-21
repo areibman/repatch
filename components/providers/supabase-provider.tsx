@@ -27,22 +27,46 @@ const SupabaseContext = createContext<SupabaseContextValue | undefined>(
 
 export function SupabaseProvider({
   children,
+  initialSession = null,
 }: {
   children: ReactNode;
+  initialSession?: Session | null;
 }) {
   const [supabase] = useState(() => createBrowserSupabaseClient());
-  const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(initialSession);
+  const [isLoading, setIsLoading] = useState(false);
 
   const refreshSession = useCallback(async () => {
-    const { data } = await supabase.auth.getSession();
-    setSession(data.session);
-    setIsLoading(false);
+    try {
+      setIsLoading(true);
+      // Use getUser() instead of getSession() for secure server-side validation
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data.user) {
+        console.error("Failed to refresh session:", error);
+        setSession(null);
+        return;
+      }
+      // After confirming user is valid, get the session
+      const { data: sessionData } = await supabase.auth.getSession();
+      setSession(sessionData.session ?? null);
+    } catch (error) {
+      setSession(null);
+    } finally {
+      setIsLoading(false);
+    }
   }, [supabase]);
 
   useEffect(() => {
-    refreshSession();
+    setSession(initialSession ?? null);
+  }, [initialSession]);
 
+  useEffect(() => {
+    if (!initialSession) {
+      refreshSession();
+    }
+  }, [initialSession, refreshSession]);
+
+  useEffect(() => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, updatedSession) => {
@@ -53,7 +77,7 @@ export function SupabaseProvider({
     return () => {
       subscription.unsubscribe();
     };
-  }, [refreshSession, supabase]);
+  }, [supabase]);
 
   const value = useMemo(
     () => ({

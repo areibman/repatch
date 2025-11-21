@@ -104,7 +104,7 @@ function LoginContent() {
             <Button
               variant="outline"
               onClick={() => handleOAuthLogin("github")}
-              disabled={isSubmitting || isLoading}
+              disabled={isSubmitting || (isLoading && session !== null)}
             >
               <GithubIcon className="mr-2 h-4 w-4" />
               GitHub
@@ -112,7 +112,7 @@ function LoginContent() {
             <Button
               variant="outline"
               onClick={() => handleOAuthLogin("google")}
-              disabled={isSubmitting || isLoading}
+              disabled={isSubmitting || (isLoading && session !== null)}
             >
               <svg
                 className="mr-2 h-4 w-4"
@@ -176,7 +176,7 @@ function LoginContent() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isSubmitting || isLoading}
+              disabled={isSubmitting || (isLoading && session !== null)}
             >
               {isSubmitting ? (
                 <span className="flex items-center gap-2">
