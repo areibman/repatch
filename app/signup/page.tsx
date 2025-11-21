@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSupabase } from "@/components/providers/supabase-provider";
 import { sanitizeRedirect } from "@/lib/auth-redirect";
+import { logAudit, maskEmail } from "@/lib/logging";
 
 function SignupContent() {
   const router = useRouter();
@@ -37,6 +38,10 @@ function SignupContent() {
 
   useEffect(() => {
     if (!isLoading && session) {
+      logAudit("auth.signup.session_active_redirect", {
+        userId: session.user.id,
+        redirectTo,
+      });
       router.replace(redirectTo);
     }
   }, [isLoading, session, redirectTo, router]);
@@ -46,6 +51,8 @@ function SignupContent() {
     setSignupResultEmail(null);
     setIsSubmitting(true);
 
+    logAudit("auth.signup.oauth_attempt", { provider, redirectTo });
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -54,13 +61,21 @@ function SignupContent() {
     });
 
     if (error) {
+      logAudit("auth.signup.oauth_failure", {
+        provider,
+        message: error.message,
+        status: error.status,
+      });
       setFormError(
         error.message.includes("Unsupported provider")
           ? `Sign in with ${provider} is not enabled. Please contact an administrator.`
           : error.message
       );
       setIsSubmitting(false);
+      return;
     }
+
+    logAudit("auth.signup.oauth_redirect", { provider, redirectTo });
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -68,17 +83,32 @@ function SignupContent() {
     setFormError(null);
     setSignupResultEmail(null);
 
+    const obfuscatedEmail = maskEmail(email);
+
     if (password !== confirmPassword) {
+      logAudit("auth.signup.validation_failed", {
+        email: obfuscatedEmail,
+        reason: "password_mismatch",
+      });
       setFormError("Passwords do not match.");
       return;
     }
 
     if (password.length < 12) {
+      logAudit("auth.signup.validation_failed", {
+        email: obfuscatedEmail,
+        reason: "password_length",
+      });
       setFormError("Password must be at least 12 characters long.");
       return;
     }
 
     setIsSubmitting(true);
+
+    logAudit("auth.signup.password_attempt", {
+      email: obfuscatedEmail,
+      hasFullName: Boolean(fullName),
+    });
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -90,18 +120,33 @@ function SignupContent() {
     });
 
     if (error) {
+      logAudit("auth.signup.password_failure", {
+        email: obfuscatedEmail,
+        message: error.message,
+        status: error.status,
+      });
       setFormError(error.message);
       setIsSubmitting(false);
       return;
     }
 
     if (data.session) {
+      logAudit("auth.signup.password_success", {
+        email: obfuscatedEmail,
+        userId: data.user?.id ?? null,
+        redirectTo,
+      });
       setIsSubmitting(false);
       router.replace(redirectTo);
       return;
     }
 
-    setSignupResultEmail(payload.email);
+    const confirmedEmail = data.user?.email ?? email;
+    logAudit("auth.signup.pending_confirmation", {
+      email: maskEmail(confirmedEmail),
+      userId: data.user?.id ?? null,
+    });
+    setSignupResultEmail(confirmedEmail);
     setIsSubmitting(false);
     setFullName("");
     setEmail("");

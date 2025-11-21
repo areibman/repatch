@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSupabase } from "@/components/providers/supabase-provider";
 import { sanitizeRedirect } from "@/lib/auth-redirect";
+import { logAudit, maskEmail } from "@/lib/logging";
 
 function LoginContent() {
   const router = useRouter();
@@ -32,6 +33,10 @@ function LoginContent() {
 
   useEffect(() => {
     if (!isLoading && session) {
+      logAudit("auth.login.session_active_redirect", {
+        userId: session.user.id,
+        redirectTo,
+      });
       router.replace(redirectTo);
     }
   }, [isLoading, session, redirectTo, router]);
@@ -41,16 +46,33 @@ function LoginContent() {
     setFormError(null);
     setIsSubmitting(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const obfuscatedEmail = maskEmail(email);
+    logAudit("auth.login.password_attempt", {
+      email: obfuscatedEmail,
+      redirectTo,
+    });
+
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
+      logAudit("auth.login.password_failure", {
+        email: obfuscatedEmail,
+        message: error.message,
+        status: error.status,
+      });
       setFormError(error.message);
       setIsSubmitting(false);
       return;
     }
+
+    logAudit("auth.login.password_success", {
+      email: obfuscatedEmail,
+      userId: data.user?.id ?? null,
+      redirectTo,
+    });
 
     router.replace(redirectTo);
   };
@@ -58,6 +80,8 @@ function LoginContent() {
   const handleOAuthLogin = async (provider: Provider) => {
     setFormError(null);
     setIsSubmitting(true);
+
+    logAudit("auth.login.oauth_attempt", { provider, redirectTo });
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -67,6 +91,11 @@ function LoginContent() {
     });
 
     if (error) {
+      logAudit("auth.login.oauth_failure", {
+        provider,
+        message: error.message,
+        status: error.status,
+      });
       setFormError(error.message);
       if (error.message.includes("Unsupported provider")) {
         setFormError(
@@ -74,7 +103,10 @@ function LoginContent() {
         );
       }
       setIsSubmitting(false);
+      return;
     }
+
+    logAudit("auth.login.oauth_redirect", { provider, redirectTo });
   };
 
   const signupHref = useMemo(

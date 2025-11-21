@@ -13,6 +13,7 @@ import type { Session, SupabaseClient } from "@supabase/supabase-js";
 
 import { createBrowserSupabaseClient } from "@/lib/supabase";
 import type { Database } from "@/lib/supabase/database.types";
+import { logAudit } from "@/lib/logging";
 
 interface SupabaseContextValue {
   supabase: SupabaseClient<Database>;
@@ -34,18 +35,59 @@ export function SupabaseProvider({
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const refreshSession = useCallback(async () => {
-    const { data } = await supabase.auth.getSession();
-    setSession(data.session);
-    setIsLoading(false);
-  }, [supabase]);
+  const executeSessionRefresh = useCallback(
+    async (reason: "initial" | "manual") => {
+      setIsLoading(true);
+      logAudit("auth.session_refresh.start", { reason });
+
+      try {
+        const { data, error } = await supabase.auth.getSession();
+
+        if (error) {
+          logAudit("auth.session_refresh.error", {
+            reason,
+            message: error.message,
+            status: error.status,
+          });
+          console.error("[SupabaseProvider] Failed to refresh session", error);
+        } else {
+          logAudit("auth.session_refresh.complete", {
+            reason,
+            hasSession: Boolean(data.session),
+            userId: data.session?.user?.id ?? null,
+          });
+        }
+
+        setSession(data.session);
+      } catch (caught) {
+        const message =
+          caught instanceof Error ? caught.message : String(caught);
+        logAudit("auth.session_refresh.exception", { reason, message });
+        console.error("[SupabaseProvider] Session refresh crashed", caught);
+        setSession(null);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [supabase]
+  );
+
+  const refreshSession = useCallback(
+    async () => executeSessionRefresh("manual"),
+    [executeSessionRefresh]
+  );
 
   useEffect(() => {
-    refreshSession();
+    executeSessionRefresh("initial");
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, updatedSession) => {
+    } = supabase.auth.onAuthStateChange((event, updatedSession) => {
+      logAudit("auth.session_state_change", {
+        event,
+        hasSession: Boolean(updatedSession),
+        userId: updatedSession?.user?.id ?? null,
+      });
       setSession(updatedSession);
       setIsLoading(false);
     });
@@ -53,17 +95,17 @@ export function SupabaseProvider({
     return () => {
       subscription.unsubscribe();
     };
-  }, [refreshSession, supabase]);
+  }, [executeSessionRefresh, supabase]);
 
-  const value = useMemo(
-    () => ({
-      supabase,
-      session,
-      isLoading,
-      refreshSession,
-    }),
-    [supabase, session, isLoading, refreshSession]
-  );
+    const value = useMemo(
+      () => ({
+        supabase,
+        session,
+        isLoading,
+        refreshSession,
+      }),
+      [supabase, session, isLoading, refreshSession]
+    );
 
   return (
     <SupabaseContext.Provider value={value}>
