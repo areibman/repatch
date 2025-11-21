@@ -101,7 +101,8 @@ function SignupContent() {
       return;
     }
 
-    setSignupResultEmail(payload.email);
+    const confirmedEmail = data.user?.email ?? email;
+    setSignupResultEmail(confirmedEmail);
     setIsSubmitting(false);
     setFullName("");
     setEmail("");

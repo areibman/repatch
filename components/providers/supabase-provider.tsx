@@ -25,6 +25,15 @@ const SupabaseContext = createContext<SupabaseContextValue | undefined>(
   undefined
 );
 
+function isAuthSessionMissingError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: string }).name === "AuthSessionMissingError"
+  );
+}
+
 export function SupabaseProvider({
   children,
   initialSession = null,
@@ -37,19 +46,30 @@ export function SupabaseProvider({
   const [isLoading, setIsLoading] = useState(false);
 
   const refreshSession = useCallback(async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      // Use getUser() instead of getSession() for secure server-side validation
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data.user) {
-        console.error("Failed to refresh session:", error);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const currentSession = sessionData.session ?? null;
+
+      if (!currentSession) {
         setSession(null);
         return;
       }
-      // After confirming user is valid, get the session
-      const { data: sessionData } = await supabase.auth.getSession();
-      setSession(sessionData.session ?? null);
+
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data.user) {
+        if (error && !isAuthSessionMissingError(error)) {
+          console.error("Failed to refresh session:", error);
+        }
+        setSession(null);
+        return;
+      }
+
+      setSession(currentSession);
     } catch (error) {
+      if (!isAuthSessionMissingError(error)) {
+        console.error("Failed to refresh session:", error);
+      }
       setSession(null);
     } finally {
       setIsLoading(false);
@@ -69,15 +89,14 @@ export function SupabaseProvider({
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, updatedSession) => {
-      setSession(updatedSession);
-      setIsLoading(false);
+    } = supabase.auth.onAuthStateChange(() => {
+      refreshSession();
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [refreshSession, supabase]);
 
   const value = useMemo(
     () => ({

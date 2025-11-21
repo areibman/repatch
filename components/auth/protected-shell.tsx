@@ -45,12 +45,15 @@ export function ProtectedShell({ children, auth }: ProtectedShellProps) {
 
   const handleSignOut = async () => {
     if (isSigningOut) {
+      console.warn("[SignOut] Attempted while already in progress");
       return;
     }
 
     setIsSigningOut(true);
+    console.log("[SignOut] Starting sign-out flow");
 
     try {
+      console.log("[SignOut] Calling /api/auth/signout");
       // Call server-side sign out endpoint first
       const response = await fetch("/api/auth/signout", {
         method: "POST",
@@ -58,32 +61,40 @@ export function ProtectedShell({ children, auth }: ProtectedShellProps) {
       });
       
       if (!response.ok) {
-        console.error("Server sign out failed with status:", response.status);
+        console.error(
+          "[SignOut] Server sign out failed",
+          response.status,
+          response.statusText
+        );
       } else {
         const result = await response.json();
         if (!result.success) {
-          console.error("Server sign out failed:", result.error);
+          console.error("[SignOut] Server sign out returned error", result.error);
+        } else {
+          console.log("[SignOut] Server session cleared");
         }
       }
     } catch (error) {
-      console.error("Server sign out request failed:", error);
+      console.error("[SignOut] Server sign out request failed:", error);
     }
 
     try {
-      // Sign out on client-side using local scope to clear browser storage
-      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      // Ensure browser storage and tokens are cleared
+      console.log("[SignOut] Calling supabase.auth.signOut({ scope: 'global' })");
+      const { error } = await supabase.auth.signOut({ scope: "global" });
       if (error) {
-        console.error("Client sign out failed:", error);
+        console.error("[SignOut] Client sign out failed:", error);
+      } else {
+        console.log("[SignOut] Client session cleared");
       }
     } catch (error) {
-      console.error("Client sign out exception:", error);
+      console.error("[SignOut] Client sign out exception:", error);
+    } finally {
+      setIsSigningOut(false);
+      console.log("[SignOut] Redirecting to /login");
+      router.replace("/login");
+      router.refresh();
     }
-
-    // Always redirect regardless of errors
-    setIsSigningOut(false);
-    
-    // Force a hard redirect to clear all client state
-    window.location.href = "/login";
   };
 
   return (

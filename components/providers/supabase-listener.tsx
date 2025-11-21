@@ -5,21 +5,19 @@ import { useRouter } from "next/navigation";
 
 import { useSupabase } from "@/components/providers/supabase-provider";
 
-interface SupabaseListenerProps {
-  serverAccessToken?: string;
-}
-
-export function SupabaseListener({
-  serverAccessToken,
-}: SupabaseListenerProps) {
+export function SupabaseListener() {
   const router = useRouter();
   const { supabase } = useSupabase();
 
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.access_token !== serverAccessToken) {
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (
+        event === "TOKEN_REFRESHED" ||
+        event === "SIGNED_IN" ||
+        event === "SIGNED_OUT"
+      ) {
         router.refresh();
       }
     });
@@ -27,7 +25,7 @@ export function SupabaseListener({
     return () => {
       subscription.unsubscribe();
     };
-  }, [router, serverAccessToken, supabase]);
+  }, [router, supabase]);
 
   return null;
 }
