@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSupabase } from "@/components/providers/supabase-provider";
 import { sanitizeRedirect } from "@/lib/auth-redirect";
+import { logAuthEvent } from "@/lib/logging";
 
 function LoginContent() {
   const router = useRouter();
@@ -30,52 +31,82 @@ function LoginContent() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!isLoading && session) {
-      router.replace(redirectTo);
-    }
-  }, [isLoading, session, redirectTo, router]);
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setFormError(null);
-    setIsSubmitting(true);
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setFormError(error.message);
-      setIsSubmitting(false);
-      return;
-    }
-
-    router.replace(redirectTo);
-  };
-
-  const handleOAuthLogin = async (provider: Provider) => {
-    setFormError(null);
-    setIsSubmitting(true);
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}`,
-      },
-    });
-
-    if (error) {
-      setFormError(error.message);
-      if (error.message.includes("Unsupported provider")) {
-        setFormError(
-          `Sign in with ${provider} is not enabled. Please contact an administrator.`
-        );
+    useEffect(() => {
+      if (!isLoading && session) {
+        logAuthEvent("login_session_active_redirect", {
+          redirectTo,
+          userId: session.user.id,
+        });
+        router.replace(redirectTo);
       }
-      setIsSubmitting(false);
-    }
-  };
+    }, [isLoading, session, redirectTo, router]);
+
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setFormError(null);
+      setIsSubmitting(true);
+
+      logAuthEvent("password_login_started", {
+        redirectTo,
+        email,
+      });
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setFormError(error.message);
+        logAuthEvent("password_login_failed", {
+          email,
+          error: error.message,
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      logAuthEvent("password_login_succeeded", {
+        email,
+      });
+      router.replace(redirectTo);
+    };
+
+    const handleOAuthLogin = async (provider: Provider) => {
+      setFormError(null);
+      setIsSubmitting(true);
+
+      logAuthEvent("oauth_login_started", {
+        provider,
+        redirectTo,
+      });
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}`,
+        },
+      });
+
+      if (error) {
+        const message = error.message.includes("Unsupported provider")
+          ? `Sign in with ${provider} is not enabled. Please contact an administrator.`
+          : error.message;
+
+        setFormError(message);
+        logAuthEvent("oauth_login_failed", {
+          provider,
+          error: message,
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      logAuthEvent("oauth_login_redirecting", {
+        provider,
+        redirectTo,
+      });
+    };
 
   const signupHref = useMemo(
     () =>

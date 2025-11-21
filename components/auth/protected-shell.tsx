@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/sidebar";
 import { SidebarHeaderContent } from "@/components/sidebar-header";
 import { useSupabase } from "@/components/providers/supabase-provider";
+import { logAuthEvent } from "@/lib/logging";
 
 const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback"];
 
@@ -42,18 +43,31 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!isProtectedRoute || isLoading || session) {
+    if (!isProtectedRoute || isLoading) {
       return;
     }
 
-    const targetPath = searchParamsString
-      ? `${pathname}?${searchParamsString}`
-      : pathname;
+    if (!session) {
+      const targetPath = searchParamsString
+        ? `${pathname}?${searchParamsString}`
+        : pathname;
 
-    const params = new URLSearchParams();
-    params.set("redirectTo", targetPath);
+      logAuthEvent("guard_redirecting_to_login", {
+        pathname,
+        targetPath,
+      });
 
-    router.replace(`/login?${params.toString()}`);
+      const params = new URLSearchParams();
+      params.set("redirectTo", targetPath);
+      router.replace(`/login?${params.toString()}`);
+      return;
+    }
+
+    logAuthEvent("guard_session_verified", {
+      pathname,
+      userId: session.user.id,
+      email: session.user.email,
+    });
   }, [
     isProtectedRoute,
     isLoading,
@@ -64,8 +78,30 @@ export function ProtectedShell({ children }: { children: ReactNode }) {
   ]);
 
   const handleSignOut = async () => {
+    if (isSigningOut) {
+      return;
+    }
     setIsSigningOut(true);
-    await supabase.auth.signOut();
+    logAuthEvent("signout_requested", {
+      userId: session?.user.id ?? null,
+      pathname,
+    });
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      logAuthEvent("signout_failed", {
+        error: error.message,
+        pathname,
+      });
+      console.error("Supabase sign-out failed", error);
+      setIsSigningOut(false);
+      return;
+    }
+
+    logAuthEvent("signout_successful", {
+      pathname,
+    });
     setIsSigningOut(false);
     router.replace("/login");
   };

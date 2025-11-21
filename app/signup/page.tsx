@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSupabase } from "@/components/providers/supabase-provider";
 import { sanitizeRedirect } from "@/lib/auth-redirect";
+import { logAuthEvent } from "@/lib/logging";
 
 function SignupContent() {
   const router = useRouter();
@@ -46,6 +47,11 @@ function SignupContent() {
     setSignupResultEmail(null);
     setIsSubmitting(true);
 
+    logAuthEvent("oauth_signup_started", {
+      provider,
+      redirectTo,
+    });
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
@@ -54,60 +60,83 @@ function SignupContent() {
     });
 
     if (error) {
-      setFormError(
-        error.message.includes("Unsupported provider")
-          ? `Sign in with ${provider} is not enabled. Please contact an administrator.`
-          : error.message
-      );
+      const message = error.message.includes("Unsupported provider")
+        ? `Sign in with ${provider} is not enabled. Please contact an administrator.`
+        : error.message;
+
+      setFormError(message);
+      logAuthEvent("oauth_signup_failed", {
+        provider,
+        error: message,
+      });
       setIsSubmitting(false);
+    } else {
+      logAuthEvent("oauth_signup_redirecting", {
+        provider,
+        redirectTo,
+      });
     }
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setFormError(null);
-    setSignupResultEmail(null);
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setFormError(null);
+      setSignupResultEmail(null);
 
-    if (password !== confirmPassword) {
-      setFormError("Passwords do not match.");
-      return;
-    }
+      if (password !== confirmPassword) {
+        setFormError("Passwords do not match.");
+        return;
+      }
 
-    if (password.length < 12) {
-      setFormError("Password must be at least 12 characters long.");
-      return;
-    }
+      if (password.length < 12) {
+        setFormError("Password must be at least 12 characters long.");
+        return;
+      }
 
-    setIsSubmitting(true);
+      setIsSubmitting(true);
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}`,
-        data: fullName ? { full_name: fullName } : undefined,
-      },
-    });
+      logAuthEvent("email_signup_started", {
+        redirectTo,
+      });
 
-    if (error) {
-      setFormError(error.message);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${redirectTo}`,
+          data: fullName ? { full_name: fullName } : undefined,
+        },
+      });
+
+      if (error) {
+        setFormError(error.message);
+        logAuthEvent("email_signup_failed", {
+          error: error.message,
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (data.session) {
+        setIsSubmitting(false);
+        logAuthEvent("email_signup_completed", {
+          userId: data.session.user.id,
+        });
+        router.replace(redirectTo);
+        return;
+      }
+
+      const confirmedEmail = data.user?.email ?? email;
+      setSignupResultEmail(confirmedEmail);
+      logAuthEvent("email_signup_pending_confirmation", {
+        email: confirmedEmail,
+      });
       setIsSubmitting(false);
-      return;
-    }
-
-    if (data.session) {
-      setIsSubmitting(false);
-      router.replace(redirectTo);
-      return;
-    }
-
-    setSignupResultEmail(payload.email);
-    setIsSubmitting(false);
-    setFullName("");
-    setEmail("");
-    setPassword("");
-    setConfirmPassword("");
-  };
+      setFullName("");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+    };
   const loginHref = useMemo(
     () =>
       redirectTo && redirectTo !== "/"
