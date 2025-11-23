@@ -9,7 +9,9 @@
     "lint": "eslint",
     "preview": "remotion preview remotion/index.ts",
     "db:seed": "dotenv -e .env.local -- tsx scripts/add-sample-data.ts",
-    "regenerate-videos": "dotenv -e .env.local -- tsx scripts/regenerate-videos.ts"
+    "regenerate-videos": "dotenv -e .env.local -- tsx scripts/regenerate-videos.ts",
+    "generate:mcp": "bash scripts/generate-mcp-server.sh",
+    "validate:openapi": "npx @redocly/cli lint openapi.yaml"
   },
   "dependencies": {
     "@actions/core": "^1.10.0",
