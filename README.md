@@ -6,6 +6,11 @@ AI-generated patch notes from your GitHub repositories, delivered as beautiful n
 
 Repatch uses LLMs to analyze GitHub repository changes over customizable ranges—quick presets, arbitrary date windows, label/tag filters, or specific releases—and generates professional patch notes. The generated content can be edited and sent via email to subscribers.
 
+## Core API & MCP Plan
+
+- The separation blueprint, unified endpoint strategy, Stainless integration plan, and polling model live in [`docs/core-api-separation.md`](./docs/core-api-separation.md).
+- The contract-first surface that Stainless + MCP will ingest is tracked at [`openapi/core-api.yaml`](./openapi/core-api.yaml). Run validation or SDK generation against this file (e.g., `STAINLESS_API_KEY=... npx stainless project bootstrap --spec openapi/core-api.yaml`) before shipping backend changes.
+
 ## Tech Stack
 
 - **Framework**: Next.js 15 with App Router
